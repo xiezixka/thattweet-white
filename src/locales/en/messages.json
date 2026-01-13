@@ -1,10 +1,53 @@
 {
   "extName": {
-    "message": "ThatTweet - Advanced Tweet Assistant",
-    "description": "Extension name"
+    "message": "ThatTweet"
   },
   "extDescription": {
-    "message": "A powerful tool for tweet collection, AI analysis, and RAG retrieval.",
-    "description": "Extension description"
+    "message": "Intelligence agency for your captured tweets."
+  },
+  "popup_tagline": {
+    "message": "Archive every tweet that touches you."
+  },
+  "popup_captured": {
+    "message": "Captured"
+  },
+  "popup_unit": {
+    "message": "Items"
+  },
+  "popup_recent": {
+    "message": "Recent Activity"
+  },
+  "popup_no_data": {
+    "message": "No tweets captured yet."
+  },
+  "popup_open_dashboard": {
+    "message": "Enter Dashboard"
+  },
+  "nav_feed": {
+    "message": "Intelligence Feed"
+  },
+  "nav_intelligence": {
+    "message": "Contemplation"
+  },
+  "nav_stats": {
+    "message": "Analytics"
+  },
+  "nav_settings": {
+    "message": "Laboratory"
+  },
+  "feed_title": {
+    "message": "Intelligence Feed"
+  },
+  "feed_subtitle": {
+    "message": "Managing high-value tweet intelligence here."
+  },
+  "feed_stat_prefix": {
+    "message": "Captured"
+  },
+  "feed_stat_suffix": {
+    "message": "items"
+  },
+  "feed_search_placeholder": {
+    "message": "Semantic search or keywords..."
   }
 }

@@ -1,10 +1,53 @@
 {
   "extName": {
-    "message": "ThatTweet - 高级推文助手",
-    "description": "插件名称"
+    "message": "ThatTweet 那条推文"
   },
   "extDescription": {
-    "message": "一个强大的推文采集、AI 分析与 RAG 检索工具。",
-    "description": "插件描述"
+    "message": "记录并分析每一条触动你的推文。"
+  },
+  "popup_tagline": {
+    "message": "记录每一条触动你的推文"
+  },
+  "popup_captured": {
+    "message": "已捕获"
+  },
+  "popup_unit": {
+    "message": "条"
+  },
+  "popup_recent": {
+    "message": "最近捕获"
+  },
+  "popup_no_data": {
+    "message": "尚未捕获任何推文"
+  },
+  "popup_open_dashboard": {
+    "message": "进入管理控制台"
+  },
+  "nav_feed": {
+    "message": "情报大厅"
+  },
+  "nav_intelligence": {
+    "message": "深思空间"
+  },
+  "nav_stats": {
+    "message": "数据看板"
+  },
+  "nav_settings": {
+    "message": "实验室"
+  },
+  "feed_title": {
+    "message": "情报大厅"
+  },
+  "feed_subtitle": {
+    "message": "在这里管理所有捕获的推文情报"
+  },
+  "feed_stat_prefix": {
+    "message": "共捕获"
+  },
+  "feed_stat_suffix": {
+    "message": "条高价值情报"
+  },
+  "feed_search_placeholder": {
+    "message": "语义搜索或关键字..."
   }
 }

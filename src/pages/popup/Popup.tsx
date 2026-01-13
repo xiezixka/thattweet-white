@@ -1,24 +1,93 @@
-import React from 'react';
-import logo from '@assets/img/logo.svg';
+import React, { useEffect, useState } from 'react';
+import { Bird, ArrowRight, Download, History } from 'lucide-react';
+import { db } from '../../core/storage/db';
+import { useTranslation } from '../../shared/hooks/useTranslation';
 
 export default function Popup() {
+  const { t } = useTranslation();
+  const [count, setCount] = useState(0);
+  const [recent, setRecent] = useState<{ id: string, text: string, author: string }[]>([]);
+
+  useEffect(() => {
+    // 获取总数
+    db.tweets.count().then(setCount);
+
+    // 获取最近 3 条
+    db.tweets.orderBy('savedAt').reverse().limit(3).toArray().then(async (tweets) => {
+      const items = await Promise.all(tweets.map(async t => {
+        const user = await db.users.get(t.authorId);
+        return {
+          id: t.id,
+          text: t.text.slice(0, 40) + '...',
+          author: user?.handle || 'Unknown'
+        };
+      }));
+      setRecent(items);
+    });
+  }, []);
+
+  const openOptions = () => {
+    chrome.runtime.openOptionsPage();
+  };
+
   return (
-    <div className="absolute top-0 left-0 right-0 bottom-0 text-center h-full p-3 bg-gray-800">
-      <header className="flex flex-col items-center justify-center text-white">
-        <img src={logo} className="h-36 pointer-events-none animate-spin-slow" alt="logo" />
-        <p>
-          Edit <code>src/pages/popup/Popup.jsx</code> and save to reload.
-        </p>
-        <a
-          className="text-blue-400"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React!
-        </a>
-        <p>Popup styled with TailwindCSS!</p>
-      </header>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-5 font-sans flex flex-col">
+      {/* Brand */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center shadow-lg shadow-brand/20">
+          <Bird size={24} className="text-white" />
+        </div>
+        <div>
+          <h1 className="font-bold text-lg leading-tight text-white">{t('extName')}</h1>
+          <p className="text-[10px] text-zinc-500">{t('popup_tagline')}</p>
+        </div>
+      </div>
+
+      {/* Stats Card */}
+      <div className="bg-zinc-900 border border-white/5 rounded-2xl p-5 mb-6 relative overflow-hidden group">
+        <div className="relative z-10">
+          <p className="text-xs text-zinc-500 mb-1">{t('popup_captured')}</p>
+          <div className="text-4xl font-black text-white flex items-baseline gap-1">
+            {count} <span className="text-xs font-normal text-zinc-600">{t('popup_unit')}</span>
+          </div>
+        </div>
+        <button className="absolute right-5 top-5 p-2 rounded-lg bg-zinc-800 text-zinc-500 hover:text-white transition-colors">
+          <Download size={18} />
+        </button>
+        <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-brand/5 rounded-full blur-2xl group-hover:bg-brand/10 transition-colors" />
+      </div>
+
+      {/* Recent Activity */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3 px-1">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <History size={12} /> {t('popup_recent')}
+          </span>
+          {count > 3 && <span className="text-[10px] text-zinc-600">+{count - 3}</span>}
+        </div>
+
+        <div className="space-y-2">
+          {recent.map(item => (
+            <div key={item.id} className="p-3 bg-zinc-900/50 border border-white/5 rounded-xl hover:bg-zinc-900 transition-colors">
+              <div className="text-[10px] font-bold text-brand mb-1">@{item.author}</div>
+              <div className="text-xs text-zinc-400 line-clamp-1">{item.text}</div>
+            </div>
+          ))}
+          {recent.length === 0 && (
+            <div className="py-4 text-center text-xs text-zinc-600 italic">
+              {t('popup_no_data')}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Action Button */}
+      <button
+        onClick={openOptions}
+        className="w-full h-12 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-all active:scale-95 shadow-xl shadow-white/5 mt-auto"
+      >
+        {t('popup_open_dashboard')} <ArrowRight size={18} />
+      </button>
     </div>
   );
 }
