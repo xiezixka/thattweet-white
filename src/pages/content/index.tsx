@@ -13,13 +13,23 @@ function injectInterceptor() {
   (document.head || document.documentElement).appendChild(script);
 }
 
+import { DomObserver } from '../../core/extractor/observer';
+
+// 初始化 DOM 观察者 (作为兜底)
+const domObserver = new DomObserver();
+
 /**
  * 监听来自拦截器的自定义事件
  */
 window.addEventListener('thattweet-tweet-data', (event: any) => {
   const { tweets, users } = event.detail;
 
-  // 将数据发送到 Background 进一步处理 (持久化、AI 等)
+  // 1. 告诉 DOM 观察者：这些推文 API 已经抓到了，你别管了
+  if (tweets && Array.isArray(tweets)) {
+    domObserver.markAsProcessed(tweets.map((t: any) => t.id));
+  }
+
+  // 2. 将数据发送到 Background 进一步处理 (持久化、AI 等)
   chrome.runtime.sendMessage({
     type: 'SAVE_TWEETS_BATCH',
     payload: { tweets, users }
@@ -41,7 +51,7 @@ if (rootContainer) {
   const root = createRoot(rootContainer);
   root.render(
     <div className='fixed bottom-4 right-4 p-2 bg-blue-500/80 backdrop-blur text-white rounded-lg shadow-xl z-[9999] text-xs pointer-events-none'>
-      ThatTweet Interceptor <span className='font-bold text-green-300'>Active</span>
+      ThatTweet Capture <span className='font-bold text-green-300'>Hybrid</span>
     </div>
   );
 }

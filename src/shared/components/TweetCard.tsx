@@ -63,9 +63,9 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
     // 1. 头像处理 (增加 fallback 状态)
     const avatarUrl = normalizeTwitterUrl(author?.avatar);
 
-    // 🔍 调试日志 (已激活)
-    if (!avatarUrl) console.log(`[Card] No avatar for ${author?.name}`, author);
-    else console.log(`[Card] Avatar for ${author?.name}:`, avatarUrl);
+    // 调试日志 (已关闭)
+    // if (!avatarUrl) console.log(`[Card] No avatar for ${author?.name}`, author);
+    // else console.log(`[Card] Avatar for ${author?.name}:`, avatarUrl);
 
     // 2. 媒体处理 (增加容错)
     const firstMedia = tweet.media?.[0];

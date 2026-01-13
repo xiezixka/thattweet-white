@@ -15,6 +15,7 @@ export enum CaptureSource {
   Manual = 'manual',       // 手动点击保存
   AutoScroll = 'auto',     // 自动滚动采集
   Interceptor = 'api',     // 刷网页时 API 自动捕获
+  DomScan = 'dom_scan',    // DOM 扫描
   Import = 'import'        // 从外部导入
 }
 

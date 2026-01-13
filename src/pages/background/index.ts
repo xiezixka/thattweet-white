@@ -32,7 +32,21 @@ async function handleBatchSave(tweets: Tweet[], users: UserCache[]) {
         const userMap = new Map(users.map(u => [u.id, u]));
 
         for (const tweet of tweets) {
-            const author = userMap.get(tweet.authorId);
+            let author = userMap.get(tweet.authorId);
+
+            // 🔧 关键修复：DOM 抓取模式下 users 为空，需要从推文嵌入字段构造用户
+            if (!author && (tweet.author || tweet.authorName)) {
+                author = {
+                    id: tweet.authorId,
+                    handle: tweet.author || tweet.authorId,
+                    name: tweet.authorName || tweet.author || 'Unknown',
+                    avatar: tweet.authorAvatarUrl || '',
+                    updatedAt: Date.now(),
+                    followersCount: 0,
+                    verified: false
+                };
+            }
+
             if (author) {
                 await TweetRepository.saveTweet(tweet, author);
             }
