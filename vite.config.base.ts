@@ -12,17 +12,17 @@ import pkg from './package.json';
 
 const isDev = process.env.__DEV__ === 'true';
 // set this flag to true, if you want localization support
-const localize = false;
+const localize = true;
 
 export const baseManifest = {
-    ...manifest,
-    version: pkg.version,
-    ...(isDev ? devManifest : {} as ManifestV3Export),
-    ...(localize ? {
-      name: '__MSG_extName__',
-      description: '__MSG_extDescription__',
-      default_locale : 'en'
-    } : {})
+  ...manifest,
+  version: pkg.version,
+  ...(isDev ? devManifest : {} as ManifestV3Export),
+  ...(localize ? {
+    name: '__MSG_extName__',
+    description: '__MSG_extDescription__',
+    default_locale: 'en'
+  } : {})
 } as ManifestV3Export
 
 export const baseBuildOptions: BuildOptions = {
