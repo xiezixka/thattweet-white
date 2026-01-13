@@ -9,11 +9,16 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "assets/*",
+        "*.js",
         "contentStyle.css",
         "dev-icon-128.png",
         "dev-icon-32.png"
       ],
-      "matches": []
+      "matches": [
+        "https://twitter.com/*",
+        "https://x.com/*"
+      ]
     }
   ]
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Tweet } from '../types/tweet';
 import { UserCache } from '../types/tweet';
-import { Calendar, MessageCircle, Heart, Repeat2, Tag, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, MessageCircle, Heart, Repeat2, Tag, Eye, ChevronDown, ChevronUp, Play, User } from 'lucide-react';
 import { useTranslation } from '../hooks/useTranslation';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,13 +29,55 @@ const getScoreStyles = (score: number) => {
     return 'text-zinc-500 bg-zinc-500/10 border-white/5';
 };
 
+/**
+ * 🛠️ 强力 URL 规范化 (增加容错与推导)
+ */
+const normalizeTwitterUrl = (url: string | undefined): string => {
+    if (!url) return '';
+
+    // 如果已经是视频链接 (.mp4)，尝试推导出它的缩略图 (如果有约定的转换规则)
+    if (url.includes('video.twimg.com') && url.includes('.mp4')) {
+        // 通常封面图会存在 pbs 服务器上，这里如果找不到 previewUrl，只能显示占位
+        return '';
+    }
+
+    let processed = url.replace('http:', 'https:');
+
+    if (processed.includes('pbs.twimg.com')) {
+        if (processed.includes('_normal.')) {
+            processed = processed.replace('_normal.', '_bigger.');
+        }
+
+        // 关键修复：确保所有媒体链接都带上 format 和 name 参数，否则 403
+        if (!processed.includes('?')) {
+            processed += '?format=jpg&name=large';
+        } else if (!processed.includes('name=')) {
+            processed += '&name=large';
+        }
+    }
+    return processed;
+};
+
 export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry' }) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isPlayerActive, setIsPlayerActive] = useState(false);
+    const [imgFail, setImgFail] = useState(false);
     const { t } = useTranslation();
     const isMasonry = mode === 'masonry';
 
     const scoreStyles = tweet.aiScore !== undefined ? getScoreStyles(tweet.aiScore) : '';
     const hasLongText = tweet.text.length > 140;
+
+    // 1. 头像处理 (增加 fallback 状态)
+    const avatarUrl = normalizeTwitterUrl(author?.avatar);
+
+    // 2. 媒体处理 (增加容错)
+    const firstMedia = tweet.media?.[0];
+    // 强制探测预览图：如果 media 里没 previewUrl，尝试回退到 url (假设 url 是图片)
+    const rawPreview = firstMedia?.previewUrl || (firstMedia?.type === 'image' ? firstMedia.url : '');
+    const thumbnailUrl = normalizeTwitterUrl(rawPreview);
+
+    const videoUrl = firstMedia?.type === 'video' ? firstMedia.url.replace('http:', 'https:') : '';
 
     return (
         <div className={cn(
@@ -46,20 +88,34 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
             {/* Header Area */}
             <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2.5">
-                    <img
-                        src={author.avatar}
-                        alt={author.name}
-                        className="w-10 h-10 rounded-full border border-white/10"
-                    />
+                    <div className="w-10 h-10 rounded-full border border-white/10 bg-zinc-800 shrink-0 overflow-hidden">
+                        {avatarUrl && !imgFail ? (
+                            <img
+                                src={avatarUrl}
+                                alt={author?.name}
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                                onError={() => setImgFail(true)}
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-brand/10 text-brand">
+                                <User size={20} />
+                            </div>
+                        )}
+                    </div>
                     <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-[14px] leading-tight text-zinc-100 truncate max-w-[140px]">{author.name}</span>
-                        <span className="text-[13px] text-zinc-500 leading-tight">@{author.handle}</span>
+                        <span className="font-bold text-[14px] leading-tight text-zinc-100 truncate max-w-[140px]">
+                            {author?.name || 'Unknown'}
+                        </span>
+                        <span className="text-[13px] text-zinc-500 leading-tight">
+                            @{author?.handle || 'unknown'}
+                        </span>
                     </div>
                 </div>
 
                 {tweet.aiScore !== undefined && (
                     <div className={cn(
-                        "px-2 py-0.5 rounded-lg border text-[10px] font-black italic tracking-tighter transition-all duration-500",
+                        "px-2 py-0.5 rounded-lg border text-[10px] font-black italic tracking-tighter transition-all duration-500 shrink-0",
                         scoreStyles
                     )}>
                         {tweet.aiScore}
@@ -81,60 +137,71 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                 </div>
             )}
 
-            {/* Main Content Area */}
+            {/* Content Area */}
             <div className="relative">
                 <div className={cn(
                     "text-zinc-300 break-words transition-all duration-300",
                     "text-[14px] leading-[1.4]",
-                    !isExpanded && isMasonry && "line-clamp-5 truncate-multiline"
+                    !isExpanded && isMasonry && "line-clamp-5"
                 )}>
-                    {tweet.text}
+                    {tweet.text || "(No Text Content)"}
                 </div>
 
                 {hasLongText && isMasonry && (
                     <button
                         onClick={() => setIsExpanded(!isExpanded)}
-                        className="mt-1 text-[11px] font-bold text-brand/70 hover:text-brand flex items-center gap-0.5 transition-colors"
+                        className="mt-1 text-[11px] font-bold text-brand hover:text-brand transition-colors"
                     >
-                        {isExpanded ? (
-                            <>{t('card_show_less')} <ChevronUp size={12} /></>
-                        ) : (
-                            <>{t('card_read_more')} <ChevronDown size={12} /></>
-                        )}
+                        {isExpanded ? t('card_show_less') : t('card_read_more')}
                     </button>
                 )}
             </div>
 
-            {/* Media Area */}
-            {tweet.media && tweet.media.length > 0 && (
-                <div className="aspect-video rounded-xl bg-zinc-800/50 overflow-hidden relative border border-white/5 mt-1">
-                    <img
-                        src={tweet.media[0].url}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        alt="Media"
-                    />
+            {/* Media/Video Area (重点修复封面显示) */}
+            {thumbnailUrl && (
+                <div className="aspect-video rounded-xl bg-zinc-900 overflow-hidden relative border border-white/5 mt-1 group-hover:border-white/10 transition-colors">
+                    {!isPlayerActive ? (
+                        <>
+                            <img
+                                src={thumbnailUrl}
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
+                                alt="Media Thumbnail"
+                                onClick={() => firstMedia?.type === 'video' && setIsPlayerActive(true)}
+                                referrerPolicy="no-referrer"
+                            />
+                            {firstMedia?.type === 'video' && (
+                                <div
+                                    className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition-colors cursor-pointer"
+                                    onClick={() => setIsPlayerActive(true)}
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 text-white shadow-2xl scale-90 group-hover:scale-100 transition-transform">
+                                        <Play size={20} fill="white" className="ml-1" />
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <video
+                            src={videoUrl}
+                            className="w-full h-full object-contain bg-black"
+                            controls
+                            autoPlay
+                            playsInline
+                        />
+                    )}
                 </div>
             )}
 
-            {/* Footer Area - Fixed: Restored all 4 stats */}
+            {/* Footer Area */}
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-white/5 text-zinc-600">
                 <div className="flex items-center gap-3 text-[11px]">
-                    <span className="flex items-center gap-1 hover:text-brand transition-colors cursor-default" title="Replies">
-                        <MessageCircle size={12} /> {formatNumber(tweet.replyCount)}
-                    </span>
-                    <span className="flex items-center gap-1 hover:text-emerald-500 transition-colors cursor-default" title="Retweets">
-                        <Repeat2 size={12} /> {formatNumber(tweet.retweetCount)}
-                    </span>
-                    <span className="flex items-center gap-1 hover:text-rose-400 transition-colors cursor-default" title="Likes">
-                        <Heart size={12} /> {formatNumber(tweet.favoriteCount)}
-                    </span>
-                    <span className="flex items-center gap-1 cursor-default" title="Views">
-                        <Eye size={12} /> {formatNumber(tweet.viewCount || 0)}
-                    </span>
+                    <span className="flex items-center gap-1"><MessageCircle size={12} /> {formatNumber(tweet.replyCount || 0)}</span>
+                    <span className="flex items-center gap-1"><Repeat2 size={12} /> {formatNumber(tweet.retweetCount || 0)}</span>
+                    <span className="flex items-center gap-1 hover:text-rose-400 transition-colors"><Heart size={12} /> {formatNumber(tweet.favoriteCount || 0)}</span>
+                    <span className="flex items-center gap-1"><Eye size={12} /> {formatNumber(tweet.viewCount || 0)}</span>
                 </div>
-                <div className="text-[10px] font-medium flex items-center gap-1 opacity-60 italic">
-                    <Calendar size={12} />
-                    {new Date(tweet.createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' })}
+                <div className="text-[10px] font-medium opacity-50 italic">
+                    {tweet.createdAt ? new Date(tweet.createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' }) : '00/00'}
                 </div>
             </div>
         </div>

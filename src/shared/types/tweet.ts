@@ -42,6 +42,12 @@ export interface Tweet {
   // --- 基础关联 ---
   id: string;                  // 推文唯一的 rest_id
   authorId: string;            // 关联 UserCache.id (外键)
+
+  // --- 旧版兼容：嵌入式作者信息 ---
+  author?: string;             // @handle (旧版字段)
+  authorName?: string;         // 显示名称 (旧版字段)
+  authorAvatarUrl?: string;    // 头像链接 (旧版字段)
+
   text: string;                // 推文正文
   tweetUrl: string;            // 推文 URL
   createdAt: string | number;  // 发推时间
@@ -84,7 +90,7 @@ export interface Tweet {
 
   // --- 原始数据快照 ---
   // 存储 LZ-String 压缩后的推文原始 API JSON 字符串
-  rawZip?: string;             
+  rawZip?: string;
 }
 
 /**
@@ -92,5 +98,5 @@ export interface Tweet {
  * 当从存储层读取数据准备展示在 React 列表时，Repository 会自动关联对应的 author 对象。
  */
 export type TweetWithUser = Tweet & {
-  author: UserCache; 
+  author: UserCache;
 };

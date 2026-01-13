@@ -1,8 +1,5 @@
 import { createRoot } from 'react-dom/client';
 import './style.css'
-// @ts-ignore
-import injectedScriptUrl from '../../core/extractor/injected?script&url';
-
 /**
  * 注入拦截器脚本到网页环境 (MAIN World)
  */
@@ -10,7 +7,8 @@ function injectInterceptor() {
   if (document.getElementById('thattweet-interceptor')) return;
   const script = document.createElement('script');
   script.id = 'thattweet-interceptor';
-  script.src = chrome.runtime.getURL(injectedScriptUrl);
+  // 手动指定构建好的文件路径，避开 CRXJS 的 loader 魔法
+  script.src = chrome.runtime.getURL('assets/injected.js');
   script.type = 'module';
   (document.head || document.documentElement).appendChild(script);
 }

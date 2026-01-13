@@ -1,9 +1,11 @@
-import { Tweet, UserCache, ProcessStatus, CaptureSource } from '../../shared/types/tweet';
+import { Tweet, UserCache, ProcessStatus, CaptureSource, MediaItem } from '../../shared/types/tweet';
 
 /**
  * 【解析引擎】
  * 负责从 X 的原始 GraphQL 响应中提取并标准化数据
- * 汲取了旧版递归搜索与路径探测的经验，并进行了强类型适配
+ * 【修复】完全对齐旧版数据结构：
+ *   - 媒体项保留 thumbnailUrl
+ *   - 推文嵌入作者字段 (author/authorName/authorAvatarUrl) 以及 authorId
  */
 export const Normalizer = {
     /**
@@ -17,7 +19,7 @@ export const Normalizer = {
         const traverse = (node: any, depth = 0) => {
             if (depth > 25 || !node || typeof node !== 'object') return;
 
-            // 1. 尝试解析用户 (优先提取，供推文关联)
+            // 1. 尝试解析用户 (优先提取)
             const user = this.extractUser(node);
             if (user) {
                 userMap.set(user.id, user);
@@ -48,7 +50,7 @@ export const Normalizer = {
     },
 
     /**
-     * 标准化推文提取逻辑
+     * 标准化推文提取逻辑 (对齐旧版 injected.ts)
      */
     extractTweet(node: any): Tweet | null {
         let tweetNode = node;
@@ -64,14 +66,34 @@ export const Normalizer = {
 
         const legacy = tweetNode.legacy;
         const tweetId = tweetNode.rest_id ?? legacy.id_str;
+        if (!tweetId) return null;
 
-        // 提取作者 ID - 采用最宽泛的探测
-        const userResult = tweetNode.core?.user_results?.result ?? tweetNode.core?.user ?? tweetNode.author_results?.result;
-        const authorId = userResult?.rest_id ?? userResult?.id_str ?? tweetNode.author_id_str;
+        // --- 作者信息提取 (对齐旧版) ---
+        const userResult = tweetNode.core?.user_results?.result ?? tweetNode.core?.user;
+        const userLegacy = userResult?.legacy ?? userResult;
 
-        if (!tweetId || !authorId) return null;
+        const authorId = userResult?.rest_id ?? userResult?.id_str ?? '';
+        const authorHandle = userLegacy?.screen_name ?? userResult?.screen_name ?? '';
+        const authorName = userLegacy?.name ?? userResult?.name ?? authorHandle;
 
-        // 处理长推文 (Notes / Premium)
+        // 头像处理：尝试多种备选路径，最后做 _normal -> _bigger
+        let authorAvatarUrl =
+            userLegacy?.profile_image_url_https ??
+            userLegacy?.profile_image_url ??
+            userResult?.profile_image_url_https ??
+            userResult?.profile_image_url ??
+            userResult?.profile_image_url_https_extended ??
+            userResult?.avatar?.image_url ??
+            userResult?.avatar?.media_info?.url ??
+            userResult?.avatar?.url ??
+            '';
+        if (authorAvatarUrl) {
+            authorAvatarUrl = authorAvatarUrl.replace('_normal.', '_bigger.');
+        }
+
+        if (!authorId && !authorHandle) return null;
+
+        // --- 推文正文 (处理长推文) ---
         const noteText = tweetNode.note_tweet?.note_tweet_results?.result?.text;
         const fullText = (noteText && noteText.length > (legacy.full_text || '').length)
             ? noteText
@@ -82,7 +104,12 @@ export const Normalizer = {
 
         return {
             id: tweetId,
-            authorId: authorId,
+            authorId: authorId || authorHandle, // 优先用 ID，兜底用 Handle
+            // 【旧版兼容】同时嵌入作者字段
+            author: authorHandle,
+            authorName: authorName,
+            authorAvatarUrl: authorAvatarUrl,
+
             text: fullText,
             tweetUrl: `https://x.com/i/status/${tweetId}`,
             createdAt: legacy.created_at ? new Date(legacy.created_at).getTime() : Date.now(),
@@ -101,16 +128,15 @@ export const Normalizer = {
             replyToUser: legacy.in_reply_to_screen_name,
             aiStatus: ProcessStatus.Pending,
             imageProcessStatus: ProcessStatus.Pending
-        };
+        } as Tweet;
     },
 
     /**
-     * 标准化用户提取逻辑 (参考旧版“鲁棒”逻辑重写)
+     * 标准化用户提取逻辑
      */
     extractUser(node: any): UserCache | null {
         if (!node || typeof node !== 'object') return null;
 
-        // 【探测】是否像一个用户对象？
         const isLikelyUser =
             node.__typename === 'User' ||
             (node.legacy && node.legacy.screen_name) ||
@@ -118,7 +144,6 @@ export const Normalizer = {
 
         if (!isLikelyUser) return null;
 
-        // 【定位数据层】尽可能向上和向下兼容
         const core = node.core?.user_results?.result ?? node.core ?? node;
         const legacy = node.legacy ?? core?.legacy ?? node;
 
@@ -127,11 +152,16 @@ export const Normalizer = {
 
         if (!userId || !handle) return null;
 
+        let avatar = legacy.profile_image_url_https ?? core.profile_image_url_https ?? '';
+        if (avatar) {
+            avatar = avatar.replace('_normal.', '_bigger.');
+        }
+
         return {
             id: userId,
             handle: handle.replace(/^@/, ''),
             name: legacy.name ?? core.name ?? node.name ?? handle,
-            avatar: (legacy.profile_image_url_https ?? core.profile_image_url_https ?? '').replace('_normal.', '_bigger.'),
+            avatar: avatar,
             description: legacy.description ?? core.description,
             followersCount: legacy.followers_count ?? node.followers_count,
             verified: legacy.verified ?? core.verified ?? node.verified,
@@ -140,28 +170,44 @@ export const Normalizer = {
     },
 
     /**
-     * 媒体文件解析
+     * 媒体文件解析 (对齐旧版：同时保存 url 和 thumbnailUrl)
      */
-    extractMedia(legacy: any): any[] {
+    extractMedia(legacy: any): MediaItem[] {
         const mediaNodes = legacy.extended_entities?.media ?? legacy.entities?.media ?? [];
         return mediaNodes.map((m: any) => {
-            const type = (m.type === 'photo' || m.type === 'image') ? 'image' :
-                (m.type === 'animated_gif' ? 'gif' : 'video');
+            const typeRaw = m.type;
+            let type: 'image' | 'video' | 'gif';
 
-            let url = m.media_url_https ?? m.media_url;
+            if (typeRaw === 'photo') type = 'image';
+            else if (typeRaw === 'video') type = 'video';
+            else if (typeRaw === 'animated_gif') type = 'gif';
+            else return null;
 
-            if ((type === 'video' || type === 'gif') && m.video_info?.variants) {
-                // 取质量最高的 MP4
-                const variants = m.video_info.variants
-                    .filter((v: any) => v.content_type === 'video/mp4')
-                    .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
-                if (variants.length > 0) url = variants[0].url;
-            } else if (type === 'image' && url && !url.includes('?')) {
+            // 原始图片 URL (这是封面图)
+            let thumbnailUrl = m.media_url_https ?? m.media_url ?? '';
+            let url = thumbnailUrl;
+
+            // 图片：补齐质量参数
+            if (type === 'image' && url && !url.includes('?')) {
                 url += '?format=jpg&name=large';
             }
 
-            return { type, url };
-        });
+            // 视频/GIF：取最高码率 MP4，但保留封面图
+            if ((type === 'video' || type === 'gif') && m.video_info?.variants) {
+                const mp4Variants = m.video_info.variants
+                    .filter((v: any) => v.content_type === 'video/mp4')
+                    .sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+                if (mp4Variants.length > 0) {
+                    url = mp4Variants[0].url;
+                }
+            }
+
+            return {
+                type,
+                url,               // 播放源 (mp4) 或 图片源
+                previewUrl: thumbnailUrl // 封面图 (对齐旧版 thumbnailUrl)
+            };
+        }).filter(Boolean) as MediaItem[];
     },
 
     parseViewCount(count: any): number {
