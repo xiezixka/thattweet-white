@@ -49,5 +49,14 @@
   },
   "feed_search_placeholder": {
     "message": "语义搜索或关键字..."
+  },
+  "status_interceptor_active": {
+    "message": "拦截器运行中"
+  },
+  "status_ai_idle": {
+    "message": "AI 队列空闲"
+  },
+  "status_version_prefix": {
+    "message": "版本 v"
   }
 }

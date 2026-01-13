@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
     LayoutDashboard,
     BrainCircuit,
@@ -18,8 +18,29 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const Sidebar: React.FC = () => {
-    const { activeView, setActiveView, sidebarCollapsed, toggleSidebar } = useUIStore();
+    const { activeView, setActiveView, sidebarCollapsed, toggleSidebar, sidebarWidth, setSidebarWidth } = useUIStore();
     const { t } = useTranslation();
+    const isResizing = useRef(false);
+
+    const startResizing = useCallback((e: React.MouseEvent) => {
+        isResizing.current = true;
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', stopResizing);
+        document.body.style.cursor = 'col-resize';
+    }, []);
+
+    const stopResizing = useCallback(() => {
+        isResizing.current = false;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', stopResizing);
+        document.body.style.cursor = 'default';
+    }, []);
+
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (!isResizing.current) return;
+        const newWidth = Math.min(Math.max(e.clientX, 80), 480);
+        setSidebarWidth(newWidth);
+    }, [setSidebarWidth]);
 
     const navItems = [
         { id: 'feed', icon: LayoutDashboard, label: t('nav_feed') },
@@ -28,27 +49,30 @@ export const Sidebar: React.FC = () => {
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];
 
+    const currentWidth = sidebarCollapsed ? 80 : sidebarWidth;
+
     return (
         <aside
+            style={{ width: currentWidth }}
             className={cn(
-                "h-screen flex flex-col transition-all duration-300 glass-panel border-r border-white/5",
-                sidebarCollapsed ? "w-20" : "w-64"
+                "h-screen flex flex-col relative transition-all duration-300 glass-panel border-r border-white/5 select-none animate-in shrink-0",
+                sidebarCollapsed ? "duration-300" : "duration-0" // Disable transition when dragging
             )}
         >
             {/* Logo Area */}
-            <div className="p-6 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center shadow-lg shadow-brand/20">
+            <div className="p-6 flex items-center gap-3 overflow-hidden">
+                <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center shadow-lg shadow-brand/20 shrink-0">
                     <Bird className="text-white" size={24} />
                 </div>
-                {!sidebarCollapsed && (
-                    <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                {!sidebarCollapsed && currentWidth > 160 && (
+                    <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent truncate">
                         ThatTweet
                     </span>
                 )}
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 space-y-2 mt-4">
+            <nav className="flex-1 px-3 space-y-2 mt-4 overflow-hidden">
                 {navItems.map((item) => (
                     <button
                         key={item.id}
@@ -61,10 +85,11 @@ export const Sidebar: React.FC = () => {
                         )}
                     >
                         <item.icon size={22} className={cn(
+                            "shrink-0",
                             activeView === item.id ? "text-brand" : "group-hover:scale-110 transition-transform"
                         )} />
-                        {!sidebarCollapsed && (
-                            <span className="font-medium">{item.label}</span>
+                        {!sidebarCollapsed && currentWidth > 160 && (
+                            <span className="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
                         )}
                     </button>
                 ))}
@@ -79,6 +104,14 @@ export const Sidebar: React.FC = () => {
                     {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
                 </button>
             </div>
+
+            {/* Drag Handle */}
+            {!sidebarCollapsed && (
+                <div
+                    onMouseDown={startResizing}
+                    className="absolute top-0 -right-1 w-2 h-full cursor-col-resize hover:bg-brand/30 transition-colors z-50"
+                />
+            )}
         </aside>
     );
 };

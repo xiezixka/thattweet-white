@@ -49,5 +49,14 @@
   },
   "feed_search_placeholder": {
     "message": "Semantic search or keywords..."
+  },
+  "status_interceptor_active": {
+    "message": "INTERCEPTOR ACTIVE"
+  },
+  "status_ai_idle": {
+    "message": "AI QUEUE IDLE"
+  },
+  "status_version_prefix": {
+    "message": "v"
   }
 }

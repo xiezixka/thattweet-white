@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sidebar } from './Sidebar';
 import { useUIStore } from '../../store/useUIStore';
+import { useTranslation } from '../../hooks/useTranslation';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MainLayoutProps {
@@ -9,6 +10,7 @@ interface MainLayoutProps {
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const { activeView } = useUIStore();
+    const { t } = useTranslation();
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-zinc-950">
@@ -17,7 +19,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
             {/* 主画布 */}
             <main className="flex-1 relative overflow-hidden flex flex-col">
-                {/* 这里可以使用 AnimatePresence 处理页面切换动效 */}
+                {/* 页面切换动效 */}
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeView}
@@ -35,14 +37,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <footer className="h-8 border-t border-white/5 bg-black/20 backdrop-blur-sm flex items-center px-6 text-[10px] text-zinc-600 gap-4">
                     <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>INTERCEPTOR ACTIVE</span>
+                        <span className="uppercase tracking-wider font-medium">{t('status_interceptor_active')}</span>
                     </div>
                     <div className="flex items-center gap-2 border-l border-white/5 pl-4">
                         <div className="w-1.5 h-1.5 rounded-full bg-brand" />
-                        <span>AI QUEUE IDLE</span>
+                        <span className="uppercase tracking-wider font-medium">{t('status_ai_idle')}</span>
                     </div>
                     <div className="flex-1" />
-                    <span>v1.0.1 ALPHA</span>
+                    <span className="opacity-40">{t('status_version_prefix')}1.0.1 ALPHA</span>
                 </footer>
             </main>
         </div>
