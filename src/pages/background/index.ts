@@ -31,6 +31,7 @@ async function handleBatchSave(tweets: Tweet[], users: UserCache[]) {
             const author = userMap.get(tweet.authorId);
             if (author) {
                 await TweetRepository.saveTweet(tweet, author);
+                console.log(`%c[ThatTweet] Saved to DB: ${tweet.id}`, 'color: #4CAF50');
             }
         }
 

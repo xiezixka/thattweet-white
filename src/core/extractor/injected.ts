@@ -17,6 +17,7 @@ import { Normalizer } from './normalizer';
             const result = Normalizer.findDataInObject(json);
 
             if (result.tweets.length > 0) {
+                console.log(`%c[ThatTweet] 提取到 ${result.tweets.length} 条推文数据`, 'color: #1d9bf0; font-weight: bold');
                 // 发送给 Content Script
                 window.dispatchEvent(new CustomEvent('thattweet-tweet-data', {
                     detail: {

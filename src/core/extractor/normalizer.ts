@@ -11,24 +11,23 @@ export const Normalizer = {
      */
     findDataInObject(obj: any): { tweets: Tweet[], users: UserCache[] } {
         const foundTweets: Tweet[] = [];
-        const foundUsers: UserCache[] = [];
-        const processedIds = new Set<string>();
+        const userMap = new Map<string, UserCache>();
+        const processedTweetIds = new Set<string>();
 
         const traverse = (node: any, depth = 0) => {
-            // 限制深度防止死循环
             if (depth > 25 || !node || typeof node !== 'object') return;
 
-            // 1. 尝试解析推文
-            const tweet = this.extractTweet(node);
-            if (tweet && !processedIds.has(tweet.id)) {
-                foundTweets.push(tweet);
-                processedIds.add(tweet.id);
-            }
-
-            // 2. 尝试解析用户 
+            // 1. 尝试解析用户 (优先提取，供推文关联)
             const user = this.extractUser(node);
             if (user) {
-                foundUsers.push(user);
+                userMap.set(user.id, user);
+            }
+
+            // 2. 尝试解析推文
+            const tweet = this.extractTweet(node);
+            if (tweet && !processedTweetIds.has(tweet.id)) {
+                foundTweets.push(tweet);
+                processedTweetIds.add(tweet.id);
             }
 
             // 3. 递归子节点
@@ -42,21 +41,20 @@ export const Normalizer = {
         };
 
         traverse(obj);
-        return { tweets: foundTweets, users: foundUsers };
+        return {
+            tweets: foundTweets,
+            users: Array.from(userMap.values())
+        };
     },
 
     /**
      * 标准化推文提取逻辑
      */
     extractTweet(node: any): Tweet | null {
-        // 识别推文节点特征
         let tweetNode = node;
-
-        // 处理 TweetWithVisibilityResults 嵌套
         if (node.__typename === 'TweetWithVisibilityResults' && node.tweet) {
             tweetNode = node.tweet;
         }
-        // 处理 tweet_results.result 嵌套
         if (node.tweet_results?.result) {
             tweetNode = node.tweet_results.result;
             if (tweetNode.tweet) tweetNode = tweetNode.tweet;
@@ -66,9 +64,12 @@ export const Normalizer = {
 
         const legacy = tweetNode.legacy;
         const tweetId = tweetNode.rest_id ?? legacy.id_str;
-        const userResult = tweetNode.core?.user_results?.result ?? tweetNode.core?.user;
 
-        if (!tweetId || !userResult) return null;
+        // 提取作者 ID - 采用最宽泛的探测
+        const userResult = tweetNode.core?.user_results?.result ?? tweetNode.core?.user ?? tweetNode.author_results?.result;
+        const authorId = userResult?.rest_id ?? userResult?.id_str ?? tweetNode.author_id_str;
+
+        if (!tweetId || !authorId) return null;
 
         // 处理长推文 (Notes / Premium)
         const noteText = tweetNode.note_tweet?.note_tweet_results?.result?.text;
@@ -76,62 +77,64 @@ export const Normalizer = {
             ? noteText
             : (legacy.full_text || legacy.text || '');
 
-        // 如果文本和媒体都为空，则不是有效推文
         const media = this.extractMedia(legacy);
         if (!fullText && media.length === 0) return null;
 
         return {
             id: tweetId,
-            authorId: userResult.rest_id || userResult.id_str,
+            authorId: authorId,
             text: fullText,
             tweetUrl: `https://x.com/i/status/${tweetId}`,
             createdAt: legacy.created_at ? new Date(legacy.created_at).getTime() : Date.now(),
             source: CaptureSource.Interceptor,
             savedAt: Date.now(),
-
             isBookmarked: false,
             isArchived: false,
             tags: [],
-
             favoriteCount: legacy.favorite_count || 0,
             retweetCount: legacy.retweet_count || 0,
             replyCount: legacy.reply_count || 0,
             viewCount: this.parseViewCount(tweetNode.views?.count),
-
             media: media,
-
             conversationId: legacy.conversation_id_str,
             replyToId: legacy.in_reply_to_status_id_str,
             replyToUser: legacy.in_reply_to_screen_name,
-
             aiStatus: ProcessStatus.Pending,
             imageProcessStatus: ProcessStatus.Pending
         };
     },
 
     /**
-     * 标准化用户提取逻辑
+     * 标准化用户提取逻辑 (参考旧版“鲁棒”逻辑重写)
      */
     extractUser(node: any): UserCache | null {
-        const userResult = node.core?.user_results?.result ??
-            node.author_results?.result ??
-            (node.__typename === 'User' ? node : null);
+        if (!node || typeof node !== 'object') return null;
 
-        if (!userResult || !userResult.legacy) return null;
+        // 【探测】是否像一个用户对象？
+        const isLikelyUser =
+            node.__typename === 'User' ||
+            (node.legacy && node.legacy.screen_name) ||
+            (node.screen_name && node.followers_count !== undefined);
 
-        const legacy = userResult.legacy;
-        const userId = userResult.rest_id || userResult.id_str;
+        if (!isLikelyUser) return null;
 
-        if (!userId || !legacy.screen_name) return null;
+        // 【定位数据层】尽可能向上和向下兼容
+        const core = node.core?.user_results?.result ?? node.core ?? node;
+        const legacy = node.legacy ?? core?.legacy ?? node;
+
+        const userId = node.rest_id ?? node.id_str ?? core.rest_id ?? core.id_str;
+        const handle = legacy.screen_name ?? core.screen_name ?? node.screen_name;
+
+        if (!userId || !handle) return null;
 
         return {
             id: userId,
-            handle: legacy.screen_name,
-            name: legacy.name || legacy.screen_name,
-            avatar: (legacy.profile_image_url_https || legacy.profile_image_url || '').replace('_normal.', '_bigger.'),
-            description: legacy.description,
-            followersCount: legacy.followers_count,
-            verified: legacy.verified,
+            handle: handle.replace(/^@/, ''),
+            name: legacy.name ?? core.name ?? node.name ?? handle,
+            avatar: (legacy.profile_image_url_https ?? core.profile_image_url_https ?? '').replace('_normal.', '_bigger.'),
+            description: legacy.description ?? core.description,
+            followersCount: legacy.followers_count ?? node.followers_count,
+            verified: legacy.verified ?? core.verified ?? node.verified,
             updatedAt: Date.now()
         };
     },
