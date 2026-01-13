@@ -1,0 +1,26 @@
+/* Tiptap Placeholder Style */
+.tiptap p.is-editor-empty:first-child::before {
+    color: #52525b;
+    /* zinc-600 */
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+}
+
+/* 隐藏 Tiptap 的默认 focus outline */
+.ProseMirror:focus {
+    outline: none;
+}
+
+/* 选中节点时的样式 (如果是 TweetCard) */
+.ProseMirror-selectednode .tweet-card-node {
+    outline: 2px solid rgba(29, 155, 240, 0.5);
+    border-radius: 12px;
+}
+
+/* 确保 NodeViewWrapper 能够正常撑开 */
+.react-renderer {
+    display: flex;
+    flex-direction: column;
+}

@@ -13,11 +13,17 @@ export const AIProviderFactory = {
             case 'custom': baseURL = settings.baseUrlContent || ''; break;
         }
 
+        const providerName = settings.provider;
+        console.log(`[AIProvider] Creating provider for: ${providerName}, baseURL: ${baseURL}`);
+
         const provider = createOpenAI({
             apiKey: settings.apiKey,
             baseURL: baseURL,
         });
 
-        return provider(forceVision ? settings.visionModel : settings.model);
+        const modelId = forceVision ? settings.visionModel : settings.model;
+        if (!modelId) throw new Error('Model ID is empty');
+
+        return provider(modelId);
     }
 };

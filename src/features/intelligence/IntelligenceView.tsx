@@ -1,18 +1,33 @@
 import React from 'react';
+import { Sidebar } from './components/layout/Sidebar';
+import { ChatArea } from './components/chat/ChatArea';
+import { NoteEditor } from './components/editor/NoteEditor';
+import { useIntelligenceStore } from './store/useIntelligenceStore';
+import { cn } from '../../shared/utils/cn';
 
-export const IntelligenceView: React.FC = () => (
-    <div className="flex h-full">
-        <div className="w-80 border-r border-white/5 p-6 space-y-4">
-            <h2 className="text-xl font-bold">对话记录</h2>
-            <div className="space-y-2 opacity-30">
-                <div className="h-12 bg-white/5 rounded-lg" />
-                <div className="h-12 bg-white/5 rounded-lg" />
+export const IntelligenceView: React.FC = () => {
+    const { isNoteOpen } = useIntelligenceStore();
+
+    return (
+        <div className="h-full bg-[#0d0d0d] text-zinc-200 flex overflow-hidden">
+            {/* 1. Left Sidebar (History) */}
+            <Sidebar />
+
+            {/* 2. Main Workspace */}
+            <div className="flex-1 flex relative min-w-0">
+                {/* 2a. Chat Area */}
+                <ChatArea />
+
+                {/* 2b. Note Editor (Right Side) */}
+                <div
+                    className={cn(
+                        "border-l border-white/5 bg-[#121212] transition-all duration-300 ease-in-out overflow-hidden flex flex-col",
+                        isNoteOpen ? "w-[450px] opacity-100" : "w-0 opacity-0"
+                    )}
+                >
+                    <NoteEditor />
+                </div>
             </div>
         </div>
-        <div className="flex-1 flex flex-col p-8">
-            <div className="flex-1 glass-panel rounded-3xl p-8 flex items-center justify-center text-zinc-600 italic">
-                选择或开始一个新的深度分析对话...
-            </div>
-        </div>
-    </div>
-);
+    );
+};
