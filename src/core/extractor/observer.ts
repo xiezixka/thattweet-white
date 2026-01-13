@@ -3,7 +3,7 @@ import { Tweet } from '../../shared/types/tweet';
 
 /**
  * 👀 DOM 观察员
- * 持续扫描页面上的推文元素，将漏网之鱼发送给后台
+ * 持续扫描页面上的推文元素，将漏网之鱼发送给后台，并给已保存的推文添加视觉标记
  */
 export class DomObserver {
     private observer: MutationObserver | null = null;
@@ -18,11 +18,14 @@ export class DomObserver {
     start() {
         if (this.observer) return;
 
-        // 🛡️ 确保 body 存在再启动 (针对 document_start)
+        // 🛡️ 确保 body 存在再启动
         if (!document.body) {
             window.requestAnimationFrame(() => this.start());
             return;
         }
+
+        // 0. 注入高亮样式
+        this.injectStyles();
 
         // 1. 初始全量扫描
         this.scan();
@@ -53,10 +56,33 @@ export class DomObserver {
     }
 
     /**
-     * 标记这些 ID 已经被 API 拦截到了，DOM 没必要再处理
+     * 注入高亮样式
+     */
+    private injectStyles() {
+        if (document.getElementById("thattweet-styles")) return;
+        const style = document.createElement("style");
+        style.id = "thattweet-styles";
+        // 样式：天蓝色柔和发光边框，与 Dark Mode 完美融合
+        style.textContent = `
+            article[data-thattweet-saved="true"] {
+                outline: 2px solid rgba(29, 155, 240, 0.4) !important;
+                outline-offset: -2px !important;
+                border-radius: 12px !important;
+                transition: outline 0.3s ease;
+                box-shadow: inset 0 0 10px rgba(29, 155, 240, 0.05) !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    /**
+     * 标记这些 ID 已经被 API 拦截到了
+     * DOM 就会给它们加上高亮框
      */
     markAsProcessed(ids: string[]) {
         ids.forEach(id => this.processedIds.add(id));
+        // 收到新的 API 数据后，立即扫一遍 DOM，给它们加上高亮
+        this.scheduleScan();
     }
 
     private scheduleScan() {
@@ -68,7 +94,7 @@ export class DomObserver {
             } else {
                 this.scan();
             }
-        }, 1000); // 1秒防抖，不需要太实时，这是兜底
+        }, 200); // 提速：200ms 防抖，视觉反馈更灵敏
     }
 
     private scan() {
@@ -80,14 +106,25 @@ export class DomObserver {
             const newTweets: Tweet[] = [];
 
             articles.forEach(article => {
-                // 试图解析
+                // 1. 先尝试获取 Tweet 对象 (内部已含广告过滤)
                 const tweet = DomExtractor.extractTweetFromElement(article);
 
-                if (tweet && tweet.id && !this.processedIds.has(tweet.id)) {
-                    // 找到了一个漏网之鱼！
+                if (!tweet) return; // 可能是广告，跳过
+
+                // 2. 检查是否已处理
+                if (this.processedIds.has(tweet.id)) {
+                    // 已处理 -> 标记视觉高亮
+                    if (article.getAttribute('data-thattweet-saved') !== 'true') {
+                        article.setAttribute('data-thattweet-saved', 'true');
+                    }
+                } else if (tweet.id) {
+                    // 未处理 -> 加入保存队列
                     console.log('[ThatTweet] DOM found fallback tweet:', tweet.id);
                     newTweets.push(tweet);
+
+                    // 标记为已处理
                     this.processedIds.add(tweet.id);
+                    article.setAttribute('data-thattweet-saved', 'true');
                 }
             });
 

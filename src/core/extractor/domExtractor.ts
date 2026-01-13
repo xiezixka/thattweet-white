@@ -7,7 +7,55 @@ type TweetMedia = { type: "image" | "video" | "gif"; url: string; previewUrl?: s
  * 作为 API 拦截的兜底方案，专门用于抓取首屏漏网或 API 变动后的推文
  */
 export class DomExtractor {
+    /**
+     * 判断是否为广告 (移植自旧版)
+     */
+    static isAdvertisement(articleElement: Element): boolean {
+        // 1. socialContext 检查
+        const socialContext = articleElement.querySelector('[data-testid="socialContext"]');
+        if (socialContext) {
+            const text = socialContext.textContent?.trim() || "";
+            if (/^(Promoted|Ad|广告|推荐|赞助)$/.test(text) || text.includes("Promoted") || text.includes("广告") || text.includes("Sponsored")) {
+                return true;
+            }
+        }
+
+        // 2. aria-label 检查
+        const adLabels = articleElement.querySelectorAll(
+            '[aria-label*="Promoted"], [aria-label*="广告"], [aria-label*="Ad"], [aria-label*="Sponsored"]'
+        );
+        for (const el of adLabels) {
+            const label = el.getAttribute('aria-label') || "";
+            if (label === "Promoted" || label === "广告" || label === "Ad" || label === "Sponsored" ||
+                label.endsWith(" Promoted") || label.endsWith(" 广告")) {
+                return true;
+            }
+        }
+
+        // 3. 顶部文本检查
+        const hasTopAdText = !!Array.from(articleElement.querySelectorAll('span')).find(s =>
+            s.textContent?.trim() === "广告" || s.textContent?.trim() === "Promoted"
+        );
+        if (hasTopAdText) return true;
+
+        // 4. 组合特征检查 (PlacementTracking + No Time)
+        const hasPlacementTracking = !!articleElement.querySelector('[data-testid="placementTracking"]');
+        const noTimeElement = !articleElement.querySelector('time');
+
+        if (hasPlacementTracking && noTimeElement) {
+            const textContent = articleElement.textContent || "";
+            if (textContent.includes("Promoted") || textContent.includes("广告") || textContent.includes("赞助")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     static extractTweetFromElement(articleElement: Element): Tweet | null {
+        // 🛡️ 广告过滤
+        if (this.isAdvertisement(articleElement)) return null;
+
         // 1. 提取推文 URL 和 ID
         const links = articleElement.querySelectorAll('a[href*="/status/"]');
         let tweetUrl: string | null = null;
