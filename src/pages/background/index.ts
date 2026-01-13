@@ -11,8 +11,13 @@ console.log('%c[ThatTweet] Background Script Active v1.0.1', 'color: #1d9bf0; fo
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'SAVE_TWEETS_BATCH') {
         const { tweets, users } = message.payload;
-        handleBatchSave(tweets, users);
-        return true;
+        handleBatchSave(tweets, users).then(() => {
+            sendResponse({ success: true });
+        }).catch(err => {
+            console.error(err);
+            sendResponse({ success: false, error: err.message });
+        });
+        return true; // Keep channel open for async response
     }
 });
 
@@ -36,6 +41,7 @@ async function handleBatchSave(tweets: Tweet[], users: UserCache[]) {
         AIJobQueue.processNextBatch().catch(console.error);
     } catch (error) {
         console.error('[ThatTweet] Batch save failed:', error);
+        throw error; // Re-throw to be caught by the listener
     }
 }
 

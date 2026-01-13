@@ -34,25 +34,17 @@ const getScoreStyles = (score: number) => {
  */
 const normalizeTwitterUrl = (url: string | undefined): string => {
     if (!url) return '';
-
-    // 如果已经是视频链接 (.mp4)，尝试推导出它的缩略图 (如果有约定的转换规则)
-    if (url.includes('video.twimg.com') && url.includes('.mp4')) {
-        // 通常封面图会存在 pbs 服务器上，这里如果找不到 previewUrl，只能显示占位
-        return '';
-    }
+    // 🧪 实验：回退到最原始状态，除了 HTTPS 协议外，不做任何处理
+    // 如果 URL 有效，直接返回。
+    // 旧版能显示，说明原始 URL 本身就是好的。
+    // 唯一保留：视频/媒体图可能需要 format 参数，但头像我们先不动。
 
     let processed = url.replace('http:', 'https:');
 
-    if (processed.includes('pbs.twimg.com')) {
-        if (processed.includes('_normal.')) {
-            processed = processed.replace('_normal.', '_bigger.');
-        }
-
-        // 关键修复：确保所有媒体链接都带上 format 和 name 参数，否则 403
+    // 只对媒体图 (media) 追加参数，头像保持原样！
+    if (processed.includes('pbs.twimg.com') && !processed.includes('/profile_images/')) {
         if (!processed.includes('?')) {
             processed += '?format=jpg&name=large';
-        } else if (!processed.includes('name=')) {
-            processed += '&name=large';
         }
     }
     return processed;
@@ -70,6 +62,10 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
 
     // 1. 头像处理 (增加 fallback 状态)
     const avatarUrl = normalizeTwitterUrl(author?.avatar);
+
+    // 🔍 调试日志 (已激活)
+    if (!avatarUrl) console.log(`[Card] No avatar for ${author?.name}`, author);
+    else console.log(`[Card] Avatar for ${author?.name}:`, avatarUrl);
 
     // 2. 媒体处理 (增加容错)
     const firstMedia = tweet.media?.[0];
