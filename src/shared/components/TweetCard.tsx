@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Tweet } from '../types/tweet';
 import { UserCache } from '../types/tweet';
-import { Calendar, MessageCircle, Heart, Repeat2, Tag, Eye } from 'lucide-react';
+import { Calendar, MessageCircle, Heart, Repeat2, Tag, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -21,56 +22,92 @@ const formatNumber = (num: number) => {
     return num.toString();
 };
 
+const getScoreStyles = (score: number) => {
+    if (score >= 90) return 'text-rose-400 bg-rose-400/10 border-rose-400/20 shadow-lg shadow-rose-400/10';
+    if (score >= 70) return 'text-amber-400 bg-amber-400/10 border-amber-400/20 shadow-md shadow-amber-400/10';
+    if (score >= 40) return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
+    return 'text-zinc-500 bg-zinc-500/10 border-white/5';
+};
+
 export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry' }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const { t } = useTranslation();
     const isMasonry = mode === 'masonry';
+
+    const scoreStyles = tweet.aiScore !== undefined ? getScoreStyles(tweet.aiScore) : '';
+    const hasLongText = tweet.text.length > 140;
 
     return (
         <div className={cn(
-            "group relative glass-card rounded-2xl overflow-hidden flex flex-col transition-all duration-300",
-            "p-4 gap-4 border-b border-white/5", // Balanced Padding (16px)
-            "break-inside-avoid w-full box-border mb-4" // Old Spec Flow Logic
+            "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all duration-300",
+            "p-3 gap-2 border-b border-white/5",
+            "break-inside-avoid w-full box-border mb-4"
         )}>
-            {/* Header: Author & Info (14px / 13px / 12px) */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+            {/* Header Area */}
+            <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2.5">
                     <img
                         src={author.avatar}
                         alt={author.name}
                         className="w-10 h-10 rounded-full border border-white/10"
                     />
                     <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-[14px] leading-tight text-zinc-100 truncate max-w-[150px]">{author.name}</span>
+                        <span className="font-bold text-[14px] leading-tight text-zinc-100 truncate max-w-[140px]">{author.name}</span>
                         <span className="text-[13px] text-zinc-500 leading-tight">@{author.handle}</span>
                     </div>
                 </div>
 
                 {tweet.aiScore !== undefined && (
-                    <div className="px-2 py-0.5 rounded-lg bg-brand/10 border border-brand/20 text-[10px] font-bold text-brand italic tracking-tight">
+                    <div className={cn(
+                        "px-2 py-0.5 rounded-lg border text-[10px] font-black italic tracking-tighter transition-all duration-500",
+                        scoreStyles
+                    )}>
                         {tweet.aiScore}
                     </div>
                 )}
             </div>
 
-            {/* AI Summary Section */}
+            {/* AI Summary */}
             {tweet.aiSummary && (
-                <div className="text-zinc-200 text-[14px] leading-[1.5] bg-white/[0.03] p-3 rounded-xl border border-white/5 italic">
-                    <span className="text-brand font-black mr-2 text-[11px]">AI</span>
+                <div className={cn(
+                    "text-zinc-200 text-[13px] leading-[1.4] p-2.5 rounded-xl border italic mb-1",
+                    tweet.aiScore && tweet.aiScore >= 90 ? "bg-rose-400/5 border-rose-400/10" : "bg-white/[0.03] border-white/5"
+                )}>
+                    <span className={cn(
+                        "font-black mr-2 text-[10px]",
+                        tweet.aiScore && tweet.aiScore >= 90 ? "text-rose-400" : "text-brand"
+                    )}>{t('card_ai_label')}:</span>
                     {tweet.aiSummary}
                 </div>
             )}
 
-            {/* Main Content (Old Spec: 14px / 1.4) */}
-            <div className={cn(
-                "text-zinc-300 break-words",
-                "text-[14px] leading-[1.4]", // Fixed Old Spec Scale
-                isMasonry ? "line-clamp-6 group-hover:line-clamp-none transition-all duration-500" : ""
-            )}>
-                {tweet.text}
+            {/* Main Content Area */}
+            <div className="relative">
+                <div className={cn(
+                    "text-zinc-300 break-words transition-all duration-300",
+                    "text-[14px] leading-[1.4]",
+                    !isExpanded && isMasonry && "line-clamp-5 truncate-multiline"
+                )}>
+                    {tweet.text}
+                </div>
+
+                {hasLongText && isMasonry && (
+                    <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="mt-1 text-[11px] font-bold text-brand/70 hover:text-brand flex items-center gap-0.5 transition-colors"
+                    >
+                        {isExpanded ? (
+                            <>{t('card_show_less')} <ChevronUp size={12} /></>
+                        ) : (
+                            <>{t('card_read_more')} <ChevronDown size={12} /></>
+                        )}
+                    </button>
+                )}
             </div>
 
-            {/* Media Content */}
+            {/* Media Area */}
             {tweet.media && tweet.media.length > 0 && (
-                <div className="aspect-video rounded-xl bg-zinc-800/50 overflow-hidden relative border border-white/5">
+                <div className="aspect-video rounded-xl bg-zinc-800/50 overflow-hidden relative border border-white/5 mt-1">
                     <img
                         src={tweet.media[0].url}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -79,27 +116,24 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                 </div>
             )}
 
-            {/* Tags - Cleaner integration */}
-            {tweet.aiTags && tweet.aiTags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                    {tweet.aiTags.slice(0, 3).map(tag => (
-                        <span key={tag} className="px-2 py-0.5 rounded-md bg-zinc-800/30 text-[11px] text-zinc-500 border border-white/5">
-                            #{tag}
-                        </span>
-                    ))}
+            {/* Footer Area - Fixed: Restored all 4 stats */}
+            <div className="flex items-center justify-between pt-2 mt-1 border-t border-white/5 text-zinc-600">
+                <div className="flex items-center gap-3 text-[11px]">
+                    <span className="flex items-center gap-1 hover:text-brand transition-colors cursor-default" title="Replies">
+                        <MessageCircle size={12} /> {formatNumber(tweet.replyCount)}
+                    </span>
+                    <span className="flex items-center gap-1 hover:text-emerald-500 transition-colors cursor-default" title="Retweets">
+                        <Repeat2 size={12} /> {formatNumber(tweet.retweetCount)}
+                    </span>
+                    <span className="flex items-center gap-1 hover:text-rose-400 transition-colors cursor-default" title="Likes">
+                        <Heart size={12} /> {formatNumber(tweet.favoriteCount)}
+                    </span>
+                    <span className="flex items-center gap-1 cursor-default" title="Views">
+                        <Eye size={12} /> {formatNumber(tweet.viewCount || 0)}
+                    </span>
                 </div>
-            )}
-
-            {/* Footer Stats (12px Scale) */}
-            <div className="flex items-center justify-between pt-3 border-t border-white/5 text-zinc-600">
-                <div className="flex items-center gap-4 text-[12px]">
-                    <span className="flex items-center gap-1.5 hover:text-brand transition-colors cursor-default"><MessageCircle size={13} /> {formatNumber(tweet.replyCount)}</span>
-                    <span className="flex items-center gap-1.5 hover:text-emerald-500 transition-colors cursor-default"><Repeat2 size={13} /> {formatNumber(tweet.retweetCount)}</span>
-                    <span className="flex items-center gap-1.5 hover:text-rose-500 transition-colors cursor-default"><Heart size={13} /> {formatNumber(tweet.favoriteCount)}</span>
-                    <span className="flex items-center gap-1.5"><Eye size={13} /> {formatNumber(tweet.viewCount || 0)}</span>
-                </div>
-                <div className="text-[12px] font-medium flex items-center gap-1.5 opacity-60">
-                    <Calendar size={13} />
+                <div className="text-[10px] font-medium flex items-center gap-1 opacity-60 italic">
+                    <Calendar size={12} />
                     {new Date(tweet.createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' })}
                 </div>
             </div>

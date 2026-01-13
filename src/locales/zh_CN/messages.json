@@ -58,5 +58,14 @@
   },
   "status_version_prefix": {
     "message": "版本 v"
+  },
+  "card_read_more": {
+    "message": "查看全文"
+  },
+  "card_show_less": {
+    "message": "收起原文"
+  },
+  "card_ai_label": {
+    "message": "AI 洞察"
   }
 }

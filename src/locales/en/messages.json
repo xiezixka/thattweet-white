@@ -58,5 +58,14 @@
   },
   "status_version_prefix": {
     "message": "v"
+  },
+  "card_read_more": {
+    "message": "Read More"
+  },
+  "card_show_less": {
+    "message": "Show Less"
+  },
+  "card_ai_label": {
+    "message": "AI"
   }
 }
