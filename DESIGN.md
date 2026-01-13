@@ -208,3 +208,39 @@ export interface Tweet {
     *   **图片**: 自动移除 `_normal` 后缀并购建 `?format=jpg&name=large` 链接获取原图。
     *   **视频**: 自动对比所有 `video_info.variants` 的码率 (Bitrate)，确保抓取最高清的版本。
 *   **作者信息去重**: 全量扫描 `user_results`，确保作者的头像、粉丝数等信息在 `UserCache` 中保持单例且最新。
+
+---
+
+## 8. AI 处理框架 (AI Processing Framework)
+
+系统设计了一套异步、插件化的 AI 处理链路，支持多服务商切换与结构化数据生产。
+
+### 8.1 多服务商适配器 (Adapter Pattern)
+为了解决不同 AI 提供商（SiliconFlow, DeepSeek, OpenAI）接口细微差异及环境兼容性，系统采用了**适配器模式**：
+*   **统一接口**: 定义 `AIProviderAdapter`，规定所有适配器必须实现 `analyze()` 方法并返回标准化的 `AIAnalysisResult` 对象。
+*   **原生 Fetch 驱动**: 考虑到 Chrome 扩展 Service Worker 复杂的 CSP 限制，底层放弃了第三方 SDK，改用原生 `fetch` 实现直连，确保了极高的网络稳定性。
+*   **协议通吃**: 通过 `OpenAIAdapter` 实现了对所有兼容 OpenAI 格式的服务商（如硅基流动、DeepSeek 官方）的统一支持。
+
+### 8.2 智能队列管理 (Queue Strategy)
+AI 分析是一个伴随网络波动的“慢任务”，系统通过 `AIJobQueue` 实现自动化调度：
+1.  **分批扫描**: 每次从 IndexedDB 中取出 N 条 `aiStatus === 'pending'` 的推文进行批处理。
+2.  **视觉依赖感知**: 
+    - 如果启用了 OCR 或视觉模型，AI 总结任务将自动“挂起”，直到图像处理流水线完成并写回 `visionDescription` 或 `ocrText`。
+    - 这确保了 AI “看到”图片后，生成的总结更加精准。
+3.  **限速与重试**: 
+    - **互斥锁**: `isProcessing` 状态位防止后台任务由于间隔太短而堆叠引发浏览器卡顿。
+    - **指数退避**: 任务失败后进入重试周期，防止瞬时触发 API 频率限制。
+
+### 8.3 AI 即 API (Structured Data Strategy)
+系统核心目标是产生“可程序化”的数据，而非简单的聊天回复：
+*   **强制 JSON 模式**: 请求中包含 `response_format: { type: "json_object" }`，强制 AI 输出。
+*   **Schema 约束**: 通过 Prompt 指令集约束 AI 必须产出包含 `summary` (摘要), `tags` (标签数组), `score` (评分), `category` (分类) 的标准 JSON，极大简化了前端展示逻辑。
+
+---
+
+## 9. 安全与权限 (Security & Permissions)
+
+作为 Manifest V3 扩展，系统严格遵循最新的安全规范：
+*   **主机权限 (Host Permissions)**: 在 `manifest.json` 中明确声明 API 域名，获取跨域 `fetch` 权限。
+*   **CSP 策略**: 针对 Service Worker 设置 `connect-src`，确保在严格的内容安全策略下 AI 请求不被拦截。
+*   **隔离原则**: Interceptor 运行在 MAIN world 以获取 API 数据，但业务逻辑留在 ISOLATED world 和 Background，确保用户隐私与代码安全。
