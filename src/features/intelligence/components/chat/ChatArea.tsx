@@ -259,13 +259,7 @@ export const ChatArea: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1">
-                    <button
-                        onClick={createSession}
-                        className="p-2 text-zinc-400 hover:text-white transition-colors mr-2"
-                        title="New Chat"
-                    >
-                        <SquarePen size={18} />
-                    </button>
+
                     {!isNoteOpen && (
                         <button
                             onClick={toggleNote}

@@ -8,6 +8,8 @@ import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import 'katex/dist/katex.min.css';
+import { diffLines } from 'diff';
+import { useChatStore } from "../../store/useChatStore";
 import {
     Pen,
     Layout,
@@ -231,6 +233,7 @@ export const NoteEditor: React.FC = () => {
         isNoteOpen, toggleNote, noteContent: content, setNoteContent: onChange,
         pendingInsert, clearPendingInsert, dualPane, setDualPane, loadNote, saveNote
     } = useIntelligenceStore();
+    const { currentSessionId, currentSession, updateSessionNote } = useChatStore();
     const { t } = useTranslation();
 
     const [splitRatio, setSplitRatio] = useState(0.5);
@@ -241,6 +244,7 @@ export const NoteEditor: React.FC = () => {
     const [currentTime, setCurrentTime] = useState("");
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [showHistory, setShowHistory] = useState(false);
+    const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
     const [isResizingSplit, setIsResizingSplit] = useState(false);
 
     // File Handle
@@ -256,6 +260,13 @@ export const NoteEditor: React.FC = () => {
     const lastSavedContentRef = useRef(content);
     const isScrollingRef = useRef<boolean>(false);
 
+    // Context-aware history key
+    const historyKey = useMemo(() => {
+        if (fileHandle) return `fallingPenHistory_file_${fileName}`;
+        if (currentSessionId) return `fallingPenHistory_chat_${currentSessionId}`;
+        return 'fallingPenHistory_global';
+    }, [fileHandle, fileName, currentSessionId]);
+
     useEffect(() => { contentRef.current = content; }, [content]);
 
     useEffect(() => {
@@ -269,14 +280,97 @@ export const NoteEditor: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (typeof chrome !== 'undefined' && chrome.storage) {
-            chrome.storage.local.get(['fallingPenHistory'], (res) => { if (res.fallingPenHistory) setHistory(res.fallingPenHistory); });
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            chrome.storage.local.get([historyKey], (res) => {
+                setHistory(res[historyKey] || []);
+            });
         }
-    }, []);
+    }, [historyKey]);
+
+    // Sync note content to current chat session
+    useEffect(() => {
+        if (currentSessionId && content !== currentSession?.noteContent) {
+            updateSessionNote(currentSessionId, content);
+        }
+    }, [content, currentSessionId]);
+
+    // Switch note content when session changes (if session has its own note)
+    const lastSessionIdRef = useRef(currentSessionId);
+    useEffect(() => {
+        if (currentSessionId !== lastSessionIdRef.current) {
+            if (currentSessionId && currentSession) {
+                onChange(currentSession.noteContent || "");
+                lastSavedContentRef.current = currentSession.noteContent || "";
+            }
+            lastSessionIdRef.current = currentSessionId;
+            setSelectedHistoryId(null);
+        }
+    }, [currentSessionId, currentSession]);
 
     useEffect(() => {
         saveNote();
     }, [content, dualPane]);
+
+    const saveVersion = useCallback((newContent: string) => {
+        if (!newContent.trim() || newContent === lastSavedContentRef.current) return;
+
+        const newItem: HistoryItem = {
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            content: newContent
+        };
+
+        setHistory(prev => {
+            const next = [newItem, ...prev].slice(0, 50); // Keep last 50 versions
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                chrome.storage.local.set({ [historyKey]: next });
+            }
+            return next;
+        });
+    }, [historyKey]);
+
+    const handleSaveFile = async (manual = false) => {
+        let handle = fileHandle;
+        if (!handle) {
+            if (!manual) return;
+            try {
+                handle = await (window as any).showSaveFilePicker({ types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }] });
+                if (!handle) return;
+                setFileHandle(handle); setFileName(handle.name); setStoredHandle(handle);
+            } catch (e) { return; }
+        }
+        try {
+            const writable = await handle.createWritable();
+            await writable.write(contentRef.current);
+            await writable.close();
+            saveVersion(contentRef.current);
+            lastSavedContentRef.current = contentRef.current;
+            setSaveStatus("saved");
+        } catch (e) { setSaveStatus("error"); }
+    };
+
+    // Shortcuts: Ctrl+S and Ctrl+Z
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                handleSaveFile(true);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [fileHandle]);
+
+    // Auto-save history snapshot even if no file is connected
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (content.trim() && content !== lastSavedContentRef.current) {
+                saveVersion(content);
+                lastSavedContentRef.current = content;
+            }
+        }, 30000); // Auto-save history every 30s of inactivity
+        return () => clearTimeout(timer);
+    }, [content]);
 
     const insertText = (before: string, after: string = "") => {
         const el = editorRef.current;
@@ -319,25 +413,6 @@ export const NoteEditor: React.FC = () => {
             }
         });
     }, []);
-
-    const handleSaveFile = async (manual = false) => {
-        let handle = fileHandle;
-        if (!handle) {
-            if (!manual) return;
-            try {
-                handle = await (window as any).showSaveFilePicker({ types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }] });
-                if (!handle) return;
-                setFileHandle(handle); setFileName(handle.name); setStoredHandle(handle);
-            } catch (e) { return; }
-        }
-        try {
-            const writable = await handle.createWritable();
-            await writable.write(contentRef.current);
-            await writable.close();
-            lastSavedContentRef.current = contentRef.current;
-            setSaveStatus("saved");
-        } catch (e) { setSaveStatus("error"); }
-    };
 
     const handleOpenFile = async () => {
         try {
@@ -389,9 +464,13 @@ export const NoteEditor: React.FC = () => {
                 const handle = (item as any).author?.handle || (item as any).author || "user";
                 const name = (item as any).author?.name || (item as any).authorName || handle;
                 const tweetUrl = (item as any).url || `https://twitter.com/${handle}/status/${(item as any).id}`;
-                text = `\n\n> **[Tweet from ${name} (@${handle})]**\n> ${(item as any).text}\n> \n> [View on Twitter](${tweetUrl})\n\n`;
+                const body = (item as any).text || "";
+                const quotedBody = body.split('\n').map((line: string) => `> ${line}`).join('\n');
+
+                text = `\n\n> **[Tweet from ${name} (@${handle})]**\n${quotedBody}\n> \n> [View on Twitter](${tweetUrl})\n\n`;
             } else {
-                text = `\n\n> ${item}\n\n`;
+                const quotedBody = String(item).split('\n').map((line: string) => `> ${line}`).join('\n');
+                text = `\n\n${quotedBody}\n\n`;
             }
             insertText(text);
             clearPendingInsert();
@@ -432,37 +511,166 @@ export const NoteEditor: React.FC = () => {
             <style>{MARVEL_DEVICES_CSS}</style>
             <style>{customCss}</style>
 
-            <header className="h-14 flex items-center justify-between px-4 bg-[#0d0d0d] border-b border-white/5 z-20 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-gradient-to-br from-brand to-emerald-600 rounded-xl flex items-center justify-center text-white shadow-xl shadow-brand/20">
-                        <Pen size={18} />
+            <header className="h-14 flex items-center justify-between px-6 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 z-20 shrink-0">
+                <div className="flex flex-col">
+                    <div className="text-[11px] font-black text-white/90 uppercase tracking-[0.2em] flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                        {t('int_note_title')}
                     </div>
-                    <div>
-                        <div className="text-sm font-black text-zinc-100 uppercase tracking-wider">{t('int_note_title')}</div>
-                        <div className="text-[9px] text-zinc-600 font-bold uppercase tracking-[0.2em]">{fileName || "落笔 · PREMIUM EDITOR"}</div>
-                    </div>
+                    <div className="text-[9px] text-zinc-600 font-bold uppercase tracking-[0.1em] ml-3.5">{fileName || "Falling Pen · Draft"}</div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                    <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 mr-1">
-                        <HeaderActionBtn onClick={() => setDualPane(!dualPane)} title="Toggle Layout" active={dualPane}><Layout size={14} /></HeaderActionBtn>
-                        <HeaderActionBtn onClick={() => setPreviewMode(prev => prev === 'page' ? 'mobile' : 'page')} title="Preview Mode" active={previewMode === 'mobile'}><Phone size={14} /></HeaderActionBtn>
+                <div className="flex items-center gap-1">
+                    <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/5 mr-1 backdrop-blur-md">
+                        <HeaderActionBtn onClick={() => setDualPane(!dualPane)} title="Toggle Layout" active={dualPane}><Layout size={13} /></HeaderActionBtn>
+                        <HeaderActionBtn onClick={() => setPreviewMode(prev => prev === 'page' ? 'mobile' : 'page')} title="Preview Mode" active={previewMode === 'mobile'}><Phone size={13} /></HeaderActionBtn>
                     </div>
-                    <HeaderActionBtn onClick={() => setIsEditingStyle(!isEditingStyle)} title="Edit Styles" active={isEditingStyle}><Settings size={16} /></HeaderActionBtn>
-                    <HeaderActionBtn onClick={() => setShowHistory(!showHistory)} title="History" active={showHistory}><History size={16} /></HeaderActionBtn>
-                    <div className="w-px h-4 bg-white/10 mx-1" />
-                    <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
-                        {fileHandle ? <HeaderActionBtn onClick={handleDisconnect} title="Disconnect"><X size={14} /></HeaderActionBtn> : <HeaderActionBtn onClick={handleOpenFile} title="Open MD"><Plus size={14} /></HeaderActionBtn>}
-                        <HeaderActionBtn onClick={() => handleSaveFile(true)} title="Save" active={saveStatus === 'dirty'}><Save size={14} /></HeaderActionBtn>
+
+                    <div className="flex gap-0.5">
+                        <HeaderActionBtn onClick={() => setIsEditingStyle(!isEditingStyle)} title="Edit Styles" active={isEditingStyle}><Settings size={14} /></HeaderActionBtn>
+                        <HeaderActionBtn onClick={() => setShowHistory(!showHistory)} title="History" active={showHistory}><History size={14} /></HeaderActionBtn>
                     </div>
+
+                    <div className="w-[1px] h-3 bg-white/10 mx-2" />
+
+                    <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/5 mr-1 backdrop-blur-md">
+                        {fileHandle ? <HeaderActionBtn onClick={handleDisconnect} title="Disconnect"><X size={13} /></HeaderActionBtn> : <HeaderActionBtn onClick={handleOpenFile} title="Open MD"><Plus size={13} /></HeaderActionBtn>}
+                        <HeaderActionBtn onClick={() => handleSaveFile(true)} title="Save" active={saveStatus === 'dirty'}><Save size={13} /></HeaderActionBtn>
+                    </div>
+
                     <HeaderActionBtn onClick={() => { navigator.clipboard.writeText(content); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); }} title="Copy">
                         {copySuccess ? <Check size={12} className="text-brand" /> : <Copy size={12} />}
                     </HeaderActionBtn>
-                    <button onClick={toggleNote} className="p-2 text-zinc-500 hover:text-white transition-colors ml-1"><PanelRightClose size={20} /></button>
+
+                    <button onClick={toggleNote} className="ml-2 p-2 text-zinc-600 hover:text-zinc-200 transition-all hover:bg-white/5 rounded-lg active:scale-95">
+                        <PanelRightClose size={18} />
+                    </button>
                 </div>
             </header>
 
             <div ref={containerRef} className="flex-1 flex overflow-hidden relative">
+                {showHistory && (
+                    <div className="absolute inset-x-0 top-0 h-[80%] bg-[#0f0f0f]/95 backdrop-blur-3xl border-b border-white/10 z-30 flex flex-col animate-in slide-in-from-top overflow-hidden shadow-2xl">
+                        <div className="flex items-center justify-between px-6 py-3 bg-white/[0.02] border-b border-white/5">
+                            <div className="flex items-center gap-4">
+                                <span className="text-[11px] uppercase font-black text-zinc-400 tracking-[0.2em] flex items-center gap-2">
+                                    <Clock size={12} className="text-brand" />
+                                    {selectedHistoryId ? "Comparison View" : "History Timeline"}
+                                </span>
+                                {selectedHistoryId && (
+                                    <button
+                                        onClick={() => setSelectedHistoryId(null)}
+                                        className="text-[10px] text-zinc-500 hover:text-white flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 transition-colors"
+                                    >
+                                        <ChevronRight size={10} className="rotate-180" /> Back to List
+                                    </button>
+                                )}
+                            </div>
+                            <button onClick={() => { setShowHistory(false); setSelectedHistoryId(null); }} className="text-[10px] font-black uppercase text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1 rounded-lg transition-all">Close</button>
+                        </div>
+
+                        <div className="flex-1 overflow-hidden flex">
+                            {selectedHistoryId ? (
+                                <div className="flex-1 flex flex-col overflow-hidden">
+                                    <div className="flex-1 overflow-y-auto p-6 font-mono text-[13px] no-scrollbar space-y-0.5 bg-black/20">
+                                        {(() => {
+                                            const item = history.find(h => h.id === selectedHistoryId);
+                                            if (!item) return null;
+                                            const diff = diffLines(content, item.content);
+                                            return diff.map((part, i) => (
+                                                <div key={i} className={cn(
+                                                    "relative pl-6 pr-4 py-0.5 border-l-2",
+                                                    part.added ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-300/90" :
+                                                        part.removed ? "bg-rose-500/10 border-rose-500/50 text-rose-300/90 line-through opacity-50" :
+                                                            "border-transparent text-zinc-500"
+                                                )}>
+                                                    <span className="absolute left-1.5 opacity-40 font-bold select-none text-[10px]">
+                                                        {part.added ? "+" : part.removed ? "-" : " "}
+                                                    </span>
+                                                    {part.value.split('\n').map((line, li) => (
+                                                        line || (li < part.value.split('\n').length - 1 ? "" : null)
+                                                    ) !== null && (
+                                                            <div key={li}>{line}</div>
+                                                        ))}
+                                                </div>
+                                            ));
+                                        })()}
+                                    </div>
+                                    <div className="p-4 bg-white/[0.02] border-t border-white/5 flex justify-end gap-3 backdrop-blur-xl">
+                                        <div className="flex items-center gap-6 mr-auto px-4 text-[10px] text-zinc-500">
+                                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> New Content</div>
+                                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Deleted from Current</div>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedHistoryId(null)}
+                                            className="px-4 py-2 rounded-xl text-[11px] font-bold text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 transition-all"
+                                        >
+                                            Discard Changes
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const item = history.find(h => h.id === selectedHistoryId);
+                                                if (item) {
+                                                    onChange(item.content);
+                                                    setShowHistory(false);
+                                                    setSelectedHistoryId(null);
+                                                }
+                                            }}
+                                            className="px-6 py-2 rounded-xl text-[11px] font-bold text-white bg-brand shadow-lg shadow-brand/20 hover:scale-105 transition-all"
+                                        >
+                                            Restore Complete Version
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex-1 overflow-y-auto p-8 flex flex-col no-scrollbar">
+                                    <div className="max-w-2xl mx-auto w-full relative">
+                                        <div className="absolute left-[27px] top-6 bottom-6 w-[2px] bg-gradient-to-b from-brand/50 via-zinc-800 to-zinc-800/20" />
+                                        <div className="space-y-6">
+                                            {history.length > 0 ? (
+                                                history.map((item, idx) => (
+                                                    <div key={item.id} onClick={() => setSelectedHistoryId(item.id)} className="group relative flex items-start gap-8 cursor-pointer pl-4">
+                                                        <div className="relative z-10 flex-shrink-0 mt-1.5">
+                                                            <div className={cn("w-[26px] h-[26px] rounded-full border-2 bg-[#0f0f0f] flex items-center justify-center transition-all duration-500", idx === 0 ? "border-brand shadow-[0_0_15px_rgba(16,185,129,0.4)]" : "border-zinc-700 group-hover:border-zinc-400")}>
+                                                                <div className={cn("w-2 h-2 rounded-full transition-all duration-500", idx === 0 ? "bg-brand scale-110" : "bg-zinc-800 group-hover:bg-zinc-500")} />
+                                                            </div>
+                                                            {idx === 0 && <div className="absolute -inset-1 rounded-full bg-brand/20 animate-ping opacity-20" />}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 bg-white/[0.01] hover:bg-white/[0.03] border border-white/5 rounded-2xl p-4 transition-all duration-300 group-hover:translate-x-1 group-hover:border-white/10 shadow-xl">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-[12px] font-mono font-bold text-zinc-100 italic">{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                                                                    <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">{new Date(item.timestamp).toLocaleDateString()}</span>
+                                                                </div>
+                                                                <div className="px-2 py-0.5 rounded-md bg-white/5 text-[9px] font-black text-zinc-500 uppercase tracking-tighter group-hover:text-brand transition-colors">{idx === 0 ? "Latest Draft" : `v.${history.length - idx}`}</div>
+                                                            </div>
+                                                            <div className="text-[12px] text-zinc-500 font-mono line-clamp-2 leading-relaxed opacity-60 group-hover:opacity-100 transition-opacity">{item.content || "Empty revision"}</div>
+                                                            <div className="mt-3 flex items-center justify-between">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-700"><FileText size={10} />{item.content.length} chars</div>
+                                                                    <div className="w-px h-2 bg-white/5" />
+                                                                    <div className="text-[10px] text-zinc-800 font-bold italic">Auto-snapshot</div>
+                                                                </div>
+                                                                <span className="text-[10px] font-black uppercase text-brand opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all">Inspect Diff →</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="absolute left-[38px] top-[14px] w-6 h-[1px] bg-white/5 group-hover:bg-brand/20 transition-colors pointer-events-none" />
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="h-48 flex flex-col items-center justify-center text-zinc-600 space-y-3">
+                                                    <Clock size={32} className="opacity-20" />
+                                                    <div className="italic text-xs font-bold tracking-widest uppercase opacity-40">Timeline is empty</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {isEditingStyle && (
                     <div className="absolute inset-x-0 top-0 h-64 bg-zinc-900 border-b border-white/10 z-30 flex flex-col animate-in slide-in-from-top">
                         <div className="flex items-center justify-between px-4 py-2 bg-zinc-800/50 border-b border-white/5">
@@ -476,63 +684,43 @@ export const NoteEditor: React.FC = () => {
                     </div>
                 )}
 
-                <div
-                    className={cn("flex flex-col relative bg-[#0f0f0f]", !dualPane ? "flex-1 max-w-4xl mx-auto min-w-[500px]" : "shrink-0 min-w-[500px]")}
-                    style={dualPane ? { width: `${splitRatio * 100}%` } : {}}
-                >
+                <div className={cn("flex flex-col relative bg-[#0f0f0f]", !dualPane ? "flex-1 max-w-4xl mx-auto min-w-[500px]" : "shrink-0 min-w-[500px]")} style={dualPane ? { width: `${splitRatio * 100}%` } : {}}>
                     <div className="absolute top-4 right-6 flex items-center gap-3 z-10">
                         <div className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors", saveStatus === 'saved' ? "text-brand border-brand/20 bg-brand/5" : "text-amber-500 border-amber-500/20 bg-amber-500/5")}>{saveStatus}</div>
                         <div className="text-[9px] text-zinc-700 font-bold uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-full">{content.length} chars</div>
                     </div>
-                    <div className="absolute left-3 top-10 bottom-10 w-4 flex flex-col gap-1.5 z-10 opacity-20 hover:opacity-100 transition-opacity">
+                    <div className="absolute left-3 top-10 bottom-10 w-4 flex flex-col gap-1.5 z-40 opacity-20 hover:opacity-100 transition-all duration-500">
                         {outlineItems.map((item, i) => (
-                            <button key={i} className="flex justify-end w-full group" onClick={() => { if (editorRef.current) editorRef.current.scrollTop = editorRef.current.scrollHeight * (item.lineIndex / content.split('\n').length); }}>
-                                <div className={cn("h-1 rounded-full transition-all group-hover:bg-brand", item.level === 1 ? "w-4 bg-zinc-600" : item.level === 2 ? "w-3 bg-zinc-700" : "w-1.5 bg-zinc-800")} />
+                            <button key={i} className="flex items-center group relative h-1" onClick={() => {
+                                const editor = editorRef.current;
+                                if (editor) {
+                                    const lines = content.split('\n');
+                                    const ratio = item.lineIndex / lines.length;
+                                    const targetScroll = editor.scrollHeight * ratio;
+                                    editor.scrollTo({ top: targetScroll - 40, behavior: 'smooth' });
+                                }
+                            }}>
+                                <div className={cn("h-1 rounded-full transition-all duration-300 group-hover:bg-brand group-hover:shadow-[0_0_12px_rgba(16,185,129,0.5)]", item.level === 1 ? "w-4 bg-zinc-600" : item.level === 2 ? "w-3 bg-zinc-700" : "w-1.5 bg-zinc-800")} />
+                                <span className="absolute left-full ml-3 opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap text-[10px] font-black text-brand bg-[#0d0d0d]/90 px-2 py-1 rounded-lg border border-brand/20 backdrop-blur-xl pointer-events-none transform -translate-x-2 group-hover:translate-x-0 shadow-2xl shadow-brand/20">{item.text}</span>
                             </button>
                         ))}
                     </div>
-                    <textarea
-                        ref={editorRef}
-                        value={content}
-                        onChange={(e) => onChange(e.target.value)}
-                        onScroll={() => handleSyncScroll('editor')}
-                        className="flex-1 w-full bg-transparent text-zinc-300 p-12 pl-16 resize-none outline-none font-sans text-[17px] leading-[1.8] no-scrollbar placeholder:text-zinc-900 focus:ring-0"
-                        placeholder="# Start writing..."
-                        spellCheck={false}
-                    />
+                    <textarea ref={editorRef} value={content} onChange={(e) => onChange(e.target.value)} onScroll={() => handleSyncScroll('editor')} className="flex-1 w-full bg-transparent text-zinc-300 p-12 pl-16 resize-none outline-none font-sans text-[17px] leading-[1.8] no-scrollbar placeholder:text-zinc-900 focus:ring-0" placeholder="# Start writing..." spellCheck={false} />
                 </div>
 
-                {dualPane && (
-                    <div onMouseDown={onMouseDownResizer} className={cn("w-[2px] shrink-0 z-40 cursor-col-resize relative", isResizingSplit ? "bg-brand" : "bg-white/5 hover:bg-brand/30")} />
-                )}
+                {dualPane && <div onMouseDown={onMouseDownResizer} className={cn("w-[2px] shrink-0 z-40 cursor-col-resize relative", isResizingSplit ? "bg-brand" : "bg-white/5 hover:bg-brand/30")} />}
 
                 {dualPane && (
                     <div className="flex-1 bg-[#0c0c0c] overflow-hidden flex justify-center p-0 border-l border-white/5 min-w-[500px]">
-                        <div
-                            ref={previewContainerRef}
-                            onScroll={() => handleSyncScroll('preview')}
-                            className={cn("w-full h-full flex justify-center transition-all", previewMode === 'mobile' ? "items-center bg-[#080808]" : "items-stretch overflow-y-auto no-scrollbar")}
-                        >
+                        <div ref={previewContainerRef} onScroll={() => handleSyncScroll('preview')} className={cn("w-full h-full flex justify-center transition-all", previewMode === 'mobile' ? "items-center bg-[#080808]" : "items-stretch overflow-y-auto no-scrollbar")}>
                             {previewMode === 'mobile' ? (
                                 <div className="scale-[0.85] origin-center flex justify-center">
                                     <div className="marvel-device iphone-x">
                                         <div className="notch"><div className="camera"></div><div className="speaker"></div></div>
                                         <div className="screen">
-                                            <div
-                                                ref={mobilePreviewRef}
-                                                onScroll={() => handleSyncScroll('preview')}
-                                                className="wechat-body mobile-content no-scrollbar"
-                                            >
-                                                <div className="mock-status-bar">
-                                                    <span>{currentTime}</span>
-                                                    <div className="right-icons">
-                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21l-12-18h24z" /></svg>
-                                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h-14v12h14v-12zM22 10h-2v4h2v-4z" /></svg>
-                                                    </div>
-                                                </div>
-                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkAlert]} rehypePlugins={[rehypeRaw, [rehypeKatex, { strict: false }], [rehypeHighlight, REHYPE_HIGHLIGHT_OPTIONS], rehypeLinkReferences]}>
-                                                    {content || "*Preview content...*"}
-                                                </ReactMarkdown>
+                                            <div ref={mobilePreviewRef} onScroll={() => handleSyncScroll('preview')} className="wechat-body mobile-content no-scrollbar">
+                                                <div className="mock-status-bar"><span>{currentTime}</span><div className="right-icons"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21l-12-18h24z" /></svg><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h-14v12h14v-12zM22 10h-2v4h2v-4z" /></svg></div></div>
+                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkAlert]} rehypePlugins={[rehypeRaw, [rehypeKatex, { strict: false }], [rehypeHighlight, REHYPE_HIGHLIGHT_OPTIONS], rehypeLinkReferences]}>{content || "*Preview content...*"}</ReactMarkdown>
                                             </div>
                                         </div>
                                     </div>
@@ -540,9 +728,7 @@ export const NoteEditor: React.FC = () => {
                             ) : (
                                 <div style={{ width: "100%", maxWidth: "800px", minHeight: "100%", background: "#0f0f0f", boxShadow: "-10px 0 30px rgba(0,0,0,0.2)" }}>
                                     <div className="wechat-body no-scrollbar">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkAlert]} rehypePlugins={[rehypeRaw, [rehypeKatex, { strict: false }], [rehypeHighlight, REHYPE_HIGHLIGHT_OPTIONS], rehypeLinkReferences]}>
-                                            {content || "*Preview content...*"}
-                                        </ReactMarkdown>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkAlert]} rehypePlugins={[rehypeRaw, [rehypeKatex, { strict: false }], [rehypeHighlight, REHYPE_HIGHLIGHT_OPTIONS], rehypeLinkReferences]}>{content || "*Preview content...*"}</ReactMarkdown>
                                     </div>
                                 </div>
                             )}

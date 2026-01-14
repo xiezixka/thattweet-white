@@ -100,5 +100,17 @@
   },
   "int_note_title": {
     "message": "阅读笔记"
+  },
+  "filter_all": {
+    "message": "全部见闻"
+  },
+  "filter_bookmarked": {
+    "message": "精选收藏"
+  },
+  "filter_has_media": {
+    "message": "包含媒体"
+  },
+  "filter_recent": {
+    "message": "最近 24 小时"
   }
 }

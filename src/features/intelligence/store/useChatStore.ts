@@ -23,6 +23,7 @@ export interface ChatSession {
     createdAt: number;
     updatedAt: number;
     messages: ChatMessage[];
+    noteContent?: string; // Content of the side note for this session
 }
 
 interface ChatState {
@@ -50,6 +51,7 @@ interface ChatState {
     // 加载/保存
     loadSessions: () => Promise<void>;
     saveSessions: () => Promise<void>;
+    updateSessionNote: (sessionId: string, content: string) => void;
 
     // Internal Helper
     _appendMessageToCurrent: (msg: ChatMessage) => void;
@@ -145,7 +147,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             title: 'New Chat',
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            messages: []
+            messages: [],
+            noteContent: ""
         };
         set(state => ({
             sessions: [newSession, ...state.sessions],
@@ -173,21 +176,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
             let newCurrentId = state.currentSessionId;
             let newCurrentSession = state.currentSession;
 
+            // If the deleted session was the active one
             if (state.currentSessionId === sessionId) {
                 if (newSessions.length > 0) {
+                    // Switch to the first available session
                     newCurrentId = newSessions[0].id;
                     newCurrentSession = newSessions[0];
                 } else {
-                    const newId = crypto.randomUUID();
-                    const newSess: ChatSession = {
-                        id: newId, title: 'New Chat', createdAt: Date.now(), updatedAt: Date.now(), messages: []
-                    };
-                    newSessions.push(newSess);
-                    newCurrentId = newId;
-                    newCurrentSession = newSess;
+                    // No sessions left
+                    newCurrentId = null;
+                    newCurrentSession = null;
                 }
             }
-            return { sessions: newSessions, currentSessionId: newCurrentId, currentSession: newCurrentSession };
+
+            return {
+                sessions: newSessions,
+                currentSessionId: newCurrentId,
+                currentSession: newCurrentSession
+            };
         });
         get().saveSessions();
     },
@@ -325,6 +331,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 currentSession: updatedSession,
                 sessions: updatedSessions
             };
+        });
+        get().saveSessions();
+    },
+
+    updateSessionNote: (sessionId, content) => {
+        set(state => {
+            const sessions = state.sessions.map(s =>
+                s.id === sessionId ? { ...s, noteContent: content, updatedAt: Date.now() } : s
+            );
+            const currentSession = state.currentSession?.id === sessionId
+                ? { ...state.currentSession, noteContent: content, updatedAt: Date.now() }
+                : state.currentSession;
+
+            return { sessions, currentSession };
         });
         get().saveSessions();
     }

@@ -196,8 +196,27 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                     <span className="flex items-center gap-1 hover:text-rose-400 transition-colors"><Heart size={12} /> {formatNumber(tweet.favoriteCount || 0)}</span>
                     <span className="flex items-center gap-1"><Eye size={12} /> {formatNumber(tweet.viewCount || 0)}</span>
                 </div>
-                <div className="text-[10px] font-medium opacity-50 italic">
-                    {tweet.createdAt ? new Date(tweet.createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' }) : '00/00'}
+
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            const { db } = await import('../../core/storage/db');
+                            await db.tweets.update(tweet.id, { isBookmarked: !tweet.isBookmarked });
+                        }}
+                        className={cn(
+                            "p-1.5 rounded-lg transition-all",
+                            tweet.isBookmarked
+                                ? "bg-amber-400/20 text-amber-400 shadow-lg shadow-amber-400/10"
+                                : "hover:bg-white/5 text-zinc-600 hover:text-amber-400"
+                        )}
+                        title={t('int_bookmark') || 'Bookmark'}
+                    >
+                        <Tag size={13} fill={tweet.isBookmarked ? "currentColor" : "none"} />
+                    </button>
+                    <div className="text-[10px] font-medium opacity-50 italic">
+                        {tweet.createdAt ? new Date(tweet.createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' }) : '00/00'}
+                    </div>
                 </div>
             </div>
         </div>
