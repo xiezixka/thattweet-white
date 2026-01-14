@@ -7,6 +7,7 @@ import { remarkAlert } from "remark-github-blockquote-alert";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
+import 'katex/dist/katex.min.css';
 import {
     Pen,
     Layout,
@@ -105,7 +106,10 @@ const DEFAULT_CSS = `.wechat-body {
 /* GitHub Alert Styles */
 .wechat-body .markdown-alert { padding: 16px 20px; margin: 1.5em 0; border-radius: 12px; border-left: 4px solid; }
 .wechat-body .markdown-alert-note { background: rgba(56, 139, 253, 0.1); border-left-color: #388bfd; }
-.wechat-body .markdown-alert-tip { background: rgba(35, 134, 54, 0.1); border-left-color: #238636; }
+.wechat-body .markdown-alert-tip { background: rgba(35, 134, 54, 0.1); border-left-color: #31ad4d; }
+.wechat-body .markdown-alert-important { background: rgba(137, 87, 229, 0.1); border-left-color: #8957e5; }
+.wechat-body .markdown-alert-warning { background: rgba(210, 153, 34, 0.1); border-left-color: #d29922; }
+.wechat-body .markdown-alert-caution { background: rgba(218, 54, 51, 0.1); border-left-color: #da3633; }
 
 /* Phone Emulator specific */
 .mobile-content {
@@ -245,9 +249,12 @@ export const NoteEditor: React.FC = () => {
     const [saveStatus, setSaveStatus] = useState<"saved" | "dirty" | "error" | "readonly" | "idle">("idle");
 
     const editorRef = useRef<HTMLTextAreaElement>(null);
+    const previewContainerRef = useRef<HTMLDivElement>(null);
+    const mobilePreviewRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef(content);
     const lastSavedContentRef = useRef(content);
+    const isScrollingRef = useRef<boolean>(false);
 
     useEffect(() => { contentRef.current = content; }, [content]);
 
@@ -352,6 +359,27 @@ export const NoteEditor: React.FC = () => {
         const timer = setTimeout(() => handleSaveFile(), 2000);
         return () => clearTimeout(timer);
     }, [content, fileHandle]);
+
+    const handleSyncScroll = (source: 'editor' | 'preview') => {
+        if (!dualPane || isScrollingRef.current) return;
+        const editor = editorRef.current;
+        const preview = previewMode === 'mobile' ? mobilePreviewRef.current : previewContainerRef.current;
+        if (!editor || !preview) return;
+
+        isScrollingRef.current = true;
+        if (source === 'editor') {
+            const ratio = editor.scrollTop / (editor.scrollHeight - editor.clientHeight);
+            preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
+        } else {
+            const ratio = preview.scrollTop / (preview.scrollHeight - preview.clientHeight);
+            editor.scrollTop = ratio * (editor.scrollHeight - editor.clientHeight);
+        }
+
+        // Use a small timeout to unlock scrolling
+        setTimeout(() => {
+            isScrollingRef.current = false;
+        }, 50);
+    };
 
     useEffect(() => {
         if (pendingInsert) {
@@ -463,7 +491,15 @@ export const NoteEditor: React.FC = () => {
                             </button>
                         ))}
                     </div>
-                    <textarea ref={editorRef} value={content} onChange={(e) => onChange(e.target.value)} className="flex-1 w-full bg-transparent text-zinc-300 p-12 pl-16 resize-none outline-none font-sans text-[17px] leading-[1.8] no-scrollbar placeholder:text-zinc-900 focus:ring-0" placeholder="# Start writing..." spellCheck={false} />
+                    <textarea
+                        ref={editorRef}
+                        value={content}
+                        onChange={(e) => onChange(e.target.value)}
+                        onScroll={() => handleSyncScroll('editor')}
+                        className="flex-1 w-full bg-transparent text-zinc-300 p-12 pl-16 resize-none outline-none font-sans text-[17px] leading-[1.8] no-scrollbar placeholder:text-zinc-900 focus:ring-0"
+                        placeholder="# Start writing..."
+                        spellCheck={false}
+                    />
                 </div>
 
                 {dualPane && (
@@ -472,13 +508,21 @@ export const NoteEditor: React.FC = () => {
 
                 {dualPane && (
                     <div className="flex-1 bg-[#0c0c0c] overflow-hidden flex justify-center p-0 border-l border-white/5 min-w-[500px]">
-                        <div className={cn("w-full h-full flex justify-center transition-all", previewMode === 'mobile' ? "items-center bg-[#080808]" : "items-stretch overflow-y-auto no-scrollbar")}>
+                        <div
+                            ref={previewContainerRef}
+                            onScroll={() => handleSyncScroll('preview')}
+                            className={cn("w-full h-full flex justify-center transition-all", previewMode === 'mobile' ? "items-center bg-[#080808]" : "items-stretch overflow-y-auto no-scrollbar")}
+                        >
                             {previewMode === 'mobile' ? (
                                 <div className="scale-[0.85] origin-center flex justify-center">
                                     <div className="marvel-device iphone-x">
                                         <div className="notch"><div className="camera"></div><div className="speaker"></div></div>
                                         <div className="screen">
-                                            <div className="wechat-body mobile-content no-scrollbar">
+                                            <div
+                                                ref={mobilePreviewRef}
+                                                onScroll={() => handleSyncScroll('preview')}
+                                                className="wechat-body mobile-content no-scrollbar"
+                                            >
                                                 <div className="mock-status-bar">
                                                     <span>{currentTime}</span>
                                                     <div className="right-icons">

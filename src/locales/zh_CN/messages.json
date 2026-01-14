@@ -24,10 +24,10 @@
     "message": "进入管理控制台"
   },
   "nav_feed": {
-    "message": "情报大厅"
+    "message": "见闻"
   },
   "nav_intelligence": {
-    "message": "深思空间"
+    "message": "沉思"
   },
   "nav_stats": {
     "message": "数据看板"
@@ -36,16 +36,16 @@
     "message": "实验室"
   },
   "feed_title": {
-    "message": "情报大厅"
+    "message": "见闻录"
   },
   "feed_subtitle": {
-    "message": "在这里管理所有捕获的推文情报"
+    "message": "捕捉流动的思考与灵感"
   },
   "feed_stat_prefix": {
     "message": "共捕获"
   },
   "feed_stat_suffix": {
-    "message": "条高价值情报"
+    "message": "条深度见闻"
   },
   "feed_search_placeholder": {
     "message": "语义搜索或关键字..."

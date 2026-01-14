@@ -7,6 +7,17 @@ import { Loader2, Search, Filter } from 'lucide-react';
 export const FeedView: React.FC = () => {
     const { tweets, loading } = useTweets();
     const { t } = useTranslation();
+    const [searchQuery, setSearchQuery] = React.useState('');
+
+    const filteredTweets = React.useMemo(() => {
+        if (!searchQuery.trim()) return tweets;
+        const q = searchQuery.toLowerCase();
+        return tweets.filter(t =>
+            t.text.toLowerCase().includes(q) ||
+            (t.author?.name || '').toLowerCase().includes(q) ||
+            (t.author?.handle || '').toLowerCase().includes(q)
+        );
+    }, [tweets, searchQuery]);
 
     return (
         <div className="p-4 lg:p-8 w-full min-h-screen flex flex-col">
@@ -17,7 +28,7 @@ export const FeedView: React.FC = () => {
                         {t('feed_title')}
                     </h1>
                     <p className="text-[13px] text-zinc-500 font-medium mt-1">
-                        {t('feed_stat_prefix')} <span className="text-brand/80 font-bold">{tweets.length}</span> {t('feed_stat_suffix')}
+                        {t('feed_stat_prefix')} <span className="text-brand/80 font-bold">{filteredTweets.length}</span> {t('feed_stat_suffix')}
                     </p>
                 </div>
 
@@ -27,7 +38,9 @@ export const FeedView: React.FC = () => {
                         <input
                             type="text"
                             placeholder={t('feed_search_placeholder')}
-                            className="w-64 lg:w-96 h-11 pl-11 pr-4 bg-zinc-900/40 border border-white/5 rounded-2xl text-sm focus:outline-none focus:border-brand/30 transition-all placeholder:text-zinc-700"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-64 lg:w-96 h-11 pl-11 pr-4 bg-zinc-900/40 border border-white/5 rounded-2xl text-sm focus:outline-none focus:border-brand/30 transition-all placeholder:text-zinc-700 font-medium"
                         />
                     </div>
                     <button className="h-11 px-4 bg-zinc-900/40 border border-white/5 rounded-2xl hover:bg-white/5 transition-colors text-zinc-500">
@@ -43,15 +56,8 @@ export const FeedView: React.FC = () => {
                 </div>
             ) : (
                 <div className="w-full px-2">
-                    {/* 
-                        使用 columns-[320px] 实现平滑自适应。
-                        这是旧版原生 CSS Columns 的现代升级版：
-                        1. 它保留了旧版完美的垂直填充（不留行间距）。
-                        2. 不需要繁琐的媒体查询断点，列数随宽度自动增减。
-                        3. 保持 16px (gap-4) 的呼吸感空隙。
-                    */}
                     <div className="columns-[320px] gap-6 space-y-6">
-                        {tweets.map((item) => (
+                        {filteredTweets.map((item) => (
                             <div key={item.id} className="break-inside-avoid">
                                 <TweetCard
                                     tweet={item}
