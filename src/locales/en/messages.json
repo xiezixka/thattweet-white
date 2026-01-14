@@ -67,5 +67,38 @@
   },
   "card_ai_label": {
     "message": "AI"
+  },
+  "int_chat_placeholder": {
+    "message": "Message intelligence or drop tweets here..."
+  },
+  "int_ask_with_attachments": {
+    "message": "Ask about these tweets..."
+  },
+  "int_new_chat": {
+    "message": "New Chat"
+  },
+  "int_thinking": {
+    "message": "Thinking..."
+  },
+  "int_analyze_intent": {
+    "message": "Analyzing search intent..."
+  },
+  "int_searching_library": {
+    "message": "Searching tweet library..."
+  },
+  "int_sources": {
+    "message": "Sources"
+  },
+  "int_add_to_note": {
+    "message": "Add to Note"
+  },
+  "int_search_library_placeholder": {
+    "message": "Search saved tweets..."
+  },
+  "int_no_models": {
+    "message": "No models loaded. Check Laboratory settings."
+  },
+  "int_note_title": {
+    "message": "Intelligence Note"
   }
 }

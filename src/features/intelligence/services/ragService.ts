@@ -78,9 +78,26 @@ export const ragService = {
             return { tweet, score, method };
         });
 
-        return results
+        const sortedResults = results
             .filter(r => r.score > 10)
             .sort((a, b) => b.score - a.score)
             .slice(0, limit);
+
+        // 批量获取作者信息
+        return Promise.all(sortedResults.map(async res => {
+            const tweet = res.tweet;
+            if (tweet.authorId) {
+                const user = await db.users.get(tweet.authorId);
+                if (user) {
+                    (tweet as any).author = {
+                        id: user.id,
+                        handle: user.handle,
+                        name: user.name,
+                        avatar: user.avatar || (tweet as any).authorAvatarUrl
+                    };
+                }
+            }
+            return res;
+        }));
     }
 };

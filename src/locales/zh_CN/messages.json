@@ -67,5 +67,38 @@
   },
   "card_ai_label": {
     "message": "AI 洞察"
+  },
+  "int_chat_placeholder": {
+    "message": "在这里询问情报，或者拖入推文卡片..."
+  },
+  "int_ask_with_attachments": {
+    "message": "针对这些推文提问..."
+  },
+  "int_new_chat": {
+    "message": "开启新会话"
+  },
+  "int_thinking": {
+    "message": "思考中..."
+  },
+  "int_analyze_intent": {
+    "message": "分析搜索意图..."
+  },
+  "int_searching_library": {
+    "message": "正在检索推文知识库..."
+  },
+  "int_sources": {
+    "message": "引用来源"
+  },
+  "int_add_to_note": {
+    "message": "加入笔记"
+  },
+  "int_search_library_placeholder": {
+    "message": "搜索已保存的推文..."
+  },
+  "int_no_models": {
+    "message": "未加载模型，请前往“实验室”配置 API Key。"
+  },
+  "int_note_title": {
+    "message": "阅读笔记"
   }
 }

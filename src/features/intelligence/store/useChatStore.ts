@@ -11,7 +11,11 @@ export interface ChatMessage {
     citations?: Tweet[];     // 引用了哪些推文
     isStreaming?: boolean;   // 是否正在生成中
     error?: string;          // 生成错误信息
+    searchMethod?: 'structured' | 'rag' | 'none';
+    searchCriteriaSummary?: string;
 }
+
+export type SearchMode = 'auto' | 'structured' | 'rag';
 
 export interface ChatSession {
     id: string;
@@ -28,50 +32,111 @@ interface ChatState {
     currentSession: ChatSession | null;
     isGenerating: boolean;
     statusMessage: string | null;
+    searchMode: SearchMode;
+    isInitialized: boolean;
 
     // 动作
     createSession: () => string;
     switchSession: (sessionId: string) => void;
     deleteSession: (sessionId: string) => void;
     setStatusMessage: (msg: string | null) => void;
+    setSearchMode: (mode: SearchMode) => void;
 
     // 消息操作
     sendMessage: (content: string, citations?: Tweet[]) => Promise<void>;
-    appendAssistantMessage: (content: string, isStreaming?: boolean, citations?: Tweet[]) => void;
+    appendAssistantMessage: (content: string, isStreaming?: boolean, citations?: Tweet[], searchMethod?: ChatMessage['searchMethod']) => void;
     updateAssistantMessage: (content: string, isStreaming?: boolean) => void;
 
     // 加载/保存
     loadSessions: () => Promise<void>;
+    saveSessions: () => Promise<void>;
 
     // Internal Helper
     _appendMessageToCurrent: (msg: ChatMessage) => void;
 }
 
-// 模拟初始状态
-const MOCK_SESSION_ID = 'mock-1';
-const MOCK_MESSAGES: ChatMessage[] = [
-    {
-        id: 'msg-1',
-        role: 'assistant',
-        content: '你好！我是你的智能助手 ThatBot。\n我已准备好根据你的推文库回答任何问题。',
-        timestamp: Date.now()
-    }
-];
-
 export const useChatStore = create<ChatState>((set, get) => ({
     sessions: [],
-    currentSessionId: MOCK_SESSION_ID,
-    currentSession: {
-        id: MOCK_SESSION_ID,
-        title: 'New Chat',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        messages: MOCK_MESSAGES
-    },
+    currentSessionId: null,
+    currentSession: null,
     isGenerating: false,
     statusMessage: null,
+    searchMode: 'auto',
+    isInitialized: false,
 
     setStatusMessage: (msg) => set({ statusMessage: msg }),
+    setSearchMode: (mode) => set({ searchMode: mode }),
+
+    loadSessions: async () => {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            const res = await chrome.storage.local.get(['chat_sessions', 'current_session_id']);
+            let sessions = res.chat_sessions || [];
+            let currentId = res.current_session_id;
+
+            if (sessions.length === 0) {
+                const newId = crypto.randomUUID();
+                const initialSession: ChatSession = {
+                    id: newId,
+                    title: 'New Chat',
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    messages: []
+                };
+                sessions = [initialSession];
+                currentId = newId;
+            }
+
+            const currentSession = sessions.find((s: ChatSession) => s.id === (currentId || sessions[0].id)) || sessions[0];
+
+            set({
+                sessions,
+                currentSessionId: currentSession.id,
+                currentSession,
+                isInitialized: true
+            });
+        } else {
+            // Development fallback to localStorage
+            const savedSessions = localStorage.getItem('chat_sessions');
+            const savedCurrentId = localStorage.getItem('current_session_id');
+            let sessions = savedSessions ? JSON.parse(savedSessions) : [];
+            let currentId = savedCurrentId;
+
+            if (sessions.length === 0) {
+                const newId = 'local-1';
+                const initialSession: ChatSession = {
+                    id: newId,
+                    title: 'New Chat',
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    messages: []
+                };
+                sessions = [initialSession];
+                currentId = newId;
+            }
+
+            const currentSession = sessions.find((s: ChatSession) => s.id === (currentId || sessions[0].id)) || sessions[0];
+            set({
+                sessions,
+                currentSessionId: currentSession.id,
+                currentSession,
+                isInitialized: true
+            });
+        }
+    },
+
+    saveSessions: async () => {
+        const { sessions, currentSessionId, isInitialized } = get();
+        if (!isInitialized) return;
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+            await chrome.storage.local.set({
+                chat_sessions: sessions,
+                current_session_id: currentSessionId
+            });
+        } else {
+            localStorage.setItem('chat_sessions', JSON.stringify(sessions));
+            localStorage.setItem('current_session_id', currentSessionId || "");
+        }
+    },
 
     createSession: () => {
         const newId = crypto.randomUUID();
@@ -87,6 +152,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             currentSessionId: newId,
             currentSession: newSession
         }));
+        get().saveSessions();
         return newId;
     },
 
@@ -97,13 +163,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 currentSessionId: sessionId,
                 currentSession: session
             });
+            get().saveSessions();
         }
     },
 
     deleteSession: (sessionId) => {
         set(state => {
             const newSessions = state.sessions.filter(s => s.id !== sessionId);
-            // 如果删除了当前会话，切到第一个或新建
             let newCurrentId = state.currentSessionId;
             let newCurrentSession = state.currentSession;
 
@@ -123,6 +189,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             }
             return { sessions: newSessions, currentSessionId: newCurrentId, currentSession: newCurrentSession };
         });
+        get().saveSessions();
     },
 
     sendMessage: async (content, citations = []) => {
@@ -144,10 +211,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
             get().setStatusMessage('正在检索推文知识库...');
             let contextCitations: Tweet[] = [];
 
+            let lastSearchMethod: ChatMessage['searchMethod'] = 'none';
+
             if (content.length > 1 || citations.length > 0) {
                 if (content.length > 1) {
+                    const mode = get().searchMode;
                     const searchResults = await ragService.search(content, 12);
-                    contextCitations = searchResults.map(r => r.tweet);
+
+                    // 根据 SearchMode 过滤结果
+                    let filteredResults = searchResults;
+                    if (mode === 'structured') {
+                        filteredResults = searchResults.filter(r => r.method === 'structured');
+                    } else if (mode === 'rag') {
+                        filteredResults = searchResults.filter(r => r.method === 'rag');
+                    }
+
+                    contextCitations = filteredResults.map(r => r.tweet);
+
+                    // 如果是精确搜索且有结果，设置 searchMethod
+                    if (filteredResults.length > 0) {
+                        const hasStructured = filteredResults.some(r => r.method === 'structured');
+                        const hasRag = filteredResults.some(r => r.method === 'rag');
+                        if (hasStructured && hasRag) lastSearchMethod = 'auto' as any;
+                        else if (hasStructured) lastSearchMethod = 'structured';
+                        else lastSearchMethod = 'rag';
+                    }
                 }
             }
 
@@ -161,7 +249,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             // 3. 开启 AI 初始消息 (带引用)
             get().setStatusMessage('思考并回答中...');
             let fullResponse = '';
-            get().appendAssistantMessage('', true, contextCitations);
+            get().appendAssistantMessage('', true, contextCitations, lastSearchMethod);
 
             // 4. 调用 LLM 流式生成
             const history = [...(get().currentSession?.messages || [])];
@@ -185,17 +273,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
             get().updateAssistantMessage(`Error: ${err.message || 'Unknown AI Error'}`, false);
         } finally {
             set({ isGenerating: false, statusMessage: null });
+            get().saveSessions();
         }
     },
 
-    appendAssistantMessage: (content, isStreaming = true, citations: Tweet[] = []) => {
+    appendAssistantMessage: (content, isStreaming = true, citations: Tweet[] = [], searchMethod: ChatMessage['searchMethod'] = 'none') => {
         const msg: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'assistant',
             content,
             timestamp: Date.now(),
             isStreaming,
-            citations
+            citations,
+            searchMethod
         };
         get()._appendMessageToCurrent(msg);
     },
@@ -215,10 +305,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
     },
 
-    loadSessions: async () => {
-        // TODO: Load from IndexedDB
-    },
-
     // Internal Helper
     _appendMessageToCurrent: (msg: ChatMessage) => {
         set(state => {
@@ -228,6 +314,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages: [...state.currentSession.messages, msg],
                 updatedAt: Date.now()
             };
+            // 更新标题（如果是第一条消息）
+            if (updatedSession.messages.length === 2 && updatedSession.messages[0].role === 'user') {
+                updatedSession.title = updatedSession.messages[0].content.slice(0, 20);
+            }
+
             // 同时更新 sessions 列表里的对应项
             const updatedSessions = state.sessions.map(s => s.id === updatedSession.id ? updatedSession : s);
             return {
@@ -235,5 +326,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 sessions: updatedSessions
             };
         });
+        get().saveSessions();
     }
 }));

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Loader2, ChevronDown, Check, Sparkles, PlusCircle, Plus, FilePlus } from 'lucide-react';
+import { Send, User, Bot, Loader2, ChevronDown, Check, Sparkles, PlusCircle, Plus, FilePlus, PanelRightOpen, PanelRightClose, SquarePen, Mic } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useChatStore } from '../../store/useChatStore';
@@ -8,28 +8,73 @@ import { cn } from '../../../../shared/utils/cn';
 import { TweetCard } from '../../../../shared/components/TweetCard';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../../../shared/types/settings';
 import { Tweet } from '../../../../shared/types/tweet';
+import { useTranslation } from '../../../../shared/hooks/useTranslation';
 
 export const ChatArea: React.FC = () => {
-    const { currentSession, sendMessage, isGenerating, statusMessage } = useChatStore();
-    const { insertToNote } = useIntelligenceStore();
+    const { currentSession, sendMessage, isGenerating, statusMessage, createSession, searchMode, setSearchMode, loadSessions } = useChatStore();
+    const { isNoteOpen, toggleNote, insertToNote } = useIntelligenceStore();
+    const { t } = useTranslation();
+
+
+
     const [inputValue, setInputValue] = useState('');
     const [attachments, setAttachments] = useState<Tweet[]>([]);
     const [showModelDropdown, setShowModelDropdown] = useState(false);
+    const [showSearchModeDropdown, setShowSearchModeDropdown] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [aiSettings, setAiSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
+    const [selectionInfo, setSelectionInfo] = useState<{ text: string, x: number, y: number } | null>(null);
+    const [isListening, setIsListening] = useState(false);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchModeRef = useRef<HTMLDivElement>(null);
 
-    // Initial load
+    const handleTextSelection = () => {
+        const selection = window.getSelection();
+        const text = selection?.toString().trim();
+        if (text && text.length > 0) {
+            const range = selection?.getRangeAt(0);
+            const rect = range?.getBoundingClientRect();
+            if (rect) {
+                // Find containing element to ensure it's within a chat bubble
+                let node = selection?.anchorNode as any;
+                let isInsideAssistantBubble = false;
+                while (node && node !== document.body) {
+                    if (node.classList?.contains('assistant-bubble')) {
+                        isInsideAssistantBubble = true;
+                        break;
+                    }
+                    node = node.parentNode;
+                }
+
+                if (isInsideAssistantBubble) {
+                    setSelectionInfo({
+                        text,
+                        x: rect.left + rect.width / 2,
+                        y: rect.top - 10
+                    });
+                } else {
+                    setSelectionInfo(null);
+                }
+            }
+        } else {
+            setSelectionInfo(null);
+        }
+    };
+
     useEffect(() => {
-        // @ts-ignore
+        document.addEventListener('mouseup', handleTextSelection);
+        return () => document.removeEventListener('mouseup', handleTextSelection);
+    }, []);
+
+    useEffect(() => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.get(['aiSettings', 'availableModels'], (res) => {
                 if (res.aiSettings) setAiSettings(res.aiSettings);
                 if (res.availableModels) setAvailableModels(res.availableModels);
             });
 
-            // Listen for model changes
             const handleStorage = (changes: any, area: string) => {
                 if (area === 'local') {
                     if (changes.aiSettings) setAiSettings(changes.aiSettings.newValue);
@@ -41,21 +86,17 @@ export const ChatArea: React.FC = () => {
         }
     }, []);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
     useEffect(() => {
-        scrollToBottom();
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [currentSession?.messages, isGenerating]);
 
     const handleSend = () => {
         if (!inputValue.trim() && attachments.length === 0) return;
         if (isGenerating) return;
 
-        sendMessage(inputValue, attachments); // 把附件也带过去
+        sendMessage(inputValue, attachments);
         setInputValue('');
-        setAttachments([]); // 清空附件
+        setAttachments([]);
     };
 
     const handleDrop = (e: React.DragEvent) => {
@@ -64,7 +105,6 @@ export const ChatArea: React.FC = () => {
             const tweetData = e.dataTransfer.getData('tweet');
             if (tweetData) {
                 const tweet = JSON.parse(tweetData) as Tweet;
-                // 避免重复添加
                 if (!attachments.find(a => a.id === tweet.id)) {
                     setAttachments(prev => [...prev, tweet]);
                 }
@@ -81,18 +121,44 @@ export const ChatArea: React.FC = () => {
     const handleModelChange = (model: string) => {
         const newSettings = { ...aiSettings, model };
         setAiSettings(newSettings);
-        // @ts-ignore
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.set({ aiSettings: newSettings });
         }
         setShowModelDropdown(false);
     };
 
-    // Close dropdown on click outside
+    const handleVoiceInput = () => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Your browser does not support voice recognition.");
+            return;
+        }
+
+        if (isListening) return;
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            setInputValue(prev => prev + transcript);
+        };
+        recognition.onerror = () => setIsListening(false);
+        recognition.onend = () => setIsListening(false);
+
+        recognition.start();
+    };
+
     useEffect(() => {
         const handleClick = (e: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
                 setShowModelDropdown(false);
+            }
+            if (searchModeRef.current && !searchModeRef.current.contains(e.target as Node)) {
+                setShowSearchModeDropdown(false);
             }
         };
         document.addEventListener('mousedown', handleClick);
@@ -100,266 +166,368 @@ export const ChatArea: React.FC = () => {
     }, []);
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-zinc-950 relative overflow-hidden">
-            {/* Header with Model Switcher (ChatGPT Style) */}
-            <header className="h-14 border-b border-white/5 flex items-center px-4 bg-zinc-950/80 backdrop-blur-md z-20">
-                <div className="relative" ref={dropdownRef}>
-                    <button
-                        onClick={() => setShowModelDropdown(!showModelDropdown)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold text-zinc-200 group"
-                    >
-                        <span className="text-zinc-400 group-hover:text-brand transition-colors">
-                            {aiSettings.model?.includes('gpt') ? <Sparkles size={16} /> : <Bot size={16} />}
-                        </span>
-                        {aiSettings.model || "Select Model"}
-                        <ChevronDown size={14} className={cn("text-zinc-500 transition-transform", showModelDropdown && "rotate-180")} />
-                    </button>
+        <div className="flex-1 flex flex-col h-full bg-[#0d0d0d] relative overflow-hidden">
+            {/* Header - ChatGPT Style */}
+            <header className="h-14 flex items-center justify-between px-4 z-20">
+                <div className="flex items-center gap-2">
+                    <div className="relative" ref={dropdownRef}>
+                        <button
+                            onClick={() => setShowModelDropdown(!showModelDropdown)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold text-zinc-400 group"
+                        >
+                            <span>{aiSettings.model || "Select Model"}</span>
+                            <ChevronDown size={14} className={cn("transition-transform", showModelDropdown && "rotate-180")} />
+                        </button>
 
-                    {showModelDropdown && (
-                        <div className="absolute top-full left-0 mt-2 w-72 bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl py-2 overflow-hidden z-50 animate-in fade-in zoom-in duration-200">
-                            <div className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Available Models</div>
-                            <div className="max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
-                                {availableModels.length > 0 ? (
-                                    availableModels.map(m => (
-                                        <button
-                                            key={m}
-                                            onClick={() => handleModelChange(m)}
-                                            className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
-                                        >
-                                            <span className="truncate">{m}</span>
-                                            {aiSettings.model === m && <Check size={14} className="text-brand shrink-0" />}
-                                        </button>
-                                    ))
-                                ) : (
-                                    <div className="px-4 py-4 text-xs text-zinc-500 text-center italic">
-                                        No models loaded. Please go to Settings to verify your API Key.
-                                    </div>
-                                )}
+                        {showModelDropdown && (
+                            <div className="absolute top-full left-0 mt-1 w-64 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in duration-200">
+                                <div className="max-h-80 overflow-y-auto no-scrollbar">
+                                    {availableModels.length > 0 ? (
+                                        availableModels.map(m => (
+                                            <button
+                                                key={m}
+                                                onClick={() => handleModelChange(m)}
+                                                className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
+                                            >
+                                                <span className="truncate">{m}</span>
+                                                {aiSettings.model === m && <Check size={14} className="text-brand shrink-0" />}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-4 py-4 text-xs text-zinc-500 text-center italic">
+                                            {t('int_no_models')}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
+
+                    <div className="h-4 w-px bg-white/10" />
+
+                    <div className="relative" ref={searchModeRef}>
+                        <button
+                            onClick={() => setShowSearchModeDropdown(!showSearchModeDropdown)}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold group",
+                                searchMode === 'auto' ? "text-yellow-500/80" : searchMode === 'structured' ? "text-emerald-500/80" : "text-blue-500/80"
+                            )}
+                        >
+                            <Sparkles size={14} className={cn(searchMode === 'auto' && "animate-pulse")} />
+                            <span className="capitalize">{searchMode}</span>
+                            <ChevronDown size={14} className={cn("transition-transform", showSearchModeDropdown && "rotate-180")} />
+                        </button>
+
+                        {showSearchModeDropdown && (
+                            <div className="absolute top-full left-0 mt-1 w-56 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in duration-200">
+                                <button
+                                    onClick={() => { setSearchMode('auto'); setShowSearchModeDropdown(false); }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
+                                >
+                                    <Sparkles size={16} className="text-yellow-500" />
+                                    <div className="flex flex-col items-start">
+                                        <span className="font-bold">{t('int_mode_auto')}</span>
+                                        <span className="text-[10px] text-zinc-500">智能切换 精确/语义</span>
+                                    </div>
+                                    {searchMode === 'auto' && <Check size={14} className="ml-auto text-brand" />}
+                                </button>
+                                <button
+                                    onClick={() => { setSearchMode('structured'); setShowSearchModeDropdown(false); }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
+                                >
+                                    <PlusCircle size={16} className="text-emerald-500" />
+                                    <div className="flex flex-col items-start">
+                                        <span className="font-bold">{t('int_mode_precise')}</span>
+                                        <span className="text-[10px] text-zinc-500">仅限作者、分数等精确匹配</span>
+                                    </div>
+                                    {searchMode === 'structured' && <Check size={14} className="ml-auto text-brand" />}
+                                </button>
+                                <button
+                                    onClick={() => { setSearchMode('rag'); setShowSearchModeDropdown(false); }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
+                                >
+                                    <Bot size={16} className="text-blue-500" />
+                                    <div className="flex flex-col items-start">
+                                        <span className="font-bold">{t('int_mode_semantic')}</span>
+                                        <span className="text-[10px] text-zinc-500">基于向量的语义相似度搜索</span>
+                                    </div>
+                                    {searchMode === 'rag' && <Check size={14} className="ml-auto text-brand" />}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Right side actions - New Chat */}
-                <div className="ml-auto">
-                    <button className="p-2 text-zinc-400 hover:text-white transition-colors" title="New Thread">
-                        <PlusCircle size={20} />
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={createSession}
+                        className="p-2 text-zinc-400 hover:text-white transition-colors mr-2"
+                        title="New Chat"
+                    >
+                        <SquarePen size={18} />
                     </button>
+                    {!isNoteOpen && (
+                        <button
+                            onClick={toggleNote}
+                            className="p-2 text-zinc-400 hover:text-white transition-colors"
+                            title={t('int_note_editor')}
+                        >
+                            <PanelRightOpen size={20} />
+                        </button>
+                    )}
                 </div>
             </header>
 
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-8 scroll-smooth scrollbar-thin scrollbar-thumb-white/10">
+            {/* Chat Content */}
+            <div className="flex-1 overflow-y-auto no-scrollbar p-4 md:p-0">
                 {!currentSession || currentSession.messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center space-y-4 px-8 opacity-40">
                         <div className="w-16 h-16 rounded-full bg-brand/10 flex items-center justify-center border border-brand/20">
-                            <Sparkles className="text-brand" size={32} />
+                            <Bot className="text-brand" size={32} />
                         </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-white"> intelligence suite </h3>
-                            <p className="text-sm text-zinc-400 max-w-xs mx-auto mt-2">
-                                问我关于你保存的推文的任何问题，我会基于你的本地知识库进行回答。
-                            </p>
-                        </div>
+                        <h3 className="text-lg font-bold text-white uppercase tracking-widest">{t('nav_intelligence')}</h3>
                     </div>
                 ) : (
-                    currentSession.messages.map((msg) => (
-                        <div key={msg.id} className={cn(
-                            "group flex gap-4 max-w-4xl mx-auto w-full",
-                            msg.role === 'user' ? "flex-row-reverse" : "flex-row"
-                        )}>
-                            <div className={cn(
-                                "w-8 h-8 rounded-lg shrink-0 flex items-center justify-center border",
-                                msg.role === 'user'
-                                    ? "bg-brand/10 border-brand/20 text-brand"
-                                    : "bg-zinc-800 border-white/10 text-zinc-400"
-                            )}>
-                                {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
-                            </div>
-
-                            <div className={cn(
-                                "flex flex-col space-y-2 max-w-[85%]",
-                                msg.role === 'user' ? "items-end" : "items-start"
+                    <div className="max-w-3xl mx-auto w-full py-8 space-y-10">
+                        {currentSession.messages.map((msg) => (
+                            <div key={msg.id} className={cn(
+                                "group flex w-full",
+                                msg.role === 'user' ? "justify-end" : "justify-start"
                             )}>
                                 <div className={cn(
-                                    "relative group/msg px-4 py-2.5 rounded-2xl text-sm leading-relaxed max-w-full",
-                                    msg.role === 'user'
-                                        ? "bg-brand text-white shadow-md shadow-brand/10 border border-brand/20"
-                                        : "bg-zinc-900/50 text-zinc-200 border border-white/5"
+                                    "flex flex-col space-y-2 min-w-0 max-w-[85%]",
+                                    msg.role === 'user' ? "items-end" : "items-start"
                                 )}>
-                                    {msg.role === 'assistant' ? (
-                                        <>
-                                            <div className="prose prose-invert prose-brand max-w-none prose-sm prose-p:leading-relaxed">
-                                                {msg.content ? (
-                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                        {msg.content}
-                                                    </ReactMarkdown>
-                                                ) : (
-                                                    <div className="flex items-center gap-2 py-1 text-zinc-500 italic animate-pulse text-[13px]">
-                                                        <Loader2 size={12} className="animate-spin" />
-                                                        {statusMessage || '思考中...'}
+                                    <div className="relative w-full">
+                                        <div className={cn(
+                                            "prose prose-invert prose-brand max-w-none text-[15px] leading-relaxed",
+                                            msg.role === 'user'
+                                                ? "bg-zinc-800/50 border border-white/5 rounded-2xl px-4 py-3 text-zinc-200"
+                                                : "bg-transparent assistant-bubble"
+                                        )}>
+                                            {msg.role === 'assistant' && !msg.content ? (
+                                                <div className="flex flex-col gap-3 py-2">
+                                                    <div className="flex items-center gap-3 text-zinc-400">
+                                                        <div className="flex gap-1">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.3s]" />
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.15s]" />
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" />
+                                                        </div>
+                                                        <span className="text-sm font-medium tracking-tight bg-gradient-to-r from-zinc-300 to-zinc-500 bg-clip-text text-transparent">
+                                                            {statusMessage || t('int_thinking')}
+                                                        </span>
                                                     </div>
-                                                )}
-                                                {msg.isStreaming && msg.content && (
-                                                    <span className="inline-block w-1.5 h-4 ml-1 bg-brand animate-pulse align-middle" />
-                                                )}
+
+                                                    {isGenerating && (
+                                                        <div className="flex flex-col gap-1 px-4 py-3 bg-white/[0.02] border border-white/5 rounded-xl animate-in fade-in slide-in-from-top-2 duration-500">
+                                                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                                                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                                                                Search Path
+                                                            </div>
+                                                            <div className="text-xs text-zinc-400 flex items-center gap-2">
+                                                                <Check size={10} className="text-emerald-500" />
+                                                                正在分析 "{inputValue || currentSession?.messages[currentSession.messages.length - 1]?.content.slice(0, 20)}..."
+                                                            </div>
+                                                            {statusMessage?.includes('检索') && (
+                                                                <div className="text-xs text-zinc-400 flex items-center gap-2 animate-in fade-in duration-300">
+                                                                    <div className="w-2 h-2 rounded-full border border-zinc-600 border-t-zinc-300 animate-spin" />
+                                                                    查找匹配的推文和语境...
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                    {msg.content}
+                                                </ReactMarkdown>
+                                            )}
+                                            {msg.isStreaming && msg.content && (
+                                                <span className="inline-block w-1.5 h-4 ml-1 bg-brand animate-pulse align-middle" />
+                                            )}
+                                        </div>
+
+                                        {/* AI Actions */}
+                                        {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
+                                            <div className="mt-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => insertToNote('text', msg.content)}
+                                                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-[10px] text-zinc-500 hover:text-zinc-300 border border-transparent hover:border-white/10"
+                                                >
+                                                    <FilePlus size={12} />
+                                                    {t('int_add_to_note')}
+                                                </button>
                                             </div>
-                                            {/* Action Bar for AI Messages */}
-                                            {!msg.isStreaming && msg.content && (
-                                                <div className="absolute top-0 -right-10 opacity-0 group-hover/msg:opacity-100 transition-all">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            insertToNote('text', msg.content);
-                                                        }}
-                                                        className="p-1.5 bg-zinc-900 border border-white/10 rounded-lg text-zinc-400 hover:text-brand hover:border-brand/40 transition-all shadow-xl"
-                                                        title="Add to Note"
-                                                    >
-                                                        <FilePlus size={14} />
-                                                    </button>
+                                        )}
+                                    </div>
+
+                                    {/* Citations */}
+                                    {msg.citations && msg.citations.length > 0 && (
+                                        <div className="space-y-3 mt-4">
+                                            {msg.role === 'assistant' && (
+                                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+                                                    <div className="h-px bg-white/5 flex-1" />
+                                                    {t('int_sources')}
+                                                    <div className="h-px bg-white/5 flex-1" />
                                                 </div>
                                             )}
-                                        </>
-                                    ) : (
-                                        <div className="whitespace-pre-wrap font-medium">{msg.content}</div>
-                                    )}
-                                </div>
-
-                                {/* Citations Display */}
-                                {msg.citations && msg.citations.length > 0 && (
-                                    <div className={cn("w-full mt-1.5", msg.role === 'user' ? "flex flex-wrap gap-1.5 justify-end" : "space-y-3")}>
-                                        {msg.role === 'assistant' && (
-                                            <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1 mt-4">
-                                                <span className="w-4 h-[1px] bg-zinc-800"></span>
-                                                Sources
-                                            </div>
-                                        )}
-
-                                        {msg.role === 'user' ? (
-                                            /* User side: Compact Pills */
-                                            msg.citations.map((tweet) => (
-                                                <div
-                                                    key={tweet.id}
-                                                    className="flex items-center gap-1.5 bg-brand-hover/20 border border-white/5 rounded-full pl-1 px-2.5 py-1 text-zinc-300 text-[10px] font-medium"
-                                                >
-                                                    <div className="w-3.5 h-3.5 rounded-full bg-zinc-800 overflow-hidden border border-white/10 shrink-0">
-                                                        {tweet.authorAvatarUrl ? <img src={tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : '👤'}
-                                                    </div>
-                                                    <span className="truncate max-w-[100px]">
-                                                        @{tweet.authorName || (typeof tweet.author === 'string' ? tweet.author : (tweet.author as any)?.handle) || 'User'}
-                                                    </span>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            /* Assistant side: Full Fidelity TweetCards with Note Action */
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                                            <div className={cn(
+                                                "grid gap-2",
+                                                msg.role === 'user' ? "flex flex-wrap" : "grid-cols-1 md:grid-cols-2"
+                                            )}>
                                                 {msg.citations.map((tweet) => (
-                                                    <div
-                                                        key={tweet.id}
-                                                        className="relative group/card"
-                                                    >
-                                                        <div
-                                                            draggable
-                                                            onDragStart={(e) => {
-                                                                e.dataTransfer.setData('tweet', JSON.stringify(tweet));
-                                                                e.dataTransfer.effectAllowed = 'copy';
-                                                            }}
-                                                            className="transform transition-all active:scale-95 cursor-grab active:cursor-grabbing border border-white/5 hover:border-brand/30 bg-zinc-900/40 rounded-2xl overflow-hidden shadow-2xl"
-                                                        >
-                                                            <TweetCard tweet={tweet} author={tweet.author as any} />
+                                                    msg.role === 'user' ? (
+                                                        <div key={tweet.id} className="flex items-center gap-1.5 bg-white/5 border border-white/5 rounded-full px-2.5 py-1 text-zinc-400 text-[10px]">
+                                                            <div className="w-3.5 h-3.5 rounded-full overflow-hidden shrink-0 border border-white/10">
+                                                                {(tweet.author as any)?.avatar || tweet.authorAvatarUrl ? <img src={(tweet.author as any)?.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : '👤'}
+                                                            </div>
+                                                            <span className="truncate max-w-[120px]">@{(tweet.author as any)?.handle || tweet.authorName || 'User'}</span>
                                                         </div>
-                                                        <button
-                                                            onClick={() => insertToNote('tweet', tweet)}
-                                                            className="absolute top-2 right-2 p-1.5 bg-brand text-white rounded-lg opacity-0 group-hover/card:opacity-100 transition-all shadow-lg hover:scale-110 active:scale-90"
-                                                            title="Add to Note"
-                                                        >
-                                                            <Plus size={14} />
-                                                        </button>
-                                                    </div>
+                                                    ) : (
+                                                        <div key={tweet.id} className="relative group/card">
+                                                            <div className="transform transition-all bg-zinc-900/40 rounded-xl overflow-hidden ring-1 ring-white/5">
+                                                                <TweetCard tweet={tweet} author={tweet.author as any} />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => insertToNote('tweet', tweet)}
+                                                                className="absolute top-2 right-2 p-1.5 bg-brand text-white rounded-lg opacity-0 group-hover/card:opacity-100 transition-all shadow-lg hover:scale-110 active:scale-90"
+                                                                title={t('int_add_to_note')}
+                                                            >
+                                                                <Plus size={14} />
+                                                            </button>
+                                                        </div>
+                                                    )
                                                 ))}
                                             </div>
-                                        )}
-                                    </div>
-                                )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ))
-                )}
-
-                {/* Minimal Status Tracking (Only show if not already in a message) */}
-                {isGenerating && statusMessage && (!currentSession?.messages.length || currentSession.messages[currentSession.messages.length - 1].role !== 'assistant') && (
-                    <div className="flex gap-4 max-w-4xl mx-auto w-full animate-in fade-in duration-300">
-                        <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center bg-zinc-800 border border-white/10 text-zinc-400">
-                            <Bot size={16} />
-                        </div>
-                        <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900/50 border border-white/5 rounded-2xl">
-                            <Loader2 className="animate-spin text-brand" size={12} />
-                            <span className="text-[11px] font-medium text-zinc-400 tracking-wide">
+                        ))}
+                        {isGenerating && statusMessage && (!currentSession?.messages.length || currentSession.messages[currentSession.messages.length - 1].role !== 'assistant') && (
+                            <div className="flex items-center gap-2 py-1 text-zinc-500 italic animate-pulse text-[13px] font-medium">
+                                <Loader2 size={13} className="animate-spin" />
                                 {statusMessage}
-                            </span>
-                        </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} className="h-10" />
                     </div>
                 )}
-                <div ref={messagesEndRef} className="h-4" />
             </div>
 
-            {/* Input Wrapper */}
-            <div className="p-4 bg-zinc-950 border-t border-white/5">
+            {/* Input Area */}
+            <div className="w-full max-w-3xl mx-auto px-4 pb-6 pt-2">
                 <div
-                    className="max-w-4xl mx-auto relative group bg-zinc-900 border border-white/10 rounded-2xl transition-all focus-within:border-brand/40"
-                    onDragOver={(e) => e.preventDefault()}
                     onDrop={handleDrop}
+                    onDragOver={(e) => e.preventDefault()}
+                    className={cn(
+                        "relative flex flex-col rounded-2xl bg-[#1a1a1a] border border-white/10 focus-within:border-brand/30 focus-within:ring-4 focus-within:ring-brand/5 shadow-2xl transition-all group/input",
+                        attachments.length > 0 && "pt-1"
+                    )}
                 >
-                    {/* Attachments Area */}
+                    {/* Attachments */}
                     {attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 p-3 pb-0">
+                        <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-white/5 max-h-32 overflow-y-auto no-scrollbar">
                             {attachments.map(tweet => (
-                                <div
-                                    key={tweet.id}
-                                    className="flex items-center gap-2 bg-white/5 border border-white/5 rounded-lg pl-1.5 pr-1 py-1 group/pill hover:bg-white/10 transition-colors"
-                                >
-                                    <div className="w-4 h-4 rounded-full bg-zinc-800 overflow-hidden flex items-center justify-center text-[8px] border border-white/10 shrink-0">
-                                        {tweet.authorAvatarUrl ? <img src={tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : '👤'}
+                                <div key={tweet.id} className="flex items-center gap-1.5 bg-white/5 rounded-lg pl-1.5 pr-1 py-1 group/item">
+                                    <div className="w-4 h-4 rounded-full overflow-hidden border border-white/10 shrink-0">
+                                        {(tweet.author as any)?.avatar || tweet.authorAvatarUrl ? <img src={(tweet.author as any)?.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : '👤'}
                                     </div>
                                     <span className="text-[11px] font-bold text-zinc-400 truncate max-w-[100px]">
-                                        @{tweet.authorName || (typeof tweet.author === 'string' ? tweet.author : (tweet.author as any)?.handle) || 'User'}
+                                        @{(tweet.author as any)?.handle || tweet.authorName || 'User'}
                                     </span>
                                     <button
                                         onClick={() => removeAttachment(tweet.id)}
-                                        className="p-0.5 hover:bg-red-500/20 hover:text-red-400 rounded text-zinc-600 transition-all"
+                                        className="p-0.5 hover:bg-white/10 rounded transition-colors"
                                     >
-                                        <Plus className="rotate-45" size={12} />
+                                        <Plus size={10} className="rotate-45 text-zinc-500" />
                                     </button>
                                 </div>
                             ))}
                         </div>
                     )}
 
-                    <textarea
-                        rows={1}
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSend();
-                            }
-                        }}
-                        placeholder={attachments.length > 0 ? "Ask about these tweets..." : "Message intelligence or drop tweets here..."}
-                        className="w-full bg-transparent p-4 pr-12 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none transition-all resize-none overflow-hidden max-h-40 min-h-[56px]"
-                    />
+                    <div className="flex items-end p-2 px-3 gap-2">
+                        <button className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors mb-0.5">
+                            <Plus size={18} />
+                        </button>
+                        <textarea
+                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-zinc-200 py-1.5 max-h-40 resize-none no-scrollbar placeholder:text-zinc-600"
+                            placeholder={attachments.length > 0 ? t('int_ask_with_attachments') : t('int_chat_placeholder')}
+                            rows={1}
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend();
+                                }
+                            }}
+                        />
+                        <button
+                            onClick={handleVoiceInput}
+                            className={cn(
+                                "p-2 rounded-xl transition-all mb-0.5 text-zinc-500 hover:bg-white/5",
+                                isListening && "text-red-500 bg-red-500/10 animate-pulse"
+                            )}
+                            title="Voice Input"
+                        >
+                            <Mic size={18} />
+                        </button>
+                        <button
+                            onClick={handleSend}
+                            disabled={isGenerating || (!inputValue.trim() && attachments.length === 0)}
+                            className={cn(
+                                "p-2 rounded-xl transition-all mb-0.5",
+                                isGenerating || (!inputValue.trim() && attachments.length === 0)
+                                    ? "bg-zinc-800 text-zinc-600"
+                                    : "bg-white text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.3)]"
+                            )}
+                        >
+                            {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {/* Floating Selection Tooltip */}
+            {selectionInfo && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        left: `${selectionInfo.x}px`,
+                        top: `${selectionInfo.y}px`,
+                        transform: 'translate(-50%, -100%)',
+                    }}
+                    className="z-[1000] flex items-center gap-1 p-1 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl animate-in fade-in zoom-in duration-200"
+                >
                     <button
-                        onClick={handleSend}
-                        disabled={(!inputValue.trim() && attachments.length === 0) || isGenerating}
-                        className="absolute right-3 bottom-3 w-8 h-8 flex items-center justify-center bg-brand text-white rounded-xl shadow-lg shadow-brand/20 disabled:opacity-50 disabled:bg-zinc-700 transition-all active:scale-90"
+                        onClick={() => {
+                            insertToNote('text', selectionInfo.text);
+                            setSelectionInfo(null);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/5 text-zinc-200 text-xs font-semibold rounded-lg transition-colors"
                     >
-                        {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        <Sparkles size={14} className="text-brand" />
+                        插入笔记
+                    </button>
+                    <div className="w-px h-4 bg-white/10" />
+                    <button
+                        onClick={() => {
+                            navigator.clipboard.writeText(selectionInfo.text);
+                            setSelectionInfo(null);
+                        }}
+                        className="px-3 py-1.5 hover:bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg transition-colors"
+                    >
+                        复制
+                    </button>
+                    <button
+                        onClick={() => setSelectionInfo(null)}
+                        className="p-1.5 hover:bg-white/5 text-zinc-500 rounded-lg transition-colors"
+                    >
+                        <Plus size={14} className="rotate-45" />
                     </button>
                 </div>
-                <p className="text-[10px] text-center text-zinc-600 mt-2">
-                    ThatTweet Intelligence may hallucinate. Consider checking important information.
-                </p>
-            </div>
+            )}
         </div>
     );
 };

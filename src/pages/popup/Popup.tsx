@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bird, ArrowRight, Download, History } from 'lucide-react';
 import { db } from '../../core/storage/db';
+import { liveQuery } from 'dexie';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 
 export default function Popup() {
@@ -9,21 +10,26 @@ export default function Popup() {
   const [recent, setRecent] = useState<{ id: string, text: string, author: string }[]>([]);
 
   useEffect(() => {
-    // 获取总数
-    db.tweets.count().then(setCount);
+    // 实时监听总数
+    const countSub = liveQuery(() => db.tweets.count()).subscribe(setCount);
 
-    // 获取最近 3 条
-    db.tweets.orderBy('savedAt').reverse().limit(3).toArray().then(async (tweets) => {
-      const items = await Promise.all(tweets.map(async t => {
+    // 实时监听最近 3 条
+    const recentSub = liveQuery(async () => {
+      const tweets = await db.tweets.orderBy('savedAt').reverse().limit(3).toArray();
+      return Promise.all(tweets.map(async t => {
         const user = await db.users.get(t.authorId);
         return {
           id: t.id,
-          text: t.text.slice(0, 40) + '...',
-          author: user?.handle || 'Unknown'
+          text: (t.text || "").slice(0, 40) + (t.text && t.text.length > 40 ? '...' : ''),
+          author: user?.handle || user?.name || 'Unknown'
         };
       }));
-      setRecent(items);
-    });
+    }).subscribe(setRecent);
+
+    return () => {
+      countSub.unsubscribe();
+      recentSub.unsubscribe();
+    };
   }, []);
 
   const openOptions = () => {
