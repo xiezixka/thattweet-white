@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Loader2, ChevronDown, Check, Sparkles, PlusCircle, Plus, FilePlus, PanelRightOpen, PanelRightClose, SquarePen, Mic } from 'lucide-react';
+import { Send, User, Bot, Loader2, ChevronDown, Check, Sparkles, PlusCircle, Plus, FilePlus, PanelRightOpen, PanelRightClose, SquarePen, Mic, Play, Tag, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useChatStore } from '../../store/useChatStore';
@@ -355,9 +355,9 @@ export const ChatArea: React.FC = () => {
                                         )}
                                     </div>
 
-                                    {/* Citations */}
-                                    {msg.citations && msg.citations.length > 0 && (
-                                        <div className="space-y-3 mt-4">
+                                    {/* Citations (Updated Visuals) */}
+                                    {msg.citations && msg.citations.length > 0 && !msg.isStreaming && (
+                                        <div className="space-y-3 mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
                                             {msg.role === 'assistant' && (
                                                 <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest flex items-center gap-2">
                                                     <div className="h-px bg-white/5 flex-1" />
@@ -366,32 +366,131 @@ export const ChatArea: React.FC = () => {
                                                 </div>
                                             )}
                                             <div className={cn(
-                                                "grid gap-2",
+                                                "grid gap-3",
                                                 msg.role === 'user' ? "flex flex-wrap" : "grid-cols-1 md:grid-cols-2"
                                             )}>
-                                                {msg.citations.map((tweet) => (
-                                                    msg.role === 'user' ? (
-                                                        <div key={tweet.id} className="flex items-center gap-1.5 bg-white/5 border border-white/5 rounded-full px-2.5 py-1 text-zinc-400 text-[10px]">
-                                                            <div className="w-3.5 h-3.5 rounded-full overflow-hidden shrink-0 border border-white/10">
-                                                                {(tweet.author as any)?.avatar || tweet.authorAvatarUrl ? <img src={(tweet.author as any)?.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : '👤'}
+                                                {msg.citations.map((tweet) => {
+                                                    const author = (tweet.author as any) || {};
+                                                    const hasMedia = tweet.media && tweet.media.length > 0;
+                                                    const firstMedia = hasMedia ? tweet.media[0] : null;
+
+                                                    // Media handling
+                                                    const previewUrl = firstMedia?.previewUrl || (firstMedia?.type === 'image' ? firstMedia.url : '');
+                                                    let thumbnailUrl = previewUrl;
+                                                    if (thumbnailUrl && thumbnailUrl.includes('pbs.twimg.com') && !thumbnailUrl.includes('?')) {
+                                                        thumbnailUrl += '?format=jpg&name=small';
+                                                    }
+
+                                                    // Relevance Score
+                                                    const relevance = (tweet as any).relevanceScore || 0;
+
+                                                    if (msg.role === 'user') {
+                                                        return (
+                                                            <div key={tweet.id} className="flex items-center gap-1.5 bg-white/5 border border-white/5 rounded-full px-2.5 py-1 text-zinc-400 text-[10px]">
+                                                                <div className="w-3.5 h-3.5 rounded-full overflow-hidden shrink-0 border border-white/10">
+                                                                    {author.avatar || tweet.authorAvatarUrl ? <img src={author.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : <User size={10} />}
+                                                                </div>
+                                                                <span className="truncate max-w-[120px]">@{author.handle || tweet.authorName || 'User'}</span>
                                                             </div>
-                                                            <span className="truncate max-w-[120px]">@{(tweet.author as any)?.handle || tweet.authorName || 'User'}</span>
-                                                        </div>
-                                                    ) : (
-                                                        <div key={tweet.id} className="relative group/card">
-                                                            <div className="transform transition-all bg-zinc-900/40 rounded-xl overflow-hidden ring-1 ring-white/5">
-                                                                <TweetCard tweet={tweet} author={tweet.author as any} />
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div
+                                                            key={tweet.id}
+                                                            onClick={(e) => {
+                                                                // Prevent card click if clicking buttons
+                                                                window.open(tweet.tweetUrl, '_blank');
+                                                            }}
+                                                            className="group relative flex flex-col p-3 bg-zinc-900/40 hover:bg-zinc-800/60 rounded-xl border border-white/5 hover:border-white/10 transition-all cursor-pointer overflow-hidden"
+                                                        >
+                                                            {/* Header */}
+                                                            <div className="flex items-center gap-2 mb-2 relative z-10">
+                                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-800 shrink-0 border border-white/10">
+                                                                    {author.avatar || tweet.authorAvatarUrl ? (
+                                                                        <img src={author.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center text-zinc-500 font-bold text-[8px] bg-zinc-800">
+                                                                            {(author.name || tweet.authorName || 'U')[0]}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex flex-col min-w-0 flex-1 leading-none">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-[11px] font-bold text-zinc-200 truncate max-w-[100px]">
+                                                                            {author.name || tweet.authorName || 'Unknown'}
+                                                                        </span>
+                                                                        <span className="text-[10px] text-zinc-500 truncate">
+                                                                            @{author.handle || 'unknown'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                {tweet.savedAt && (
+                                                                    <div className="text-[9px] text-zinc-600 font-mono">
+                                                                        {new Date(tweet.savedAt).toLocaleDateString()}
+                                                                    </div>
+                                                                )}
                                                             </div>
+
+                                                            {/* Body */}
+                                                            <div className={cn(
+                                                                "text-[11px] text-zinc-400 leading-relaxed mb-2 break-words relative z-10",
+                                                                hasMedia ? "line-clamp-3" : "line-clamp-10"
+                                                            )}>
+                                                                {tweet.text}
+                                                            </div>
+
+                                                            {/* Media */}
+                                                            {hasMedia && thumbnailUrl && (
+                                                                <div className="aspect-video w-full rounded-lg bg-black/50 overflow-hidden relative mb-2 border border-white/5 z-10 grid place-items-center">
+                                                                    <img src={thumbnailUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" referrerPolicy="no-referrer" />
+                                                                    {firstMedia?.type === 'video' && (
+                                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                                            <div className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center border border-white/20">
+                                                                                <Play size={10} fill="white" className="ml-0.5 text-white" />
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Footer */}
+                                                            <div className="flex items-center justify-between mt-auto pt-1 relative z-10">
+                                                                <div className="flex items-center gap-1.5 overflow-hidden">
+                                                                    {tweet.tags && tweet.tags.slice(0, 2).map((tag, i) => (
+                                                                        <span key={i} className="px-1.5 py-0.5 rounded bg-brand/5 text-brand text-[9px] border border-brand/10 truncate max-w-[60px]">
+                                                                            #{tag}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="flex items-center gap-3 shrink-0 ml-auto">
+                                                                    {tweet.aiScore !== undefined && tweet.aiScore > 0 && (
+                                                                        <span className="text-[9px] font-bold italic text-zinc-500">
+                                                                            Ask {tweet.aiScore}
+                                                                        </span>
+                                                                    )}
+                                                                    {relevance > 0 && (
+                                                                        <span className="text-[9px] font-mono text-emerald-500/80">
+                                                                            {relevance}%
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Action Button */}
                                                             <button
-                                                                onClick={() => insertToNote('tweet', tweet)}
-                                                                className="absolute top-2 right-2 p-1.5 bg-brand text-white rounded-lg opacity-0 group-hover/card:opacity-100 transition-all shadow-lg hover:scale-110 active:scale-90"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    insertToNote('tweet', tweet);
+                                                                }}
+                                                                className="absolute top-2 right-2 p-1.5 bg-brand text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-110 active:scale-95 z-20"
                                                                 title={t('int_add_to_note')}
                                                             >
-                                                                <Plus size={14} />
+                                                                <Plus size={12} />
                                                             </button>
                                                         </div>
-                                                    )
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}

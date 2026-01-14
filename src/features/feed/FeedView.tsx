@@ -116,6 +116,7 @@ export const FeedView: React.FC = () => {
                                     tweet={item}
                                     author={item.author}
                                     mode="masonry"
+                                    onAuthorClick={(author) => setSearchQuery(author.handle || author.name)}
                                 />
                             </div>
                         ))}

@@ -14,9 +14,31 @@ function injectInterceptor() {
 }
 
 import { DomObserver } from '../../core/extractor/observer';
+import { Tweet } from '../../shared/types/tweet';
+
+function shouldSaveTweet(tweet: Tweet): boolean {
+  const path = window.location.pathname;
+
+  // 1. 白名单：主页 (Home) 和 搜索页 (Search)
+  // 允许保存这些页面上的所有内容 (Feed流)
+  if (path === '/' || path === '/home' || path.startsWith('/search')) {
+    return true;
+  }
+
+  // 2. 详情页 (Status)：只保存当前 URL 指定的主推文，屏蔽下方的回复 (Replies)
+  const match = path.match(/\/status\/(\d+)/);
+  if (match) {
+    const mainTweetId = match[1];
+    return tweet.id === mainTweetId;
+  }
+
+  // 3. 其他页面 (如个人主页 Profile, 列表 List 等)
+  // 根据用户指令 "Only ... home ... search ... acquire"，这里应当返回 false。
+  return false;
+}
 
 // 初始化 DOM 观察者 (作为兜底)
-const domObserver = new DomObserver();
+const domObserver = new DomObserver(shouldSaveTweet);
 
 /**
  * 监听来自拦截器的自定义事件
@@ -24,15 +46,20 @@ const domObserver = new DomObserver();
 window.addEventListener('thattweet-tweet-data', (event: any) => {
   const { tweets, users } = event.detail;
 
+  // Filter tweets based on current page context (Enable saving replies!)
+  const tweetsToSave = (tweets as Tweet[]).filter(tweet => shouldSaveTweet(tweet));
+
+  if (tweetsToSave.length === 0) return;
+
   // 1. 告诉 DOM 观察者：这些推文 API 已经抓到了，你别管了
-  if (tweets && Array.isArray(tweets)) {
-    domObserver.markAsProcessed(tweets.map((t: any) => t.id));
+  if (tweetsToSave && Array.isArray(tweetsToSave)) {
+    domObserver.markAsProcessed(tweetsToSave.map((t: any) => t.id));
   }
 
   // 2. 将数据发送到 Background 进一步处理 (持久化、AI 等)
   chrome.runtime.sendMessage({
     type: 'SAVE_TWEETS_BATCH',
-    payload: { tweets, users }
+    payload: { tweets: tweetsToSave, users }
   }).catch(err => {
     console.warn('[ThatTweet] Failed to send tweets to background:', err);
   });

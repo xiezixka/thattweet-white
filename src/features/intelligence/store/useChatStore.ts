@@ -232,7 +232,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
                         filteredResults = searchResults.filter(r => r.method === 'rag');
                     }
 
-                    contextCitations = filteredResults.map(r => r.tweet);
+                    contextCitations = filteredResults.map(r => {
+                        const t = r.tweet as any;
+                        t.relevanceScore = Math.min(Math.round(r.score), 100); // Normalize to roughly 0-100 range for display
+                        return t;
+                    });
 
                     // 如果是精确搜索且有结果，设置 searchMethod
                     if (filteredResults.length > 0) {

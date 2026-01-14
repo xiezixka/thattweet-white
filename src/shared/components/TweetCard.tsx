@@ -14,6 +14,7 @@ interface TweetCardProps {
     tweet: Tweet;
     author: UserCache;
     mode?: 'masonry' | 'compact' | 'reference';
+    onAuthorClick?: (author: UserCache) => void;
 }
 
 const formatNumber = (num: number) => {
@@ -50,7 +51,7 @@ const normalizeTwitterUrl = (url: string | undefined): string => {
     return processed;
 };
 
-export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry' }) => {
+export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry', onAuthorClick }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isPlayerActive, setIsPlayerActive] = useState(false);
     const [imgFail, setImgFail] = useState(false);
@@ -76,14 +77,22 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
     const videoUrl = firstMedia?.type === 'video' ? firstMedia.url.replace('http:', 'https:') : '';
 
     return (
-        <div className={cn(
-            "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all duration-300",
-            "p-3 gap-2 border-b border-white/5",
-            "break-inside-avoid w-full box-border mb-4"
-        )}>
+        <div
+            onClick={() => window.open(tweet.tweetUrl, '_blank')}
+            className={cn(
+                "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all duration-300 cursor-pointer hover:shadow-lg hover:border-white/10",
+                "p-3 gap-2 border-b border-white/5",
+                "break-inside-avoid w-full box-border mb-4"
+            )}>
             {/* Header Area */}
             <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2.5">
+                <div
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (onAuthorClick) onAuthorClick(author);
+                    }}
+                    className="flex items-center gap-2.5 hover:opacity-80 transition-opacity cursor-pointer"
+                >
                     <div className="w-10 h-10 rounded-full border border-white/10 bg-zinc-800 shrink-0 overflow-hidden">
                         {avatarUrl && !imgFail ? (
                             <img
@@ -145,7 +154,10 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
 
                 {hasLongText && isMasonry && (
                     <button
-                        onClick={() => setIsExpanded(!isExpanded)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsExpanded(!isExpanded);
+                        }}
                         className="mt-1 text-[11px] font-bold text-brand hover:text-brand transition-colors"
                     >
                         {isExpanded ? t('card_show_less') : t('card_read_more')}
@@ -162,13 +174,21 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                                 src={thumbnailUrl}
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
                                 alt="Media Thumbnail"
-                                onClick={() => firstMedia?.type === 'video' && setIsPlayerActive(true)}
+                                onClick={(e) => {
+                                    if (firstMedia?.type === 'video') {
+                                        e.stopPropagation();
+                                        setIsPlayerActive(true);
+                                    }
+                                }}
                                 referrerPolicy="no-referrer"
                             />
                             {firstMedia?.type === 'video' && (
                                 <div
                                     className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition-colors cursor-pointer"
-                                    onClick={() => setIsPlayerActive(true)}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsPlayerActive(true);
+                                    }}
                                 >
                                     <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 text-white shadow-2xl scale-90 group-hover:scale-100 transition-transform">
                                         <Play size={20} fill="white" className="ml-1" />
@@ -183,6 +203,7 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                             controls
                             autoPlay
                             playsInline
+                            onClick={(e) => e.stopPropagation()} // Prevent card click when clicking video controls
                         />
                     )}
                 </div>

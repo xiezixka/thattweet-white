@@ -8,10 +8,12 @@ import { Tweet } from '../../shared/types/tweet';
 export class DomObserver {
     private observer: MutationObserver | null = null;
     private processedIds = new Set<string>();
+    private validator?: (tweet: Tweet) => boolean;
     private isScanning = false;
     private scanTimer: any = null;
 
-    constructor() {
+    constructor(validator?: (tweet: Tweet) => boolean) {
+        this.validator = validator;
         this.start();
     }
 
@@ -111,7 +113,12 @@ export class DomObserver {
 
                 if (!tweet) return; // 可能是广告，跳过
 
-                // 2. 检查是否已处理
+                // 2. 校验：是否符合当前页面的抓取规则 (详情页只存主推，主页全存等)
+                if (this.validator && !this.validator(tweet)) {
+                    return;
+                }
+
+                // 3. 检查是否已处理
                 if (this.processedIds.has(tweet.id)) {
                     // 已处理 -> 标记视觉高亮
                     if (article.getAttribute('data-thattweet-saved') !== 'true') {
