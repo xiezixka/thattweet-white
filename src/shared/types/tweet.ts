@@ -45,7 +45,7 @@ export interface Tweet {
   authorId: string;            // 关联 UserCache.id (外键)
 
   // --- 旧版兼容：嵌入式作者信息 ---
-  author?: string;             // @handle (旧版字段)
+  author?: string | UserCache;   // @handle (旧版字段) 或 UserCache 对象
   authorName?: string;         // 显示名称 (旧版字段)
   authorAvatarUrl?: string;    // 头像链接 (旧版字段)
 
@@ -53,15 +53,13 @@ export interface Tweet {
   tweetUrl: string;            // 推文 URL
   createdAt: string | number;  // 发推时间
   source: CaptureSource;       // 采集来源
-
-  // --- 个人管理 ---
+  // ...
   savedAt: number;             // 保存时间 (ms)
   isBookmarked: boolean;       // 是否加星收藏
   isArchived: boolean;         // 是否已归档
   tags: string[];              // 用户手动打的标签
   note?: string;               // 用户笔记
-
-  // --- 互动统计 ---
+  // ...
   favoriteCount: number;       // 点赞数
   retweetCount: number;        // 转发数
   replyCount: number;          // 回复数

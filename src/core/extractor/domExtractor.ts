@@ -115,19 +115,19 @@ export class DomExtractor {
         let numericAuthorId: string | null = null;
 
         const avatarSelectors = [
-            '[data-testid="Tweet-User-Avatar"] img',
-            'div[data-testid="tweet"] img[src*="profile_images"]',
-            'img[src*="profile_images"]',
+            'article[data-testid="tweet"] [data-testid="Tweet-User-Avatar"] img',
+            'article[data-testid="tweet"] img[src*="profile_images"]',
+            'img[data-testid="Tweet-User-Avatar"]',
         ];
 
         for (const selector of avatarSelectors) {
             const img = articleElement.querySelector(selector);
-            const src = img?.getAttribute("src");
-            if (src && src.includes("profile_images")) {
+            // 考虑 lazy-loading: 优先取 data-src 或 src
+            const src = img?.getAttribute("src") || img?.getAttribute("data-src");
+
+            if (src && (src.includes("profile_images") || src.includes("abs.twimg.com/sticky/default_profile_images"))) {
                 authorAvatarUrl = src.replace("_normal.", "_bigger.");
 
-                // 🔑 关键改进：从头像 URL 提取数字 ID
-                // 格式: https://pbs.twimg.com/profile_images/1234567890/xxx.jpg
                 const idMatch = src.match(/profile_images\/(\d+)\//);
                 if (idMatch) {
                     numericAuthorId = idMatch[1];

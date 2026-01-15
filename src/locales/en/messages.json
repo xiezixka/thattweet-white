@@ -114,7 +114,7 @@
     "message": "Image Recognition"
   },
   "settings_section_chat": {
-    "message": "AI Chat (Introspection)"
+    "message": "Introspection"
   },
   "settings_section_rag": {
     "message": "Embeddings & Retrieval"

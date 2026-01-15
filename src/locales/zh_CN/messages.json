@@ -123,19 +123,19 @@
     "message": "重置"
   },
   "settings_section_api": {
-    "message": "API Configuration"
+    "message": "API 配置"
   },
   "settings_section_vision": {
-    "message": "Image Recognition"
+    "message": "视觉识别"
   },
   "settings_section_chat": {
-    "message": "AI Chat (沉思)"
+    "message": "沉思"
   },
   "settings_section_rag": {
-    "message": "Embeddings & Retrieval"
+    "message": "语义检索"
   },
   "settings_section_automation": {
-    "message": "Automation & Tags"
+    "message": "自动化 & 标签"
   },
   "settings_section_backup": {
     "message": "Backup"
