@@ -5,6 +5,7 @@ import { useUIStore } from '../../shared/store/useUIStore';
 import { FeedView } from '../../features/feed/FeedView';
 import { IntelligenceView } from '../../features/intelligence/IntelligenceView';
 import { SettingsView } from '../../features/settings/SettingsView';
+import { StatsView } from '../../features/stats/StatsView';
 import { MediaLightbox } from '../../shared/components/MediaLightbox';
 
 const Options: React.FC = () => {
@@ -17,7 +18,7 @@ const Options: React.FC = () => {
       case 'intelligence':
         return <IntelligenceView />;
       case 'stats':
-        return <div className="p-8 text-zinc-500">数据看板模块构建中...</div>;
+        return <StatsView />;
       case 'settings':
         return <SettingsView />;
       default:
