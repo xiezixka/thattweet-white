@@ -6,7 +6,7 @@
     "message": "记录并分析每一条触动你的推文。"
   },
   "popup_tagline": {
-    "message": "记录每一条触动你的推文"
+    "message": "捕捉流动的思考与灵感"
   },
   "popup_captured": {
     "message": "已捕获"
@@ -46,6 +46,9 @@
   },
   "feed_stat_suffix": {
     "message": "条深度见闻"
+  },
+  "feed_stat_total": {
+    "message": "总共捕获 {{count}} 条推文"
   },
   "feed_search_placeholder": {
     "message": "语义搜索或关键字..."
@@ -112,5 +115,188 @@
   },
   "filter_recent": {
     "message": "最近 24 小时"
+  },
+  "settings_save": {
+    "message": "保存配置"
+  },
+  "settings_reset": {
+    "message": "重置"
+  },
+  "settings_section_api": {
+    "message": "API Configuration"
+  },
+  "settings_section_vision": {
+    "message": "Image Recognition"
+  },
+  "settings_section_chat": {
+    "message": "AI Chat (沉思)"
+  },
+  "settings_section_rag": {
+    "message": "Embeddings & Retrieval"
+  },
+  "settings_section_automation": {
+    "message": "Automation & Tags"
+  },
+  "settings_section_backup": {
+    "message": "Backup"
+  },
+  "settings_section_prompts": {
+    "message": "Custom Prompts"
+  },
+  "settings_api_key": {
+    "message": "密钥"
+  },
+  "settings_api_key_desc": {
+    "message": "API Key 用于身份验证"
+  },
+  "settings_api_url": {
+    "message": "接口地址"
+  },
+  "settings_api_url_desc": {
+    "message": "基础 API 终端节点"
+  },
+  "settings_model": {
+    "message": "模型"
+  },
+  "settings_model_desc": {
+    "message": "指定的语言模型 ID"
+  },
+  "settings_verify": {
+    "message": "点击验证"
+  },
+  "settings_vision_keys": {
+    "message": "硅基流动密钥"
+  },
+  "settings_vision_keys_desc": {
+    "message": "用于 OCR 和视觉识别 (支持多行)"
+  },
+  "settings_ocr_enable": {
+    "message": "启用 OCR"
+  },
+  "settings_ocr_desc": {
+    "message": "识别图片中的文字"
+  },
+  "settings_vision_enable": {
+    "message": "启用视觉模型"
+  },
+  "settings_vision_desc": {
+    "message": "理解图片内容"
+  },
+  "settings_max_images": {
+    "message": "最大图片数"
+  },
+  "settings_max_images_desc": {
+    "message": "每条推文处理的图片数量上限"
+  },
+  "settings_chat_key_desc": {
+    "message": "对话功能专用 API Key (留空则默认使用全局密钥)"
+  },
+  "settings_rag_enable": {
+    "message": "启用语义检索"
+  },
+  "settings_rag_desc": {
+    "message": "使用向量嵌入进行语义搜索"
+  },
+  "settings_automation_auto": {
+    "message": "自动分析"
+  },
+  "settings_automation_auto_desc": {
+    "message": "静默后台处理捕获到的推文"
+  },
+  "settings_categories": {
+    "message": "分类体系"
+  },
+  "settings_categories_desc": {
+    "message": "用于推文自动分类的维度"
+  },
+  "settings_backup_desc": {
+    "message": "每 10 分钟自动备份所有数据为 JSON。请先手动创建一个备份文件夹，再选择该文件夹。"
+  },
+  "settings_backup_now": {
+    "message": "立即备份"
+  },
+  "settings_backup_folder": {
+    "message": "备份文件夹"
+  },
+  "settings_select_folder": {
+    "message": "选择文件夹"
+  },
+  "settings_prompt_analysis": {
+    "message": "评分与分析"
+  },
+  "settings_prompt_summary": {
+    "message": "精简摘要"
+  },
+  "settings_support_title": {
+    "message": "觉得 ThatTweet 帮到了你？支持作者一下"
+  },
+  "settings_support_subtitle": {
+    "message": "您的打赏是保持项目活跃和快速更新的动力之一"
+  },
+  "settings_lab": {
+    "message": "LABORATORY"
+  },
+  "settings_sys_config": {
+    "message": "系统配置"
+  },
+  "settings_save_status": {
+    "message": "保存状态"
+  },
+  "settings_waiting": {
+    "message": "等待更改..."
+  },
+  "settings_keys_loaded": {
+    "message": "已加载 {{count}} 个密钥"
+  },
+  "settings_rag_key_desc": {
+    "message": "嵌入 (Embedding) 与重排序 (Reranker) 专用密钥"
+  },
+  "settings_embedding": {
+    "message": "嵌入 (Embedding)"
+  },
+  "settings_reranker": {
+    "message": "重排序 (Reranker)"
+  },
+  "settings_model_id": {
+    "message": "模型 ID"
+  },
+  "settings_endpoint": {
+    "message": "终端节点 (Endpoint)"
+  },
+  "settings_new_category": {
+    "message": "新分类..."
+  },
+  "settings_batch_replace": {
+    "message": "批量替换"
+  },
+  "settings_backup_shield": {
+    "message": "自动化数据护盾"
+  },
+  "settings_no_folder": {
+    "message": "未选择文件夹"
+  },
+  "settings_prompt_analysis_desc": {
+    "message": "决定推文如何评分与分类的系统提示词"
+  },
+  "settings_prompt_summary_desc": {
+    "message": "用于在见闻列表中生成精简摘要的提示词"
+  },
+  "settings_save_success": {
+    "message": "配置已保存"
+  },
+  "settings_verifying": {
+    "message": "正在验证..."
+  },
+  "settings_no_key": {
+    "message": "未提供密钥"
+  },
+  "settings_verify_success": {
+    "message": "验证通过！"
+  },
+  "settings_verify_failed": {
+    "message": "验证失败"
+  },
+  "settings_verify_error": {
+    "message": "网络请求错误"
   }
 }

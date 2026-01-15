@@ -12,16 +12,6 @@ export const llmService = {
         });
     },
 
-    getBaseUrl(provider: string, customUrl?: string): string {
-        switch (provider) {
-            case 'siliconflow': return 'https://api.siliconflow.cn/v1';
-            case 'deepseek': return 'https://api.deepseek.com';
-            case 'openai': return 'https://api.openai.com/v1';
-            case 'custom': return customUrl || '';
-            default: return 'https://api.siliconflow.cn/v1';
-        }
-    },
-
     buildSystemPrompt(contextTweets: Tweet[]): string {
         let contextSection = '';
         if (contextTweets.length > 0) {
@@ -57,19 +47,22 @@ ${contextSection || "【注意：当前检索结果为空，请告知用户后�
     async *chatStream(messages: ChatMessage[], contextTweets: Tweet[]): AsyncGenerator<string, void, unknown> {
         const settings = await this.getSettings();
 
+        // 优先使用 Chat 专用配置，否则回退到全局 API 配置
+        const apiKey = settings.chatApiKey || settings.apiKey;
+        const baseUrl = settings.chatBaseUrl || settings.baseUrl;
+        const model = settings.chatModel || settings.model;
+
         console.log('[llmService] Settings:', {
-            provider: settings.provider,
-            model: settings.model,
-            hasKey: !!settings.apiKey,
+            model,
+            hasKey: !!apiKey,
         });
 
-        if (!settings.apiKey) throw new Error('AI API Key not configured');
-        if (!settings.model) throw new Error('AI Model not selected');
+        if (!apiKey) throw new Error('AI API Key not configured');
+        if (!model) throw new Error('AI Model not selected');
 
-        const baseUrl = this.getBaseUrl(settings.provider, settings.baseUrlContent);
         const url = `${baseUrl}/chat/completions`;
 
-        console.log('[llmService] Calling:', url, 'with model:', settings.model);
+        console.log('[llmService] Calling:', url, 'with model:', model);
 
         // 构建消息体
         const systemPrompt = this.buildSystemPrompt(contextTweets);
@@ -82,10 +75,12 @@ ${contextSection || "【注意：当前检索结果为空，请告知用户后�
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${settings.apiKey}`
+                'Authorization': `Bearer ${apiKey}`,
+                'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                'X-Title': 'ThatTweet'
             },
             body: JSON.stringify({
-                model: settings.model,
+                model,
                 messages: apiMessages,
                 stream: true,
                 max_tokens: 4096,

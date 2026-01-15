@@ -78,8 +78,9 @@ export interface Tweet {
   // --- AI 增强数据 ---
   aiScore?: number;            // 智能评分 (0-100)
   aiSummary?: string;          // AI 摘要
+  aiReason?: string;           // AI 评价理由 (新)
   aiTags?: string[];           // AI 自动生成的标签
-  aiCategory?: string;         // AI 智能分类 (技术, 资讯, 生活等)
+  aiCategory?: string;         // AI 智能分类
   aiStatus: ProcessStatus;     // AI 处理状态
   aiProcessedAt?: number;      // AI 处理完成时间
 

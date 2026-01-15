@@ -25,6 +25,7 @@ export const ChatArea: React.FC = () => {
     const [aiSettings, setAiSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
     const [selectionInfo, setSelectionInfo] = useState<{ text: string, x: number, y: number } | null>(null);
     const [isListening, setIsListening] = useState(false);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -90,6 +91,14 @@ export const ChatArea: React.FC = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [currentSession?.messages, isGenerating]);
 
+    // Auto-resize textarea
+    useEffect(() => {
+        if (inputRef.current) {
+            inputRef.current.style.height = 'auto';
+            inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+        }
+    }, [inputValue]);
+
     const handleSend = () => {
         if (!inputValue.trim() && attachments.length === 0) return;
         if (isGenerating) return;
@@ -119,7 +128,7 @@ export const ChatArea: React.FC = () => {
     };
 
     const handleModelChange = (model: string) => {
-        const newSettings = { ...aiSettings, model };
+        const newSettings = { ...aiSettings, chatModel: model };
         setAiSettings(newSettings);
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.set({ aiSettings: newSettings });
@@ -175,7 +184,7 @@ export const ChatArea: React.FC = () => {
                             onClick={() => setShowModelDropdown(!showModelDropdown)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold text-zinc-400 group"
                         >
-                            <span>{aiSettings.model || "Select Model"}</span>
+                            <span>{(aiSettings.chatModel || aiSettings.model) || "Select Model"}</span>
                             <ChevronDown size={14} className={cn("transition-transform", showModelDropdown && "rotate-180")} />
                         </button>
 
@@ -190,7 +199,7 @@ export const ChatArea: React.FC = () => {
                                                 className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
                                             >
                                                 <span className="truncate">{m}</span>
-                                                {aiSettings.model === m && <Check size={14} className="text-brand shrink-0" />}
+                                                {(aiSettings.chatModel || aiSettings.model) === m && <Check size={14} className="text-brand shrink-0" />}
                                             </button>
                                         ))
                                     ) : (
@@ -508,32 +517,32 @@ export const ChatArea: React.FC = () => {
                 )}
             </div>
 
-            {/* Input Area */}
-            <div className="w-full max-w-3xl mx-auto px-4 pb-6 pt-2">
+            {/* Input Area - ChatGPT Premium Style */}
+            <div className="w-full max-w-3xl mx-auto px-4 pb-8 pt-2">
                 <div
                     onDrop={handleDrop}
                     onDragOver={(e) => e.preventDefault()}
                     className={cn(
-                        "relative flex flex-col rounded-2xl bg-[#1a1a1a] border border-white/10 focus-within:border-brand/30 focus-within:ring-4 focus-within:ring-brand/5 shadow-2xl transition-all group/input",
+                        "relative flex flex-col rounded-[26px] bg-[#212121] border border-white/[0.08] shadow-2xl transition-all duration-300 group/input focus-within:border-zinc-500/50 focus-within:bg-[#262626]",
                         attachments.length > 0 && "pt-1"
                     )}
                 >
                     {/* Attachments */}
                     {attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-white/5 max-h-32 overflow-y-auto no-scrollbar">
+                        <div className="flex flex-wrap gap-2 px-4 py-3 border-b border-white/[0.03] max-h-32 overflow-y-auto no-scrollbar">
                             {attachments.map(tweet => (
-                                <div key={tweet.id} className="flex items-center gap-1.5 bg-white/5 rounded-lg pl-1.5 pr-1 py-1 group/item">
-                                    <div className="w-4 h-4 rounded-full overflow-hidden border border-white/10 shrink-0">
+                                <div key={tweet.id} className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl pl-2 pr-1.5 py-1.5 group/item transition-colors">
+                                    <div className="w-5 h-5 rounded-full overflow-hidden border border-white/10 shrink-0">
                                         {(tweet.author as any)?.avatar || tweet.authorAvatarUrl ? <img src={(tweet.author as any)?.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : '👤'}
                                     </div>
-                                    <span className="text-[11px] font-bold text-zinc-400 truncate max-w-[100px]">
+                                    <span className="text-[12px] font-bold text-zinc-300 truncate max-w-[120px]">
                                         @{(tweet.author as any)?.handle || tweet.authorName || 'User'}
                                     </span>
                                     <button
                                         onClick={() => removeAttachment(tweet.id)}
-                                        className="p-0.5 hover:bg-white/10 rounded transition-colors"
+                                        className="p-1 hover:bg-white/10 rounded-full transition-colors"
                                     >
-                                        <Plus size={10} className="rotate-45 text-zinc-500" />
+                                        <Plus size={12} className="rotate-45 text-zinc-500 group-hover/item:text-zinc-300" />
                                     </button>
                                 </div>
                             ))}
@@ -541,11 +550,13 @@ export const ChatArea: React.FC = () => {
                     )}
 
                     <div className="flex items-end p-2 px-3 gap-2">
-                        <button className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors mb-0.5">
-                            <Plus size={18} />
+                        <button className="flex items-center justify-center w-8 h-8 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all mb-1 shrink-0">
+                            <Plus size={20} strokeWidth={2.5} />
                         </button>
+
                         <textarea
-                            className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-zinc-200 py-1.5 max-h-40 resize-none no-scrollbar placeholder:text-zinc-600"
+                            ref={inputRef}
+                            className="flex-1 bg-transparent border-none focus:ring-0 outline-none text-[15px] leading-relaxed text-zinc-100 py-2.5 px-1 max-h-60 resize-none no-scrollbar placeholder:text-zinc-600 font-medium"
                             placeholder={attachments.length > 0 ? t('int_ask_with_attachments') : t('int_chat_placeholder')}
                             rows={1}
                             value={inputValue}
@@ -557,28 +568,32 @@ export const ChatArea: React.FC = () => {
                                 }
                             }}
                         />
-                        <button
-                            onClick={handleVoiceInput}
-                            className={cn(
-                                "p-2 rounded-xl transition-all mb-0.5 text-zinc-500 hover:bg-white/5",
-                                isListening && "text-red-500 bg-red-500/10 animate-pulse"
-                            )}
-                            title="Voice Input"
-                        >
-                            <Mic size={18} />
-                        </button>
-                        <button
-                            onClick={handleSend}
-                            disabled={isGenerating || (!inputValue.trim() && attachments.length === 0)}
-                            className={cn(
-                                "p-2 rounded-xl transition-all mb-0.5",
-                                isGenerating || (!inputValue.trim() && attachments.length === 0)
-                                    ? "bg-zinc-800 text-zinc-600"
-                                    : "bg-white text-black hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.3)]"
-                            )}
-                        >
-                            {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                        </button>
+
+                        <div className="flex items-center gap-1 mb-1 shrink-0">
+                            <button
+                                onClick={handleVoiceInput}
+                                className={cn(
+                                    "w-8 h-8 flex items-center justify-center rounded-full transition-all text-zinc-400 hover:text-white hover:bg-white/10",
+                                    isListening && "text-red-500 bg-red-500/10 animate-pulse"
+                                )}
+                                title="Voice Input"
+                            >
+                                <Mic size={18} />
+                            </button>
+
+                            <button
+                                onClick={handleSend}
+                                disabled={isGenerating || (!inputValue.trim() && attachments.length === 0)}
+                                className={cn(
+                                    "w-8 h-8 flex items-center justify-center rounded-full transition-all duration-300",
+                                    isGenerating || (!inputValue.trim() && attachments.length === 0)
+                                        ? "bg-zinc-700/50 text-zinc-500"
+                                        : "bg-white text-black hover:scale-105 active:scale-95 shadow-lg"
+                                )}
+                            >
+                                {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} strokeWidth={2.5} />}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

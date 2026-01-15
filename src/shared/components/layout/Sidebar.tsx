@@ -5,8 +5,7 @@ import {
     BarChart3,
     Settings2,
     ChevronLeft,
-    ChevronRight,
-    Bird
+    ChevronRight
 } from 'lucide-react';
 import { useUIStore, ViewType } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -61,8 +60,8 @@ export const Sidebar: React.FC = () => {
         >
             {/* Logo Area */}
             <div className="p-6 flex items-center gap-3 overflow-hidden">
-                <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center shadow-lg shadow-brand/20 shrink-0">
-                    <Bird className="text-white" size={24} />
+                <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
+                    <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
                 </div>
                 {!sidebarCollapsed && currentWidth > 160 && (
                     <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent truncate">

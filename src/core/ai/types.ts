@@ -2,10 +2,11 @@ import { AISettings } from '../../shared/types/settings';
 import { Tweet } from '../../shared/types/tweet';
 
 export interface AIAnalysisResult {
-    summary: string;
-    tags: string[];
+    summary?: string;
     score: number;
     category: string;
+    reason: string;
+    tags?: string[];
 }
 
 /**

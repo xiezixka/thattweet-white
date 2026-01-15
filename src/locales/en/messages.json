@@ -24,7 +24,7 @@
     "message": "Enter Dashboard"
   },
   "nav_feed": {
-    "message": "Intelligence Feed"
+    "message": "Feed"
   },
   "nav_intelligence": {
     "message": "Contemplation"
@@ -100,5 +100,188 @@
   },
   "int_note_title": {
     "message": "Intelligence Note"
+  },
+  "settings_save": {
+    "message": "Save"
+  },
+  "settings_reset": {
+    "message": "Reset"
+  },
+  "settings_section_api": {
+    "message": "API Configuration"
+  },
+  "settings_section_vision": {
+    "message": "Image Recognition"
+  },
+  "settings_section_chat": {
+    "message": "AI Chat (Introspection)"
+  },
+  "settings_section_rag": {
+    "message": "Embeddings & Retrieval"
+  },
+  "settings_section_automation": {
+    "message": "Automation & Tags"
+  },
+  "settings_section_backup": {
+    "message": "Backup"
+  },
+  "settings_section_prompts": {
+    "message": "Custom Prompts"
+  },
+  "settings_api_key": {
+    "message": "Key"
+  },
+  "settings_api_key_desc": {
+    "message": "API Key used for authentication"
+  },
+  "settings_api_url": {
+    "message": "Endpoint"
+  },
+  "settings_api_url_desc": {
+    "message": "Base API endpoint URL"
+  },
+  "settings_model": {
+    "message": "Model"
+  },
+  "settings_model_desc": {
+    "message": "Target language model ID"
+  },
+  "settings_verify": {
+    "message": "Verify"
+  },
+  "settings_vision_keys": {
+    "message": "Vision Keys"
+  },
+  "settings_vision_keys_desc": {
+    "message": "Used for OCR and Vision (Supports multi-line)"
+  },
+  "settings_ocr_enable": {
+    "message": "Enable OCR"
+  },
+  "settings_ocr_desc": {
+    "message": "Extract text from images"
+  },
+  "settings_vision_enable": {
+    "message": "Enable Vision"
+  },
+  "settings_vision_desc": {
+    "message": "Understand image content"
+  },
+  "settings_max_images": {
+    "message": "Max Images"
+  },
+  "settings_max_images_desc": {
+    "message": "Max images processed per tweet"
+  },
+  "settings_chat_key_desc": {
+    "message": "API Key for chat features (optional fallback to global)"
+  },
+  "settings_rag_enable": {
+    "message": "Enable RAG"
+  },
+  "settings_rag_desc": {
+    "message": "Use vector embeddings for semantic search"
+  },
+  "settings_automation_auto": {
+    "message": "Auto-analyze"
+  },
+  "settings_automation_auto_desc": {
+    "message": "Silently process captured tweets in background"
+  },
+  "settings_categories": {
+    "message": "Taxonomy"
+  },
+  "settings_categories_desc": {
+    "message": "Dimensions for automatic analysis"
+  },
+  "settings_backup_desc": {
+    "message": "Automatically backup all data to JSON every 10 mins. Create a folder manually once, then select it."
+  },
+  "settings_backup_now": {
+    "message": "Backup Now"
+  },
+  "settings_backup_folder": {
+    "message": "Backup Folder"
+  },
+  "settings_select_folder": {
+    "message": "Select Folder"
+  },
+  "settings_prompt_analysis": {
+    "message": "Scoring & Analysis"
+  },
+  "settings_prompt_summary": {
+    "message": "Concise Summary"
+  },
+  "settings_support_title": {
+    "message": "Found ThatTweet helpful?"
+  },
+  "settings_support_subtitle": {
+    "message": "Your support keeps the project active."
+  },
+  "settings_lab": {
+    "message": "LABORATORY"
+  },
+  "settings_sys_config": {
+    "message": "SYSTEM CONFIGURATION"
+  },
+  "settings_save_status": {
+    "message": "SAVE STATUS"
+  },
+  "settings_waiting": {
+    "message": "Waiting for changes..."
+  },
+  "settings_keys_loaded": {
+    "message": "{{count}} Keys Loaded"
+  },
+  "settings_rag_key_desc": {
+    "message": "Dedicated Key for Embedding & Reranking"
+  },
+  "settings_embedding": {
+    "message": "Embedding"
+  },
+  "settings_reranker": {
+    "message": "Reranker"
+  },
+  "settings_model_id": {
+    "message": "Model ID"
+  },
+  "settings_endpoint": {
+    "message": "Endpoint"
+  },
+  "settings_new_category": {
+    "message": "New Category..."
+  },
+  "settings_batch_replace": {
+    "message": "Batch Replace"
+  },
+  "settings_backup_shield": {
+    "message": "Automated Data Shield"
+  },
+  "settings_no_folder": {
+    "message": "No Folder Selected"
+  },
+  "settings_prompt_analysis_desc": {
+    "message": "System prompt that determines how tweets are scored and categorized"
+  },
+  "settings_prompt_summary_desc": {
+    "message": "Prompt used for generating a concise summary for the feed"
+  },
+  "settings_save_success": {
+    "message": "Settings Saved"
+  },
+  "settings_verifying": {
+    "message": "Verifying..."
+  },
+  "settings_no_key": {
+    "message": "No key provided"
+  },
+  "settings_verify_success": {
+    "message": "Verification Success"
+  },
+  "settings_verify_failed": {
+    "message": "Verification Failed"
+  },
+  "settings_verify_error": {
+    "message": "Network Error"
   }
 }

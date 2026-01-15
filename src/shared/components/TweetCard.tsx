@@ -140,17 +140,25 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                 )}
             </div>
 
-            {/* AI Summary */}
             {tweet.aiSummary && (
                 <div className={cn(
                     "text-zinc-200 text-[13px] leading-[1.4] p-2.5 rounded-xl border italic mb-1",
                     tweet.aiScore && tweet.aiScore >= 90 ? "bg-rose-400/5 border-rose-400/10" : "bg-white/[0.03] border-white/5"
                 )}>
-                    <span className={cn(
-                        "font-black mr-2 text-[10px]",
-                        tweet.aiScore && tweet.aiScore >= 90 ? "text-rose-400" : "text-brand"
-                    )}>{t('card_ai_label')}:</span>
-                    {tweet.aiSummary}
+                    <div className="flex items-start gap-2">
+                        <span className={cn(
+                            "font-black text-[10px] mt-0.5",
+                            tweet.aiScore && tweet.aiScore >= 90 ? "text-rose-400" : "text-brand"
+                        )}>{t('card_ai_label')}:</span>
+                        <div className="flex-1">
+                            <p>{tweet.aiSummary}</p>
+                            {tweet.aiReason && (
+                                <p className="mt-1.5 text-[11px] text-zinc-500 border-l-2 border-white/10 pl-2 not-italic font-medium">
+                                    {tweet.aiReason}
+                                </p>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 

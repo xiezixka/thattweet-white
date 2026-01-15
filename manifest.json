@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://api.siliconflow.cn https://api.deepseek.com https://api.openai.com; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://api.siliconflow.cn https://api.deepseek.com https://api.openai.com https://openrouter.ai; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:;"
   },
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
@@ -13,11 +13,11 @@
   "action": {
     "default_popup": "src/pages/popup/index.html",
     "default_icon": {
-      "32": "icon-32.png"
+      "32": "icon.png"
     }
   },
   "icons": {
-    "128": "icon-128.png"
+    "128": "icon.png"
   },
   "permissions": [
     "storage",
@@ -29,6 +29,7 @@
     "https://api.siliconflow.cn/*",
     "https://api.deepseek.com/*",
     "https://api.openai.com/*",
+    "https://openrouter.ai/*",
     "https://pbs.twimg.com/*",
     "https://abs.twimg.com/*",
     "https://video.twimg.com/*"
@@ -51,8 +52,7 @@
         "assets/*",
         "*.js",
         "*.css",
-        "icon-128.png",
-        "icon-32.png"
+        "icon.png"
       ],
       "matches": [
         "https://twitter.com/*",

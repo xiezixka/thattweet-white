@@ -1,44 +1,97 @@
 export type AIProvider = 'siliconflow' | 'deepseek' | 'openai' | 'anthropic' | 'custom';
 
 export interface AISettings {
-    enabled: boolean;
-    provider: AIProvider;
+    // 1. API Configuration (General)
     apiKey: string;
+    baseUrl: string;
     model: string;
-    baseUrlContent?: string;
 
-    // 视觉与图像处理 (Vision/OCR 分离)
-    visionEnabled: boolean;
+    // 2. Image Recognition
+    imageKeys: string; // 一行一个
     ocrEnabled: boolean;
-    visionModel: string; // 默认可以使用 siliconflow 的视觉模型
+    visionEnabled: boolean;
+    maxImagesPerTweet: number;
 
-    // 自动化与性能偏好
+    // 3. AI Chat (Contemplation)
+    chatApiKey: string;
+    chatBaseUrl: string;
+    chatModel: string;
+
+    // 4. RAG (Embeddings & Retrieval)
+    ragEnabled: boolean;
+    ragApiKey: string;
+    embeddingModel: string;
+    embeddingUrl: string;
+    rerankerModel: string;
+    rerankerUrl: string;
+
+    // 5. Automation & Tags
     autoAnalyze: boolean;
-    batchSize: number; // 每次处理几条
-    maxRetries: number;
+    batchSize: number;
     rateLimitMs: number;
+    categories: string[];
 
-    // 提示词配置
-    prompts: {
-        system: string;
-        tweetTemplate: string;
-    }
+    // 6. Backup
+    autoBackupEnabled: boolean;
+    backupFolderId?: string;
+    backupFolderName?: string;
+
+    // 7. Custom Prompts
+    promptAnalysis: string;
+    promptSummary: string;
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
-    enabled: false,
-    provider: 'siliconflow',
     apiKey: '',
-    model: 'deepseek-ai/DeepSeek-V3',
-    visionEnabled: false,
-    ocrEnabled: false,
-    visionModel: 'vendor/Pro/google/gemini-2.0-flash-exp', // 示例视觉模型
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: 'xiaomi/mimo-v2-flash:free',
+
+    imageKeys: '',
+    ocrEnabled: true,
+    visionEnabled: true,
+    maxImagesPerTweet: 2,
+
+    chatApiKey: '',
+    chatBaseUrl: 'https://openrouter.ai/api/v1',
+    chatModel: 'xiaomi/mimo-v2-flash:free',
+
+    ragEnabled: false,
+    ragApiKey: '',
+    embeddingModel: 'BAAI/bge-m3',
+    embeddingUrl: 'https://api.siliconflow.cn/v1/embeddings',
+    rerankerModel: 'BAAI/bge-reranker-v2-m3',
+    rerankerUrl: 'https://api.siliconflow.cn/v1/rerank',
+
     autoAnalyze: true,
-    batchSize: 10,
-    maxRetries: 5,
-    rateLimitMs: 2000,
-    prompts: {
-        system: '你是一个精干的推文分析助手。我会给你推文内容（如有图片，会附带 OCR 或视觉分析文字）。请严格按 JSON 格式返回分析结果。',
-        tweetTemplate: '推文作者: {author}\n内容: {text}\n图片描述: {vision}\nOCR文字: {ocr}'
-    }
+    batchSize: 5,
+    rateLimitMs: 1000,
+    categories: ['技术', '资讯', '观点', '教程', '工具', '灵感', '娱乐', '其他'],
+
+    autoBackupEnabled: false,
+
+    promptAnalysis: `分析以下推文，返回 JSON 格式评估结果。
+
+评分标准 (1-100)：
+- 原创观点：+30分（基础分50）
+- 包含数据、代码、实质内容：+25分
+- 时效性/新闻性：+20分
+- AI生成内容（明显机器痕迹）：-20分
+- 纯转发/水贴/无实质内容：-30分
+
+分类选项：技术、资讯、观点、教程、工具、灵感、娱乐、其他
+
+严格按照以下 JSON 格式返回，不要添加任何其他内容：
+{"score": 75, "category": "技术", "reason": "简短评价理由"}
+
+推文内容：
+{tweet_text}
+作者：@{author}`,
+
+    promptSummary: `为以下推文生成简洁摘要（50字以内），提取核心信息。
+
+推文内容：
+{tweet_text}
+作者：@{author}
+
+只返回摘要内容，不要添加任何其他说明。`
 };

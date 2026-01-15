@@ -14,11 +14,13 @@ export class AIJobQueue {
         if (this.isProcessing) return;
 
         const settings = await this.getSettings();
-        if (!settings.enabled || !settings.apiKey) return;
+        if (!settings.autoAnalyze || !settings.apiKey || settings.apiKey.trim().length < 5) {
+            return;
+        }
 
         this.isProcessing = true;
         try {
-            // 1. 获取待处理的推文 (参考旧版逻辑：过滤存档、过滤已处理、等待图片)
+            // 1. 获取待处理的推文
             const pendingTweets = await TweetRepository.getPendingAITweets();
             const toProcess = pendingTweets.filter(t => {
                 if (t.isArchived) return false;
@@ -42,6 +44,7 @@ export class AIJobQueue {
                     // 写回数据库
                     await db.tweets.update(tweet.id, {
                         aiSummary: result.summary,
+                        aiReason: result.reason,
                         aiTags: result.tags,
                         aiCategory: result.category,
                         aiScore: result.score,

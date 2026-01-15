@@ -40,8 +40,8 @@ export default function Popup() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-5 font-sans flex flex-col">
       {/* Brand */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center shadow-lg shadow-brand/20">
-          <Bird size={24} className="text-white" />
+        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg">
+          <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
         </div>
         <div>
           <h1 className="font-bold text-lg leading-tight text-white">{t('extName')}</h1>

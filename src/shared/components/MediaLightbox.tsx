@@ -48,10 +48,15 @@ export const MediaLightbox: React.FC = () => {
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-in fade-in duration-300"
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-950/70 backdrop-blur-3xl animate-in fade-in duration-500 ease-out"
             onClick={closeLightbox}
             onWheel={handleWheel}
         >
+            {/* Ambient Background Glow - Subtle blue hue to enhance the glass feel */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120vw] h-[120vh] bg-[radial-gradient(circle_at_center,rgba(29,155,240,0.08)_0%,transparent_70%)]" />
+                <div className="absolute inset-0 bg-white/[0.01] pointer-events-none" /> {/* Micro-grain hint */}
+            </div>
             {/* Scroll Container */}
             <div
                 ref={scrollRef}
