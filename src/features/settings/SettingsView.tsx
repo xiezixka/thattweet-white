@@ -21,14 +21,175 @@ import {
     X,
     MessageSquare,
     Search,
-    RefreshCw
+    RefreshCw,
+    Clock
 } from 'lucide-react';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import supportImg from '../../assets/img/支持一下.png';
 import { cn } from '../../shared/utils/cn';
+import { selectBackupDirectory, hasBackupDirectory, BackupResult } from '../../core/backup/backupService';
+
 
 type SettingsSection = 'api' | 'vision' | 'chat' | 'rag' | 'workflow' | 'backup' | 'prompts';
+
+// ============ Backup Section Component ============
+const BackupSection: React.FC = () => {
+    const { t } = useTranslation();
+    const [backupStatus, setBackupStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+    const [backupMessage, setBackupMessage] = useState<string>('');
+    const [folderName, setFolderName] = useState<string | null>(null);
+    const [lastBackupTime, setLastBackupTime] = useState<string | null>(null);
+
+    // Check backup directory on mount
+    useEffect(() => {
+        hasBackupDirectory().then(status => {
+            if (status.configured && status.name) {
+                setFolderName(status.name);
+            }
+        });
+    }, []);
+
+    const handleSelectFolder = async () => {
+        const result = await selectBackupDirectory();
+        if (result.success && result.name) {
+            setFolderName(result.name);
+            setBackupMessage('文件夹已选择');
+            setTimeout(() => setBackupMessage(''), 2000);
+        }
+    };
+
+    const handleBackupNow = () => {
+        setBackupStatus('running');
+        setBackupMessage('正在备份...');
+
+        chrome.runtime.sendMessage({ type: 'thattweet-backup-now' }, (response: BackupResult) => {
+            if (response?.ok) {
+                setBackupStatus('success');
+                setBackupMessage('备份成功！');
+                setLastBackupTime(new Date().toLocaleString());
+            } else if (response?.reason === 'no-change') {
+                setBackupStatus('idle');
+                setBackupMessage('无变化，跳过备份');
+            } else if (response?.reason === 'no-handle') {
+                setBackupStatus('error');
+                setBackupMessage('请先选择备份文件夹');
+            } else if (response?.reason === 'no-permission') {
+                setBackupStatus('error');
+                setBackupMessage('没有写入权限，请重新选择文件夹');
+            } else {
+                setBackupStatus('error');
+                setBackupMessage('备份失败');
+            }
+            setTimeout(() => {
+                setBackupStatus('idle');
+                setBackupMessage('');
+            }, 3000);
+        });
+    };
+
+    return (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-xl font-black text-white mb-10 tracking-tight flex items-center gap-3">
+                <div className="w-1.5 h-6 bg-brand rounded-full" />
+                {t('settings_section_backup')}
+            </h2>
+
+            <div className="p-8 bg-zinc-900/50 border border-white/5 rounded-3xl space-y-8 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 text-zinc-800 pointer-events-none group-hover:text-zinc-700 transition-colors">
+                    <Database size={80} />
+                </div>
+                <div className="relative z-10 max-w-md">
+                    <p className="text-lg font-bold text-white mb-2">{t('settings_backup_shield')}</p>
+                    <p className="text-xs text-zinc-500 leading-relaxed">
+                        {t('settings_backup_desc')}
+                    </p>
+                </div>
+
+                <div className="flex flex-col gap-4 relative z-10">
+                    {/* Backup Button & Status */}
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={handleBackupNow}
+                            disabled={backupStatus === 'running' || !folderName}
+                            className={cn(
+                                "flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95",
+                                !folderName
+                                    ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                                    : backupStatus === 'running'
+                                        ? "bg-zinc-700 text-zinc-400"
+                                        : "bg-brand text-white shadow-brand/20 hover:bg-brand-hover"
+                            )}
+                        >
+                            {backupStatus === 'running' ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : backupStatus === 'success' ? (
+                                <CheckCircle size={14} />
+                            ) : backupStatus === 'error' ? (
+                                <AlertCircle size={14} />
+                            ) : (
+                                <Database size={14} />
+                            )}
+                            {t('settings_backup_now')}
+                        </button>
+
+                        {backupMessage && (
+                            <span className={cn(
+                                "text-xs font-bold animate-in fade-in slide-in-from-left-4",
+                                backupStatus === 'success' ? "text-emerald-500" :
+                                    backupStatus === 'error' ? "text-rose-500" : "text-zinc-400"
+                            )}>
+                                {backupMessage}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Last Backup Time */}
+                    {lastBackupTime && (
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-medium">
+                            <Clock size={12} />
+                            上次备份: {lastBackupTime}
+                        </div>
+                    )}
+
+                    <div className="h-px bg-white/5" />
+
+                    {/* Folder Selection */}
+                    <div className="flex items-center justify-between py-2">
+                        <div className="flex items-center gap-3">
+                            <div className={cn(
+                                "p-2.5 rounded-xl border transition-colors",
+                                folderName ? "bg-brand/10 border-brand/20 text-brand" : "bg-zinc-800 border-white/5 text-zinc-400"
+                            )}>
+                                <FolderOpen size={18} />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t('settings_backup_folder')}</p>
+                                <p className={cn("text-xs font-bold", folderName ? "text-zinc-300" : "text-zinc-600")}>
+                                    {folderName || t('settings_no_folder')}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleSelectFolder}
+                            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold border border-white/5 transition-all active:scale-95"
+                        >
+                            {t('settings_select_folder')}
+                        </button>
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex items-start gap-2 p-3 bg-white/[0.02] rounded-xl border border-white/5">
+                        <AlertCircle size={14} className="text-zinc-600 shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-zinc-500 leading-relaxed">
+                            后台每 10 分钟自动检查并备份 (仅当数据变化时写入)。备份文件: <code className="text-brand">ThatTweet-backup.json</code>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const SettingsView: React.FC = () => {
     const { t } = useTranslation();
@@ -534,49 +695,9 @@ export const SettingsView: React.FC = () => {
 
                     {/* Backup */}
                     {activeSection === 'backup' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <SectionHeader title={sidebarItems[5].label} />
-
-                            <div className="p-8 bg-zinc-900/50 border border-white/5 rounded-3xl space-y-8 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-8 text-zinc-800 pointer-events-none group-hover:text-zinc-700 transition-colors">
-                                    <Database size={80} />
-                                </div>
-                                <div className="relative z-10 max-w-md">
-                                    <p className="text-lg font-bold text-white mb-2">{t('settings_backup_shield')}</p>
-                                    <p className="text-xs text-zinc-500 leading-relaxed">
-                                        {t('settings_backup_desc')}
-                                    </p>
-                                </div>
-
-                                <div className="flex flex-col gap-4 relative z-10">
-                                    <div className="flex items-center gap-4">
-                                        <button className="flex items-center gap-2 px-6 py-3 bg-brand text-white rounded-xl text-xs font-black shadow-lg shadow-brand/20 active:scale-95 transition-all">
-                                            {t('settings_backup_now')}
-                                        </button>
-                                    </div>
-
-                                    <div className="h-px bg-white/5" />
-
-                                    <div className="flex items-center justify-between py-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2.5 rounded-xl bg-zinc-800 border border-white/5">
-                                                <FolderOpen size={18} className="text-zinc-400" />
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t('settings_backup_folder')}</p>
-                                                <p className="text-xs font-bold text-zinc-300">
-                                                    {settings.backupFolderName || t('settings_no_folder')}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold border border-white/5 transition-all">
-                                            {t('settings_select_folder')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <BackupSection />
                     )}
+
 
                     {/* Custom Prompts */}
                     {activeSection === 'prompts' && (
