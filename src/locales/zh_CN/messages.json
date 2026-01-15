@@ -298,5 +298,77 @@
   },
   "settings_verify_error": {
     "message": "网络请求错误"
+  },
+  "stats_title": {
+    "message": "数据看板"
+  },
+  "stats_subtitle": {
+    "message": "深度洞察你的推文知识库"
+  },
+  "stats_active_filters": {
+    "message": "已激活过滤器"
+  },
+  "stats_clear_all": {
+    "message": "清除全部"
+  },
+  "stats_showing_count": {
+    "message": "显示"
+  },
+  "stats_showing_suffix": {
+    "message": "条推文"
+  },
+  "stats_time_range": {
+    "message": "时间范围"
+  },
+  "stats_quality_dist": {
+    "message": "质量分布"
+  },
+  "stats_categories": {
+    "message": "分类维度"
+  },
+  "stats_top_authors": {
+    "message": "作者热门榜"
+  },
+  "stats_hot_tags": {
+    "message": "热门标签"
+  },
+  "stats_total_tweets": {
+    "message": "总推文数"
+  },
+  "stats_high_quality": {
+    "message": "高质量"
+  },
+  "stats_bookmarked": {
+    "message": "已收藏"
+  },
+  "stats_authors": {
+    "message": "作者数"
+  },
+  "stats_showing_limit": {
+    "message": "显示前 50 条结果，共 {{count}} 条"
+  },
+  "stats_time_all": {
+    "message": "全部"
+  },
+  "stats_time_today": {
+    "message": "今天"
+  },
+  "stats_time_week": {
+    "message": "本周"
+  },
+  "stats_time_month": {
+    "message": "本月"
+  },
+  "stats_score_high": {
+    "message": "高质量"
+  },
+  "stats_score_featured": {
+    "message": "精选"
+  },
+  "stats_score_normal": {
+    "message": "普通"
+  },
+  "stats_score_low": {
+    "message": "低价值"
   }
 }

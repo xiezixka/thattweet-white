@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React from 'react';
 import {
     LayoutDashboard,
     BrainCircuit,
@@ -17,29 +17,8 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export const Sidebar: React.FC = () => {
-    const { activeView, setActiveView, sidebarCollapsed, toggleSidebar, sidebarWidth, setSidebarWidth } = useUIStore();
+    const { activeView, setActiveView, sidebarCollapsed, toggleSidebar } = useUIStore();
     const { t } = useTranslation();
-    const isResizing = useRef(false);
-
-    const startResizing = useCallback((e: React.MouseEvent) => {
-        isResizing.current = true;
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', stopResizing);
-        document.body.style.cursor = 'col-resize';
-    }, []);
-
-    const stopResizing = useCallback(() => {
-        isResizing.current = false;
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', stopResizing);
-        document.body.style.cursor = 'default';
-    }, []);
-
-    const handleMouseMove = useCallback((e: MouseEvent) => {
-        if (!isResizing.current) return;
-        const newWidth = Math.min(Math.max(e.clientX, 80), 480);
-        setSidebarWidth(newWidth);
-    }, [setSidebarWidth]);
 
     const navItems = [
         { id: 'feed', icon: LayoutDashboard, label: t('nav_feed') },
@@ -48,69 +27,77 @@ export const Sidebar: React.FC = () => {
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];
 
-    const currentWidth = sidebarCollapsed ? 80 : sidebarWidth;
-
     return (
         <aside
-            style={{ width: currentWidth }}
             className={cn(
-                "h-screen flex flex-col relative transition-all duration-300 glass-panel border-r border-white/5 select-none animate-in shrink-0",
-                sidebarCollapsed ? "duration-300" : "duration-0" // Disable transition when dragging
+                "h-screen flex flex-col relative transition-all duration-300 ease-in-out glass-panel border-r border-white/5 select-none shrink-0",
+                sidebarCollapsed ? "w-[88px]" : "w-[260px]"
             )}
         >
             {/* Logo Area */}
-            <div className="p-6 flex items-center gap-3 overflow-hidden">
-                <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
+            <div className={cn(
+                "h-20 flex items-center gap-4 overflow-hidden transition-all duration-300",
+                sidebarCollapsed ? "justify-center px-0" : "px-6"
+            )}>
+                <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 shadow-lg shadow-black/20">
                     <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
                 </div>
-                {!sidebarCollapsed && currentWidth > 160 && (
-                    <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent truncate">
-                        ThatTweet
-                    </span>
-                )}
+                <span className={cn(
+                    "font-bold text-xl tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent whitespace-nowrap transition-opacity duration-300",
+                    sidebarCollapsed ? "opacity-0 w-0 hidden" : "opacity-100"
+                )}>
+                    ThatTweet
+                </span>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 space-y-2 mt-4 overflow-hidden">
+            <nav className="flex-1 px-4 space-y-2 mt-4 overflow-hidden">
                 {navItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => setActiveView(item.id as ViewType)}
                         className={cn(
-                            "w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all group",
+                            "w-full flex items-center gap-4 px-3 py-3.5 rounded-2xl transition-all group relative overflow-hidden",
                             activeView === item.id
-                                ? "bg-brand/10 text-brand nebula-glow"
-                                : "text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                                ? "bg-brand/10 text-brand"
+                                : "text-zinc-500 hover:bg-white/5 hover:text-zinc-200",
+                            sidebarCollapsed && "justify-center px-0"
                         )}
+                        title={sidebarCollapsed ? item.label : undefined}
                     >
-                        <item.icon size={22} className={cn(
-                            "shrink-0",
-                            activeView === item.id ? "text-brand" : "group-hover:scale-110 transition-transform"
-                        )} />
-                        {!sidebarCollapsed && currentWidth > 160 && (
-                            <span className="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
+                        {/* Active Indicator Background */}
+                        {activeView === item.id && (
+                            <div className="absolute inset-0 bg-brand/5 opacity-50" />
                         )}
+
+                        <item.icon
+                            size={24}
+                            strokeWidth={activeView === item.id ? 2.5 : 2}
+                            className={cn(
+                                "shrink-0 transition-transform duration-300",
+                                activeView === item.id ? "scale-105" : "group-hover:scale-110"
+                            )}
+                        />
+
+                        <span className={cn(
+                            "font-medium whitespace-nowrap transition-all duration-300 origin-left",
+                            sidebarCollapsed ? "opacity-0 w-0 hidden scale-90" : "opacity-100 scale-100"
+                        )}>
+                            {item.label}
+                        </span>
                     </button>
                 ))}
             </nav>
 
             {/* Footer / Toggle */}
-            <div className="p-3">
+            <div className="p-4 flex justify-center">
                 <button
                     onClick={toggleSidebar}
-                    className="w-full flex items-center justify-center p-3 rounded-xl hover:bg-white/5 text-zinc-500 transition-colors"
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-zinc-600 hover:text-white transition-colors"
                 >
-                    {sidebarCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+                    {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
                 </button>
             </div>
-
-            {/* Drag Handle */}
-            {!sidebarCollapsed && (
-                <div
-                    onMouseDown={startResizing}
-                    className="absolute top-0 -right-1 w-2 h-full cursor-col-resize hover:bg-brand/30 transition-colors z-50"
-                />
-            )}
         </aside>
     );
 };

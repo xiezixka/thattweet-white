@@ -62,26 +62,27 @@ export const StatsView: React.FC = () => {
         const now = Date.now();
         const day = 24 * 60 * 60 * 1000;
         return [
-            { label: '全部', key: 'all', since: 0 },
-            { label: '今天', key: 'today', since: now - day },
-            { label: '本周', key: 'week', since: now - 7 * day },
-            { label: '本月', key: 'month', since: now - 30 * day },
+            { label: t('stats_time_all'), key: 'all', since: 0 },
+            { label: t('stats_time_today'), key: 'today', since: now - day },
+            { label: t('stats_time_week'), key: 'week', since: now - 7 * day },
+            { label: t('stats_time_month'), key: 'month', since: now - 30 * day },
         ];
-    }, []);
+    }, [t]);
 
     // 分数区间定义
     const scoreRanges: ScoreRange[] = useMemo(() => {
         const ranges = [
-            { label: '高质量', min: 80, max: 100, color: 'rose' },
-            { label: '精选', min: 60, max: 79, color: 'amber' },
-            { label: '普通', min: 40, max: 59, color: 'emerald' },
-            { label: '低价值', min: 0, max: 39, color: 'zinc' },
+            { label: t('stats_score_high'), min: 80, max: 100, color: 'rose' },
+            { label: t('stats_score_featured'), min: 60, max: 79, color: 'amber' },
+            { label: t('stats_score_normal'), min: 40, max: 59, color: 'emerald' },
+            { label: t('stats_score_low'), min: 0, max: 39, color: 'zinc' },
         ];
         return ranges.map(r => ({
             ...r,
             count: tweets.filter(t => (t.aiScore ?? 0) >= r.min && (t.aiScore ?? 0) <= r.max).length
         }));
-    }, [tweets]);
+    }, [tweets, t]);
+
 
     // 分类统计
     const categoryStats: CategoryStat[] = useMemo(() => {
@@ -204,43 +205,33 @@ export const StatsView: React.FC = () => {
     };
 
     return (
-        <div className="p-4 lg:p-8 w-full min-h-screen">
-            {/* Header */}
-            <header className="mb-8 px-2">
-                <h1 className="text-3xl font-black bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent italic tracking-tight flex items-center gap-3">
-                    <BarChart3 className="text-brand" size={28} />
-                    数据看板
-                </h1>
-                <p className="text-[13px] text-zinc-500 font-medium mt-1">
-                    深度洞察你的推文知识库
-                </p>
-            </header>
 
+        <div className="p-4 lg:p-8 w-full min-h-screen">
             <div className="flex gap-6">
                 {/* Left: Faceted Filters Panel */}
                 <aside className="w-72 shrink-0 space-y-6">
-                    {/* Active Filters Summary */}
-                    {hasActiveFilters && (
-                        <div className="glass-card rounded-2xl p-4 border border-brand/20 bg-brand/5">
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-xs font-bold text-brand uppercase">已激活过滤器</span>
+                    {/* Filter Status & Analytics Summary */}
+                    <div className="glass-card rounded-2xl p-4 border border-white/10 bg-white/5">
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('stats_active_filters')}</span>
+                            {hasActiveFilters && (
                                 <button
                                     onClick={clearAllFilters}
-                                    className="text-[10px] text-zinc-400 hover:text-white flex items-center gap-1"
+                                    className="text-[10px] text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
                                 >
-                                    <X size={10} /> 清除全部
+                                    <X size={10} /> {t('stats_clear_all')}
                                 </button>
-                            </div>
-                            <p className="text-sm text-zinc-300">
-                                显示 <span className="font-bold text-brand">{filteredTweets.length}</span> / {tweets.length} 条推文
-                            </p>
+                            )}
                         </div>
-                    )}
+                        <p className="text-sm text-zinc-300">
+                            {t('stats_showing_count')} <span className="font-bold text-brand">{filteredTweets.length}</span> / {tweets.length} {t('stats_showing_suffix')}
+                        </p>
+                    </div>
 
                     {/* Time Range */}
                     <div className="glass-card rounded-2xl p-4 border border-white/5">
                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <Calendar size={14} /> 时间范围
+                            <Calendar size={14} /> {t('stats_time_range')}
                         </h3>
                         <div className="flex flex-wrap gap-2">
                             {timeRanges.map(range => (
@@ -263,7 +254,7 @@ export const StatsView: React.FC = () => {
                     {/* Score Ranges */}
                     <div className="glass-card rounded-2xl p-4 border border-white/5">
                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <Star size={14} /> 质量分布
+                            <Star size={14} /> {t('stats_quality_dist')}
                         </h3>
                         <div className="space-y-2">
                             {scoreRanges.map(range => (
@@ -292,7 +283,7 @@ export const StatsView: React.FC = () => {
                     {/* Categories */}
                     <div className="glass-card rounded-2xl p-4 border border-white/5">
                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <Tag size={14} /> 分类维度
+                            <Tag size={14} /> {t('stats_categories')}
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
                             {categoryStats.map(cat => (
@@ -315,7 +306,7 @@ export const StatsView: React.FC = () => {
                     {/* Top Authors */}
                     <div className="glass-card rounded-2xl p-4 border border-white/5">
                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <Users size={14} /> 作者热门榜
+                            <Users size={14} /> {t('stats_top_authors')}
                         </h3>
                         <div className="space-y-1.5">
                             {authorStats.slice(0, 5).map(author => (
@@ -347,7 +338,7 @@ export const StatsView: React.FC = () => {
                     {/* Hot Tags */}
                     <div className="glass-card rounded-2xl p-4 border border-white/5">
                         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <Sparkles size={14} /> 热门标签
+                            <Sparkles size={14} /> {t('stats_hot_tags')}
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
                             {tagStats.slice(0, 15).map(({ tag, count }) => (
@@ -374,19 +365,19 @@ export const StatsView: React.FC = () => {
                     <div className="grid grid-cols-4 gap-4 mb-6">
                         <div className="glass-card rounded-xl p-4 border border-white/5">
                             <p className="text-2xl font-black text-white">{tweets.length}</p>
-                            <p className="text-xs text-zinc-500">总推文数</p>
+                            <p className="text-xs text-zinc-500">{t('stats_total_tweets')}</p>
                         </div>
                         <div className="glass-card rounded-xl p-4 border border-white/5">
                             <p className="text-2xl font-black text-brand">{tweets.filter(t => (t.aiScore ?? 0) >= 80).length}</p>
-                            <p className="text-xs text-zinc-500">高质量</p>
+                            <p className="text-xs text-zinc-500">{t('stats_high_quality')}</p>
                         </div>
                         <div className="glass-card rounded-xl p-4 border border-white/5">
                             <p className="text-2xl font-black text-amber-400">{tweets.filter(t => t.isBookmarked).length}</p>
-                            <p className="text-xs text-zinc-500">已收藏</p>
+                            <p className="text-xs text-zinc-500">{t('stats_bookmarked')}</p>
                         </div>
                         <div className="glass-card rounded-xl p-4 border border-white/5">
                             <p className="text-2xl font-black text-emerald-400">{authorStats.length}</p>
-                            <p className="text-xs text-zinc-500">作者数</p>
+                            <p className="text-xs text-zinc-500">{t('stats_authors')}</p>
                         </div>
                     </div>
 
@@ -426,7 +417,7 @@ export const StatsView: React.FC = () => {
 
                     {filteredTweets.length > 50 && (
                         <p className="text-center text-zinc-500 text-sm mt-6">
-                            显示前 50 条结果，共 {filteredTweets.length} 条
+                            {t('stats_showing_limit').replace('{{count}}', filteredTweets.length.toString())}
                         </p>
                     )}
                 </main>

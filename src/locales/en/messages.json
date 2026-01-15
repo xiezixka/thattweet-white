@@ -283,5 +283,77 @@
   },
   "settings_verify_error": {
     "message": "Network Error"
+  },
+  "stats_title": {
+    "message": "Analytics"
+  },
+  "stats_subtitle": {
+    "message": "Deep insights into your knowledge base"
+  },
+  "stats_active_filters": {
+    "message": "Active Filters"
+  },
+  "stats_clear_all": {
+    "message": "Clear All"
+  },
+  "stats_showing_count": {
+    "message": "Showing"
+  },
+  "stats_showing_suffix": {
+    "message": "tweets"
+  },
+  "stats_time_range": {
+    "message": "Time Range"
+  },
+  "stats_quality_dist": {
+    "message": "Quality Distribution"
+  },
+  "stats_categories": {
+    "message": "Dimensions"
+  },
+  "stats_top_authors": {
+    "message": "Top Authors"
+  },
+  "stats_hot_tags": {
+    "message": "Hot Tags"
+  },
+  "stats_total_tweets": {
+    "message": "Total Tweets"
+  },
+  "stats_high_quality": {
+    "message": "High Quality"
+  },
+  "stats_bookmarked": {
+    "message": "Bookmarked"
+  },
+  "stats_authors": {
+    "message": "Authors"
+  },
+  "stats_showing_limit": {
+    "message": "Showing top 50 of {{count}} results"
+  },
+  "stats_time_all": {
+    "message": "All Time"
+  },
+  "stats_time_today": {
+    "message": "Today"
+  },
+  "stats_time_week": {
+    "message": "This Week"
+  },
+  "stats_time_month": {
+    "message": "This Month"
+  },
+  "stats_score_high": {
+    "message": "High Quality"
+  },
+  "stats_score_featured": {
+    "message": "Featured"
+  },
+  "stats_score_normal": {
+    "message": "Normal"
+  },
+  "stats_score_low": {
+    "message": "Low Value"
   }
 }
