@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useTweets } from '../../shared/hooks/useTweets';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { TweetCard } from '../../shared/components/TweetCard';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     BarChart3, TrendingUp, Users, Tag, Calendar, Star,
     Image, MessageCircle, Filter, ChevronDown, X, Sparkles
@@ -45,6 +46,16 @@ export const StatsView: React.FC = () => {
     const [selectedScoreRange, setSelectedScoreRange] = useState<string | null>(null);
     const [selectedTimeRange, setSelectedTimeRange] = useState<string>('all');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+    // 视觉过渡缓冲区状态
+    const [isTransitioning, setIsTransitioning] = useState(false);
+
+    // 监听过滤器变化，触发视觉缓冲
+    useEffect(() => {
+        setIsTransitioning(true);
+        const timer = setTimeout(() => setIsTransitioning(false), 250);
+        return () => clearTimeout(timer);
+    }, [selectedCategories, selectedAuthors, selectedScoreRange, selectedTimeRange, selectedTags]);
 
     // 时间范围定义
     const timeRanges: TimeRange[] = useMemo(() => {
@@ -379,18 +390,38 @@ export const StatsView: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Filtered Results */}
-                    <div className="columns-[320px] gap-4">
-                        {filteredTweets.slice(0, 50).map((item) => (
-                            <div key={item.id} className="break-inside-avoid mb-4">
-                                <TweetCard
-                                    tweet={item}
-                                    author={item.author}
-                                    mode="masonry"
-                                    onTagClick={(tag) => toggleTag(tag)}
-                                />
-                            </div>
-                        ))}
+                    {/* Filtered Results with Transitions */}
+                    <div className={cn(
+                        "transition-all duration-300 ease-out",
+                        isTransitioning ? "opacity-50 blur-md scale-[0.99]" : "opacity-100 blur-0 scale-100"
+                    )}>
+                        <div className="columns-[320px] gap-4">
+                            <AnimatePresence mode="popLayout">
+                                {filteredTweets.slice(0, 50).map((item) => (
+                                    <motion.div
+                                        layout
+                                        key={item.id}
+                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                                        transition={{
+                                            type: "spring",
+                                            stiffness: 100,
+                                            damping: 15,
+                                            mass: 1
+                                        }}
+                                        className="break-inside-avoid mb-4"
+                                    >
+                                        <TweetCard
+                                            tweet={item}
+                                            author={item.author}
+                                            mode="masonry"
+                                            onTagClick={(tag) => toggleTag(tag)}
+                                        />
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
+                        </div>
                     </div>
 
                     {filteredTweets.length > 50 && (
