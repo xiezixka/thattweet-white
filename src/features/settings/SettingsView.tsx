@@ -22,13 +22,15 @@ import {
     MessageSquare,
     Search,
     RefreshCw,
-    Clock
+    Clock,
+    Upload,
+    Download
 } from 'lucide-react';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import supportImg from '../../assets/img/支持一下.png';
 import { cn } from '../../shared/utils/cn';
-import { selectBackupDirectory, hasBackupDirectory, BackupResult } from '../../core/backup/backupService';
+import { selectBackupDirectory, hasBackupDirectory, BackupResult, importBackupFromFile, ImportResult } from '../../core/backup/backupService';
 
 
 type SettingsSection = 'api' | 'vision' | 'chat' | 'rag' | 'workflow' | 'backup' | 'prompts';
@@ -40,6 +42,11 @@ const BackupSection: React.FC = () => {
     const [backupMessage, setBackupMessage] = useState<string>('');
     const [folderName, setFolderName] = useState<string | null>(null);
     const [lastBackupTime, setLastBackupTime] = useState<string | null>(null);
+
+    // Import state
+    const [importStatus, setImportStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+    const [importMessage, setImportMessage] = useState<string>('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Check backup directory on mount
     useEffect(() => {
@@ -88,6 +95,42 @@ const BackupSection: React.FC = () => {
         });
     };
 
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setImportStatus('running');
+        setImportMessage('正在导入...');
+
+        try {
+            const result = await importBackupFromFile(file);
+            if (result.ok) {
+                setImportStatus('success');
+                setImportMessage(`导入成功！新增 ${result.imported} 条，已存在 ${result.skipped} 条`);
+            } else {
+                setImportStatus('error');
+                setImportMessage(result.error || '导入失败');
+            }
+        } catch (error) {
+            setImportStatus('error');
+            setImportMessage('导入失败: ' + String(error));
+        }
+
+        // Reset file input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+
+        setTimeout(() => {
+            setImportStatus('idle');
+            setImportMessage('');
+        }, 5000);
+    };
+
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h2 className="text-xl font-black text-white mb-10 tracking-tight flex items-center gap-3">
@@ -107,8 +150,8 @@ const BackupSection: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-4 relative z-10">
-                    {/* Backup Button & Status */}
-                    <div className="flex items-center gap-4">
+                    {/* Backup & Import Buttons */}
+                    <div className="flex items-center gap-3 flex-wrap">
                         <button
                             onClick={handleBackupNow}
                             disabled={backupStatus === 'running' || !folderName}
@@ -128,21 +171,65 @@ const BackupSection: React.FC = () => {
                             ) : backupStatus === 'error' ? (
                                 <AlertCircle size={14} />
                             ) : (
-                                <Database size={14} />
+                                <Download size={14} />
                             )}
                             {t('settings_backup_now')}
                         </button>
 
-                        {backupMessage && (
-                            <span className={cn(
-                                "text-xs font-bold animate-in fade-in slide-in-from-left-4",
-                                backupStatus === 'success' ? "text-emerald-500" :
-                                    backupStatus === 'error' ? "text-rose-500" : "text-zinc-400"
-                            )}>
-                                {backupMessage}
-                            </span>
-                        )}
+                        <button
+                            onClick={handleImportClick}
+                            disabled={importStatus === 'running'}
+                            className={cn(
+                                "flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95 border",
+                                importStatus === 'running'
+                                    ? "bg-zinc-700 text-zinc-400 border-white/5"
+                                    : "bg-zinc-800 text-white border-white/10 hover:bg-zinc-700 hover:border-brand/30"
+                            )}
+                        >
+                            {importStatus === 'running' ? (
+                                <Loader2 size={14} className="animate-spin" />
+                            ) : importStatus === 'success' ? (
+                                <CheckCircle size={14} className="text-emerald-500" />
+                            ) : importStatus === 'error' ? (
+                                <AlertCircle size={14} className="text-rose-500" />
+                            ) : (
+                                <Upload size={14} />
+                            )}
+                            导入备份
+                        </button>
+
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".json"
+                            onChange={handleFileChange}
+                            className="hidden"
+                        />
                     </div>
+
+                    {/* Status Messages */}
+                    {(backupMessage || importMessage) && (
+                        <div className="flex items-center gap-4 flex-wrap">
+                            {backupMessage && (
+                                <span className={cn(
+                                    "text-xs font-bold animate-in fade-in slide-in-from-left-4",
+                                    backupStatus === 'success' ? "text-emerald-500" :
+                                        backupStatus === 'error' ? "text-rose-500" : "text-zinc-400"
+                                )}>
+                                    {backupMessage}
+                                </span>
+                            )}
+                            {importMessage && (
+                                <span className={cn(
+                                    "text-xs font-bold animate-in fade-in slide-in-from-left-4",
+                                    importStatus === 'success' ? "text-emerald-500" :
+                                        importStatus === 'error' ? "text-rose-500" : "text-zinc-400"
+                                )}>
+                                    {importMessage}
+                                </span>
+                            )}
+                        </div>
+                    )}
 
                     {/* Last Backup Time */}
                     {lastBackupTime && (
@@ -181,9 +268,11 @@ const BackupSection: React.FC = () => {
                     {/* Info */}
                     <div className="flex items-start gap-2 p-3 bg-white/[0.02] rounded-xl border border-white/5">
                         <AlertCircle size={14} className="text-zinc-600 shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-zinc-500 leading-relaxed">
-                            后台每 10 分钟自动检查并备份 (仅当数据变化时写入)。备份文件: <code className="text-brand">ThatTweet-backup.json</code>
-                        </p>
+                        <div className="text-[10px] text-zinc-500 leading-relaxed space-y-1">
+                            <p>后台每 10 分钟自动检查并备份 (仅当数据变化时写入)。</p>
+                            <p>备份文件: <code className="text-brand">ThatTweet-backup.json</code> (v2 紧凑格式)</p>
+                            <p className="text-zinc-600">支持导入 v1 (旧版) 和 v2 (紧凑) 格式的备份文件</p>
+                        </div>
                     </div>
                 </div>
             </div>

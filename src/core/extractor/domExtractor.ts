@@ -110,8 +110,10 @@ export class DomExtractor {
             }
         }
 
-        // 4. 头像 (DOM 兜底关键)
+        // 4. 头像 (DOM 兜底关键) + 从头像 URL 提取数字 ID
         let authorAvatarUrl: string | undefined;
+        let numericAuthorId: string | null = null;
+
         const avatarSelectors = [
             '[data-testid="Tweet-User-Avatar"] img',
             'div[data-testid="tweet"] img[src*="profile_images"]',
@@ -123,6 +125,13 @@ export class DomExtractor {
             const src = img?.getAttribute("src");
             if (src && src.includes("profile_images")) {
                 authorAvatarUrl = src.replace("_normal.", "_bigger.");
+
+                // 🔑 关键改进：从头像 URL 提取数字 ID
+                // 格式: https://pbs.twimg.com/profile_images/1234567890/xxx.jpg
+                const idMatch = src.match(/profile_images\/(\d+)\//);
+                if (idMatch) {
+                    numericAuthorId = idMatch[1];
+                }
                 break;
             }
         }
@@ -130,10 +139,13 @@ export class DomExtractor {
         // 5. 媒体提取
         const media = this.extractMediaFromDOM(articleElement);
 
+        // 6. 确定最终的 authorId（优先使用数字 ID）
+        const finalAuthorId = numericAuthorId || authorHandle;
+
         return {
             id: tweetId,
-            authorId: authorHandle, // DOM 模式下暂用 Handle 做 ID
-            author: authorHandle,   // 旧版兼容字段
+            authorId: finalAuthorId, // 优先使用数字 ID，无法获取时回退到 Handle
+            author: authorHandle,   // 旧版兼容字段（始终存 handle）
             authorName: authorName || authorHandle, // 旧版兼容字段
             authorAvatarUrl: authorAvatarUrl, // 旧版兼容字段
 
@@ -154,6 +166,7 @@ export class DomExtractor {
             imageProcessStatus: ProcessStatus.Pending
         } as Tweet;
     }
+
 
     private static extractMediaFromDOM(articleElement: Element): MediaItem[] {
         const media: MediaItem[] = [];

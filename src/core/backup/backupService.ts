@@ -5,6 +5,8 @@
 
 import { db } from '../storage/db';
 import { openDB, IDBPDatabase } from 'idb';
+import { compressBackup, parseBackup, CompactBackup } from './compactBackup';
+import { Tweet, UserCache } from '../../shared/types/tweet';
 
 // Type augmentation for File System Access API (not fully in standard TS defs)
 declare global {
@@ -124,9 +126,9 @@ async function ensureWritePermission(handle: FileSystemDirectoryHandle): Promise
 
 // ============ Full Backup Export ============
 /**
- * Export all data from IndexedDB to a structured backup object
+ * Export all data from IndexedDB to a compact backup object (v2 format)
  */
-export async function exportFullBackup(source: 'alarm' | 'manual'): Promise<FullBackup> {
+export async function exportFullBackup(source: 'alarm' | 'manual'): Promise<CompactBackup> {
     // Fetch all tweets
     const tweets = await db.tweets.toArray();
     const users = await db.users.toArray();
@@ -140,16 +142,8 @@ export async function exportFullBackup(source: 'alarm' | 'manual'): Promise<Full
         }
     });
 
-    return {
-        version: BACKUP_VERSION,
-        exportDate: Date.now(),
-        exportedAt: new Date().toISOString(),
-        source,
-        tweets,
-        users,
-        settings: storageData.aiSettings || {},
-        tweetCount: tweets.length,
-    };
+    // 使用紧凑格式导出
+    return compressBackup(tweets, users, storageData.aiSettings || {}, source);
 }
 
 // ============ Trigger Backup ============
@@ -196,7 +190,7 @@ export async function triggerFullBackup(source: 'alarm' | 'manual'): Promise<Bac
             // 7. Store the new hash
             await setStoredBackupHash(hash);
 
-            console.log(`[ThatTweet Backup] Successfully backed up ${backup.tweetCount} tweets`);
+            console.log(`[ThatTweet Backup] Successfully backed up ${backup.t.length} tweets (v2 compact format)`);
             return { ok: true, usedHandle: true, timestamp: Date.now() };
         } catch (writeError) {
             console.error('[ThatTweet Backup] Write error:', writeError);
@@ -237,5 +231,116 @@ export async function hasBackupDirectory(): Promise<{ configured: boolean; name?
         return { configured: false };
     } catch {
         return { configured: false };
+    }
+}
+
+// ============ Import Backup ============
+export interface ImportResult {
+    ok: boolean;
+    imported: number;
+    skipped: number;
+    error?: string;
+}
+
+/**
+ * Import backup from JSON string
+ * Supports both v1 (full) and v2 (compact) formats
+ */
+export async function importBackupFromJson(jsonString: string): Promise<ImportResult> {
+    try {
+        const data = JSON.parse(jsonString);
+        const parsed = parseBackup(data);
+
+        if (!parsed) {
+            return { ok: false, imported: 0, skipped: 0, error: 'Invalid backup format' };
+        }
+
+        const { tweets, users, settings } = parsed;
+        let imported = 0;
+        let skipped = 0;
+
+        // Import users first (they are referenced by tweets)
+        for (const user of users) {
+            try {
+                const existing = await db.users.get(user.id);
+                if (!existing || user.updatedAt > existing.updatedAt) {
+                    await db.users.put(user);
+                } else {
+                    skipped++;
+                }
+            } catch {
+                // If error, try to insert anyway
+                await db.users.put(user);
+            }
+        }
+
+        // Import tweets
+        for (const tweet of tweets) {
+            try {
+                const existing = await db.tweets.get(tweet.id);
+                if (!existing) {
+                    await db.tweets.add(tweet);
+                    imported++;
+                } else {
+                    // Merge: keep newer data, but preserve user notes/bookmarks
+                    const merged: Tweet = {
+                        ...tweet,
+                        // Preserve user-specific data from existing
+                        isBookmarked: existing.isBookmarked || tweet.isBookmarked,
+                        isArchived: existing.isArchived || tweet.isArchived,
+                        tags: [...new Set([...(existing.tags || []), ...(tweet.tags || [])])],
+                        note: existing.note || tweet.note,
+                        // Preserve AI data if already processed
+                        aiStatus: existing.aiStatus !== 'pending' ? existing.aiStatus : tweet.aiStatus,
+                        aiScore: existing.aiScore ?? tweet.aiScore,
+                        aiSummary: existing.aiSummary ?? tweet.aiSummary,
+                        aiReason: existing.aiReason ?? tweet.aiReason,
+                        aiTags: existing.aiTags?.length ? existing.aiTags : tweet.aiTags,
+                        aiCategory: existing.aiCategory ?? tweet.aiCategory,
+                        aiProcessedAt: existing.aiProcessedAt ?? tweet.aiProcessedAt,
+                        // Preserve image data if already processed
+                        imageProcessStatus: existing.imageProcessStatus !== 'pending' ? existing.imageProcessStatus : tweet.imageProcessStatus,
+                        ocrText: existing.ocrText ?? tweet.ocrText,
+                        visionDescription: existing.visionDescription ?? tweet.visionDescription,
+                        imageProcessedAt: existing.imageProcessedAt ?? tweet.imageProcessedAt,
+                    };
+                    await db.tweets.put(merged);
+                    skipped++;
+                }
+            } catch (e) {
+                console.warn('[ThatTweet Import] Failed to import tweet:', tweet.id, e);
+            }
+        }
+
+        // Import settings if present
+        if (settings && Object.keys(settings).length > 0) {
+            if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+                const currentSettings = await new Promise<Record<string, any>>((resolve) => {
+                    chrome.storage.local.get(['aiSettings'], (data) => resolve(data.aiSettings || {}));
+                });
+                // Merge settings (don't overwrite existing values)
+                const mergedSettings = { ...settings, ...currentSettings };
+                await chrome.storage.local.set({ aiSettings: mergedSettings });
+            }
+        }
+
+        console.log(`[ThatTweet Import] Imported ${imported} tweets, skipped ${skipped} (already exist)`);
+        return { ok: true, imported, skipped };
+    } catch (error) {
+        console.error('[ThatTweet Import] Import failed:', error);
+        return { ok: false, imported: 0, skipped: 0, error: String(error) };
+    }
+}
+
+/**
+ * Read and import backup from a File object
+ */
+export async function importBackupFromFile(file: File): Promise<ImportResult> {
+    try {
+        const text = await file.text();
+        return await importBackupFromJson(text);
+    } catch (error) {
+        console.error('[ThatTweet Import] Failed to read file:', error);
+        return { ok: false, imported: 0, skipped: 0, error: 'Failed to read file' };
     }
 }
