@@ -284,6 +284,45 @@
   "settings_verify_error": {
     "message": "Network Error"
   },
+  "settings_import": {
+    "message": "Import"
+  },
+  "settings_import_backup": {
+    "message": "Import backed up JSON file"
+  },
+  "settings_backup_auto_info": {
+    "message": "Background check and backup every 10 mins (only if changes detected)."
+  },
+  "settings_backup_file_info": {
+    "message": "Backup file: $1 (v2 compact format)"
+  },
+  "settings_backup_support_info": {
+    "message": "Supports importing v1 (Legacy) and v2 (Compact) formats"
+  },
+  "settings_chat_optional_fallback": {
+    "message": "Default to basic API settings if left blank"
+  },
+  "settings_group_ai": {
+    "message": "AI Foundation"
+  },
+  "settings_group_intelligence": {
+    "message": "Intelligence"
+  },
+  "settings_group_workflow": {
+    "message": "Workflow"
+  },
+  "settings_group_system": {
+    "message": "System"
+  },
+  "settings_vision_multi_line": {
+    "message": "Supports multiple lines, randomly selected"
+  },
+  "settings_batch_process_size": {
+    "message": "AI Batch Size"
+  },
+  "settings_batch_process_size_desc": {
+    "message": "Number of tweets to accumulate before triggering AI analysis"
+  },
   "stats_title": {
     "message": "Analytics"
   },

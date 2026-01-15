@@ -37,6 +37,11 @@ export class AIJobQueue {
                 return true;
             }).slice(0, settings.batchSize);
 
+            if (toProcess.length < settings.batchSize) {
+                // console.log(`[ThatTweet] Pending tweets (${toProcess.length}) not enough for batch size (${settings.batchSize}). Waiting...`);
+                return;
+            }
+
             console.log(`[ThatTweet] AI Queue starting batch process for ${toProcess.length} tweets.`);
 
             try {

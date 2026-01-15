@@ -41,6 +41,28 @@
             border-radius: inherit;
         }
     }
+
+    .animate-spin-slow {
+        animation: spin 8s linear infinite;
+    }
+
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .brand-gradient {
+        background: linear-gradient(135deg, #1d9bf0 0%, #0077b5 100%);
+    }
+
+    .brand-glow {
+        box-shadow: 0 0 20px rgba(29, 155, 240, 0.15);
+    }
 }
 
 /* 隐藏滚动条但保留功能 */

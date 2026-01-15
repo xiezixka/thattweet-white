@@ -27,7 +27,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                         transition={{ duration: 0.3, ease: 'easeOut' }}
-                        className={activeView === 'intelligence'
+                        className={['intelligence', 'settings'].includes(activeView)
                             ? "flex-1 overflow-hidden flex flex-col w-full h-full"
                             : "flex-1 overflow-y-auto no-scrollbar"}
                     >

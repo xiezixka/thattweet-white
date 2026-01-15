@@ -299,6 +299,45 @@
   "settings_verify_error": {
     "message": "网络请求错误"
   },
+  "settings_import": {
+    "message": "导入"
+  },
+  "settings_import_backup": {
+    "message": "导入已备份的 JSON 文件"
+  },
+  "settings_backup_auto_info": {
+    "message": "后台每 10 分钟自动检查并备份 (仅当数据变化时写入)。"
+  },
+  "settings_backup_file_info": {
+    "message": "备份文件: $1 (v2 紧凑格式)"
+  },
+  "settings_backup_support_info": {
+    "message": "支持导入 v1 (旧版) 和 v2 (紧凑) 格式的备份文件"
+  },
+  "settings_chat_optional_fallback": {
+    "message": "如果不填写，将默认使用基础 API 设置"
+  },
+  "settings_group_ai": {
+    "message": "AI 基础"
+  },
+  "settings_group_intelligence": {
+    "message": "智能分析"
+  },
+  "settings_group_workflow": {
+    "message": "自动化"
+  },
+  "settings_group_system": {
+    "message": "系统"
+  },
+  "settings_vision_multi_line": {
+    "message": "支持多行，将随机挑选使用"
+  },
+  "settings_batch_process_size": {
+    "message": "AI 批次处理大小"
+  },
+  "settings_batch_process_size_desc": {
+    "message": "累积多少条推文后才触发 AI 分析 (减少 API 调用频率)"
+  },
   "stats_title": {
     "message": "数据看板"
   },

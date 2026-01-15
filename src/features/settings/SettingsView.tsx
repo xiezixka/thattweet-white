@@ -24,7 +24,11 @@ import {
     RefreshCw,
     Clock,
     Upload,
-    Download
+    Download,
+    Sparkles,
+    Settings,
+    Activity,
+    BookOpen
 } from 'lucide-react';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { useTranslation } from '../../shared/hooks/useTranslation';
@@ -32,11 +36,11 @@ import supportImg from '../../assets/img/支持一下.png';
 import { cn } from '../../shared/utils/cn';
 import { selectBackupDirectory, hasBackupDirectory, BackupResult, importBackupFromFile, ImportResult } from '../../core/backup/backupService';
 
+// ============ Reorganized Types ============
+type SettingsGroup = 'ai' | 'intelligence' | 'automation' | 'system';
 
-type SettingsSection = 'api' | 'vision' | 'chat' | 'rag' | 'workflow' | 'backup' | 'prompts';
-
-// ============ Backup Section Component ============
-const BackupSection: React.FC = () => {
+// ============ Backup Card Component ============
+const BackupCard: React.FC = () => {
     const { t } = useTranslation();
     const [backupStatus, setBackupStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
     const [backupMessage, setBackupMessage] = useState<string>('');
@@ -48,7 +52,6 @@ const BackupSection: React.FC = () => {
     const [importMessage, setImportMessage] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Check backup directory on mount
     useEffect(() => {
         hasBackupDirectory().then(status => {
             if (status.configured && status.name) {
@@ -61,32 +64,29 @@ const BackupSection: React.FC = () => {
         const result = await selectBackupDirectory();
         if (result.success && result.name) {
             setFolderName(result.name);
-            setBackupMessage('文件夹已选择');
+            setBackupMessage(t('settings_save_success'));
             setTimeout(() => setBackupMessage(''), 2000);
         }
     };
 
     const handleBackupNow = () => {
         setBackupStatus('running');
-        setBackupMessage('正在备份...');
+        setBackupMessage('');
 
         chrome.runtime.sendMessage({ type: 'thattweet-backup-now' }, (response: BackupResult) => {
             if (response?.ok) {
                 setBackupStatus('success');
-                setBackupMessage('备份成功！');
+                setBackupMessage(t('settings_verify_success'));
                 setLastBackupTime(new Date().toLocaleString());
             } else if (response?.reason === 'no-change') {
                 setBackupStatus('idle');
-                setBackupMessage('无变化，跳过备份');
+                setBackupMessage(t('settings_waiting'));
             } else if (response?.reason === 'no-handle') {
                 setBackupStatus('error');
-                setBackupMessage('请先选择备份文件夹');
-            } else if (response?.reason === 'no-permission') {
-                setBackupStatus('error');
-                setBackupMessage('没有写入权限，请重新选择文件夹');
+                setBackupMessage(t('settings_no_folder'));
             } else {
                 setBackupStatus('error');
-                setBackupMessage('备份失败');
+                setBackupMessage(t('settings_verify_failed'));
             }
             setTimeout(() => {
                 setBackupStatus('idle');
@@ -95,36 +95,26 @@ const BackupSection: React.FC = () => {
         });
     };
 
-    const handleImportClick = () => {
-        fileInputRef.current?.click();
-    };
-
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setImportStatus('running');
-        setImportMessage('正在导入...');
-
         try {
             const result = await importBackupFromFile(file);
             if (result.ok) {
                 setImportStatus('success');
-                setImportMessage(`导入成功！新增 ${result.imported} 条，已存在 ${result.skipped} 条`);
+                setImportMessage(`${t('settings_verify_success')} +${result.imported}`);
             } else {
                 setImportStatus('error');
-                setImportMessage(result.error || '导入失败');
+                setImportMessage(result.error || t('settings_verify_failed'));
             }
         } catch (error) {
             setImportStatus('error');
-            setImportMessage('导入失败: ' + String(error));
+            setImportMessage(String(error));
         }
 
-        // Reset file input
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setTimeout(() => {
             setImportStatus('idle');
             setImportMessage('');
@@ -132,161 +122,80 @@ const BackupSection: React.FC = () => {
     };
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h2 className="text-xl font-black text-white mb-10 tracking-tight flex items-center gap-3">
-                <div className="w-1.5 h-6 bg-brand rounded-full" />
-                {t('settings_section_backup')}
-            </h2>
-
-            <div className="p-8 bg-zinc-900/50 border border-white/5 rounded-3xl space-y-8 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 text-zinc-800 pointer-events-none group-hover:text-zinc-700 transition-colors">
-                    <Database size={80} />
+        <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 space-y-6 relative overflow-hidden">
+            <div className="flex items-center justify-between relative z-10">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-brand/10 text-brand rounded-2xl">
+                        <Database size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white">{t('settings_section_backup')}</h3>
+                        <p className="text-xs text-zinc-500">{t('settings_backup_shield')}</p>
+                    </div>
                 </div>
-                <div className="relative z-10 max-w-md">
-                    <p className="text-lg font-bold text-white mb-2">{t('settings_backup_shield')}</p>
-                    <p className="text-xs text-zinc-500 leading-relaxed">
-                        {t('settings_backup_desc')}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                <button
+                    onClick={handleBackupNow}
+                    disabled={backupStatus === 'running' || !folderName}
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border transition-all active:scale-95 group",
+                        !folderName
+                            ? "bg-zinc-900/50 border-white/5 text-zinc-600 grayscale cursor-not-allowed"
+                            : "bg-white/[0.02] border-white/5 hover:border-brand/40 text-brand"
+                    )}
+                >
+                    {backupStatus === 'running' ? <Loader2 size={24} className="animate-spin" /> : <Download size={24} />}
+                    <span className="text-xs font-black uppercase tracking-widest">{t('settings_backup_now')}</span>
+                </button>
+
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={importStatus === 'running'}
+                    className="flex flex-col items-center justify-center gap-2 p-6 bg-white/[0.02] border border-white/5 rounded-2xl hover:border-emerald-500/40 text-emerald-500 transition-all active:scale-95 group"
+                >
+                    {importStatus === 'running' ? <Loader2 size={24} className="animate-spin" /> : <Upload size={24} />}
+                    <span className="text-xs font-black uppercase tracking-widest">{t('settings_import')}</span>
+                    <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileChange} className="hidden" />
+                </button>
+            </div>
+
+            <div className="space-y-4 pt-2 border-t border-white/5">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <FolderOpen size={16} className="text-zinc-500" />
+                        <div className="text-xs">
+                            <p className="text-zinc-500 uppercase font-black tracking-tighter text-[9px]">{t('settings_backup_folder')}</p>
+                            <p className="text-zinc-300 font-bold max-w-[150px] truncate">{folderName || t('settings_no_folder')}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleSelectFolder}
+                        className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-[10px] font-bold text-white rounded-lg transition-colors border border-white/5"
+                    >
+                        {t('settings_select_folder')}
+                    </button>
+                </div>
+
+                <div className="p-3 bg-black/20 rounded-xl border border-white/5">
+                    <p className="text-[10px] text-zinc-500 leading-relaxed font-medium">
+                        {t('settings_backup_auto_info')}
                     </p>
-                </div>
-
-                <div className="flex flex-col gap-4 relative z-10">
-                    {/* Backup & Import Buttons */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <button
-                            onClick={handleBackupNow}
-                            disabled={backupStatus === 'running' || !folderName}
-                            className={cn(
-                                "flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95",
-                                !folderName
-                                    ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                                    : backupStatus === 'running'
-                                        ? "bg-zinc-700 text-zinc-400"
-                                        : "bg-brand text-white shadow-brand/20 hover:bg-brand-hover"
-                            )}
-                        >
-                            {backupStatus === 'running' ? (
-                                <Loader2 size={14} className="animate-spin" />
-                            ) : backupStatus === 'success' ? (
-                                <CheckCircle size={14} />
-                            ) : backupStatus === 'error' ? (
-                                <AlertCircle size={14} />
-                            ) : (
-                                <Download size={14} />
-                            )}
-                            {t('settings_backup_now')}
-                        </button>
-
-                        <button
-                            onClick={handleImportClick}
-                            disabled={importStatus === 'running'}
-                            className={cn(
-                                "flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95 border",
-                                importStatus === 'running'
-                                    ? "bg-zinc-700 text-zinc-400 border-white/5"
-                                    : "bg-zinc-800 text-white border-white/10 hover:bg-zinc-700 hover:border-brand/30"
-                            )}
-                        >
-                            {importStatus === 'running' ? (
-                                <Loader2 size={14} className="animate-spin" />
-                            ) : importStatus === 'success' ? (
-                                <CheckCircle size={14} className="text-emerald-500" />
-                            ) : importStatus === 'error' ? (
-                                <AlertCircle size={14} className="text-rose-500" />
-                            ) : (
-                                <Upload size={14} />
-                            )}
-                            导入备份
-                        </button>
-
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".json"
-                            onChange={handleFileChange}
-                            className="hidden"
-                        />
-                    </div>
-
-                    {/* Status Messages */}
-                    {(backupMessage || importMessage) && (
-                        <div className="flex items-center gap-4 flex-wrap">
-                            {backupMessage && (
-                                <span className={cn(
-                                    "text-xs font-bold animate-in fade-in slide-in-from-left-4",
-                                    backupStatus === 'success' ? "text-emerald-500" :
-                                        backupStatus === 'error' ? "text-rose-500" : "text-zinc-400"
-                                )}>
-                                    {backupMessage}
-                                </span>
-                            )}
-                            {importMessage && (
-                                <span className={cn(
-                                    "text-xs font-bold animate-in fade-in slide-in-from-left-4",
-                                    importStatus === 'success' ? "text-emerald-500" :
-                                        importStatus === 'error' ? "text-rose-500" : "text-zinc-400"
-                                )}>
-                                    {importMessage}
-                                </span>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Last Backup Time */}
-                    {lastBackupTime && (
-                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-medium">
-                            <Clock size={12} />
-                            上次备份: {lastBackupTime}
-                        </div>
-                    )}
-
-                    <div className="h-px bg-white/5" />
-
-                    {/* Folder Selection */}
-                    <div className="flex items-center justify-between py-2">
-                        <div className="flex items-center gap-3">
-                            <div className={cn(
-                                "p-2.5 rounded-xl border transition-colors",
-                                folderName ? "bg-brand/10 border-brand/20 text-brand" : "bg-zinc-800 border-white/5 text-zinc-400"
-                            )}>
-                                <FolderOpen size={18} />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t('settings_backup_folder')}</p>
-                                <p className={cn("text-xs font-bold", folderName ? "text-zinc-300" : "text-zinc-600")}>
-                                    {folderName || t('settings_no_folder')}
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={handleSelectFolder}
-                            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold border border-white/5 transition-all active:scale-95"
-                        >
-                            {t('settings_select_folder')}
-                        </button>
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex items-start gap-2 p-3 bg-white/[0.02] rounded-xl border border-white/5">
-                        <AlertCircle size={14} className="text-zinc-600 shrink-0 mt-0.5" />
-                        <div className="text-[10px] text-zinc-500 leading-relaxed space-y-1">
-                            <p>后台每 10 分钟自动检查并备份 (仅当数据变化时写入)。</p>
-                            <p>备份文件: <code className="text-brand">ThatTweet-backup.json</code> (v2 紧凑格式)</p>
-                            <p className="text-zinc-600">支持导入 v1 (旧版) 和 v2 (紧凑) 格式的备份文件</p>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
     );
 };
 
+// ============ Main View Component ============
 export const SettingsView: React.FC = () => {
     const { t } = useTranslation();
-    const [activeSection, setActiveSection] = useState<SettingsSection>('api');
+    const [activeGroup, setActiveGroup] = useState<SettingsGroup>('ai');
     const [settings, setSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
     const [status, setStatus] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
-    const [isValidating, setIsValidating] = useState<string | null>(null); // section name or null
+    const [isValidating, setIsValidating] = useState<string | null>(null);
     const [newTag, setNewTag] = useState('');
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -318,50 +227,34 @@ export const SettingsView: React.FC = () => {
         }
     };
 
-    const handleResetPrompt = (key: 'promptAnalysis' | 'promptSummary') => {
-        handleChange(key, DEFAULT_AI_SETTINGS[key]);
-    };
-
-    const addTag = () => {
-        if (newTag.trim() && !settings.categories.includes(newTag.trim())) {
-            handleChange('categories', [...settings.categories, newTag.trim()]);
-            setNewTag('');
-        }
-    };
-
-    const removeTag = (tag: string) => {
-        handleChange('categories', settings.categories.filter(t => t !== tag));
-    };
-
-    const handleVerifyKey = async (section: 'api' | 'vision' | 'chat' | 'rag') => {
-        setIsValidating(section);
-        setStatus(t('settings_verifying') || 'Verifying...');
+    const handleVerifyKey = async (type: 'api' | 'vision' | 'chat' | 'rag') => {
+        setIsValidating(type);
+        setStatus(t('settings_verifying'));
 
         let apiKey = '';
         let baseUrl = '';
         let model = '';
 
-        if (section === 'api') {
+        if (type === 'api') {
             apiKey = settings.apiKey;
             baseUrl = settings.baseUrl;
             model = settings.model;
-        } else if (section === 'chat') {
+        } else if (type === 'chat') {
             apiKey = settings.chatApiKey || settings.apiKey;
             baseUrl = settings.chatBaseUrl || settings.baseUrl;
             model = settings.chatModel || settings.model;
-        } else if (section === 'vision') {
-            // 取第一行非空密钥测试
-            apiKey = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean)[0] || '';
-            baseUrl = 'https://api.siliconflow.cn/v1'; // 默认硅基流动
-            model = 'google/gemini-2.0-flash-exp'; // 默认测试模型
-        } else if (section === 'rag') {
+        } else if (type === 'vision') {
+            apiKey = settings.imageKeys.split('\n').filter(Boolean)[0] || '';
+            baseUrl = 'https://api.siliconflow.cn/v1';
+            model = 'google/gemini-2.0-flash-exp';
+        } else if (type === 'rag') {
             apiKey = settings.ragApiKey;
-            baseUrl = settings.embeddingUrl; // 简单测试地址
+            baseUrl = settings.embeddingUrl;
         }
 
         if (!apiKey) {
             setIsValidating(null);
-            setStatus(t('settings_no_key') || 'No key provided');
+            setStatus(t('settings_no_key'));
             return;
         }
 
@@ -371,518 +264,378 @@ export const SettingsView: React.FC = () => {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${apiKey}`,
-                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
                     'X-Title': 'ThatTweet'
                 },
                 body: JSON.stringify({
                     model: model || 'xiaomi/mimo-v2-flash:free',
-                    messages: [{ role: 'user', content: 'Say hi' }],
-                    max_tokens: 5,
-                    temperature: 0.1
+                    messages: [{ role: 'user', content: 'hi' }],
+                    max_tokens: 5
                 })
             });
 
             if (response.ok) {
-                setStatus(t('settings_verify_success') || 'Verification Success');
+                setStatus(t('settings_verify_success'));
             } else {
-                const err = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-                const errMsg = err.error?.message || response.statusText;
-                console.error('Verify failed:', err);
-                setStatus(`${t('settings_verify_failed') || 'Failed'}: ${errMsg}`);
+                const err = await response.json();
+                setStatus(`${t('settings_verify_failed')}: ${err.error?.message || response.statusText}`);
             }
         } catch (error) {
-            console.error('Verify error:', error);
-            setStatus(t('settings_verify_error') || 'Network Error');
+            setStatus(t('settings_verify_error'));
         } finally {
             setIsValidating(null);
             setTimeout(() => setStatus(''), 3000);
         }
     };
 
-    const sidebarItems = [
-        { id: 'api', icon: Shield, label: t('settings_section_api') },
-        { id: 'vision', icon: Eye, label: t('settings_section_vision') },
-        { id: 'chat', icon: MessageSquare, label: t('settings_section_chat') },
-        { id: 'rag', icon: Search, label: t('settings_section_rag') },
-        { id: 'workflow', icon: Zap, label: t('settings_section_automation') },
-        { id: 'backup', icon: Database, label: t('settings_section_backup') },
-        { id: 'prompts', icon: FileText, label: t('settings_section_prompts') },
+    const groups = [
+        { id: 'ai', icon: Shield, label: t('settings_group_ai'), sublabel: 'Connections & Models' },
+        { id: 'intelligence', icon: Zap, label: t('settings_group_intelligence'), sublabel: 'Analysis & Search' },
+        { id: 'automation', icon: Activity, label: t('settings_group_workflow'), sublabel: 'Rules & Tags' },
+        { id: 'system', icon: Settings, label: t('settings_group_system'), sublabel: 'Data & Maintenance' },
     ];
 
-    const InputGroup = ({ label, description, children, error }: any) => (
-        <div className="space-y-2 mb-8 group/input">
-            <div className="flex flex-col">
-                <label className="text-sm font-bold text-zinc-100 uppercase tracking-tight flex items-center gap-2 group-focus-within/input:text-brand transition-colors">
-                    {label}
-                </label>
-                {description && <p className="text-[11px] text-zinc-500 font-medium mb-2">{description}</p>}
+    const Card = ({ children, title, icon: Icon, description }: any) => (
+        <section className="bg-white/[0.02] border border-white/[0.05] rounded-[32px] p-8 space-y-8 relative overflow-hidden group/card hover:bg-white/[0.03] transition-all duration-500">
+            <div className="absolute top-0 right-0 p-8 text-white/[0.02] pointer-events-none group-hover/card:text-white/[0.04] transition-colors duration-700">
+                {Icon && <Icon size={120} strokeWidth={1} />}
             </div>
+            <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-2">
+                    {Icon && <div className="p-2 bg-brand/10 rounded-xl text-brand"><Icon size={20} /></div>}
+                    <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
+                </div>
+                {description && <p className="text-xs text-zinc-500 font-medium mb-8 max-w-lg leading-relaxed">{description}</p>}
+                <div className="space-y-6">
+                    {children}
+                </div>
+            </div>
+        </section>
+    );
+
+    const Field = ({ label, description, children }: any) => (
+        <div className="space-y-2 group/field">
+            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block group-focus-within/field:text-brand transition-colors">
+                {label}
+            </label>
             {children}
-            {error && <p className="text-xs text-rose-500 font-medium">{error}</p>}
+            {description && <p className="text-[10px] text-zinc-600 font-medium italic">{description}</p>}
         </div>
     );
 
-    const SectionHeader = ({ title }: { title: string }) => (
-        <h2 className="text-xl font-black text-white mb-10 tracking-tight flex items-center gap-3">
-            <div className="w-1.5 h-6 bg-brand rounded-full" />
-            {title}
-        </h2>
-    );
-
     return (
-        <div className="flex h-screen bg-[#0a0a0a] overflow-hidden">
-            {/* Left Navigation */}
-            <aside className="w-64 border-r border-white/[0.05] flex flex-col p-4 bg-[#0d0d0d]">
-                <div className="px-4 py-8 mb-4">
-                    <h1 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em] mb-1">{t('settings_lab')}</h1>
-                    <p className="text-[10px] text-zinc-600 font-medium uppercase">{t('settings_sys_config')}</p>
+        <div className="flex h-full bg-[#050505]">
+            {/* Elegant Sidebar */}
+            <aside className="w-[300px] border-r border-white/5 flex flex-col bg-[#080808]">
+                <div className="p-10">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center shadow-lg shadow-brand/20">
+                            <Sparkles size={18} className="text-white" />
+                        </div>
+                        <h1 className="text-lg font-black text-white tracking-tighter">{t('settings_lab')}</h1>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">{t('settings_sys_config')}</p>
                 </div>
 
-                <nav className="flex-1 space-y-1">
-                    {sidebarItems.map((item) => (
+                <nav className="flex-1 px-4 space-y-1.5">
+                    {groups.map((group) => (
                         <button
-                            key={item.id}
-                            onClick={() => setActiveSection(item.id as SettingsSection)}
+                            key={group.id}
+                            onClick={() => setActiveGroup(group.id as SettingsGroup)}
                             className={cn(
-                                "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 group",
-                                activeSection === item.id
-                                    ? "bg-white/[0.03] text-white border border-white/10"
-                                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]"
+                                "w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 group",
+                                activeGroup === group.id
+                                    ? "bg-white/[0.04] text-white border border-white/10 shadow-xl shadow-black/40"
+                                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.01]"
                             )}
                         >
-                            <item.icon size={18} className={cn(
-                                "transition-colors",
-                                activeSection === item.id ? "text-brand" : "text-zinc-600 group-hover:text-zinc-400"
+                            <group.icon size={20} className={cn(
+                                "transition-colors duration-300",
+                                activeGroup === group.id ? "text-brand" : "text-zinc-600 group-hover:text-zinc-400"
                             )} />
-                            <span>{item.label}</span>
-                            {activeSection === item.id && (
+                            <div className="text-left">
+                                <p className="text-sm font-bold tracking-tight">{group.label}</p>
+                                <p className="text-[9px] font-medium opacity-40 uppercase tracking-wider">{group.sublabel}</p>
+                            </div>
+                            {activeGroup === group.id && (
                                 <div className="ml-auto w-1 h-1 rounded-full bg-brand shadow-[0_0_8px_var(--brand)]" />
                             )}
                         </button>
                     ))}
                 </nav>
 
-                {/* Status Bar */}
-                <div className="mt-auto p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase">{t('settings_save_status')}</span>
-                        <div className={cn("w-2 h-2 rounded-full", status ? "bg-emerald-500 animate-pulse" : "bg-zinc-700")} />
+                <div className="p-6">
+                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">{t('settings_save_status')}</span>
+                            <div className={cn("w-1.5 h-1.5 rounded-full", status ? "bg-emerald-500 animate-pulse" : "bg-zinc-800")} />
+                        </div>
+                        <p className="text-[10px] text-zinc-500 font-bold truncate leading-none">
+                            {status || t('settings_waiting')}
+                        </p>
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-black transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-brand/10 mt-2"
+                        >
+                            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                            {t('settings_save')}
+                        </button>
                     </div>
-                    <p className="text-[10px] text-zinc-600 font-medium truncate">
-                        {status || t('settings_waiting')}
-                    </p>
                 </div>
             </aside>
 
-            {/* Main Content Area */}
-            <main className="flex-1 overflow-y-auto no-scrollbar relative" ref={scrollContainerRef}>
-                <div className="max-w-3xl mx-auto px-12 py-16 pb-40">
+            {/* Content Area */}
+            <main className="flex-1 overflow-y-auto no-scrollbar" ref={scrollContainerRef}>
+                <div className="max-w-4xl mx-auto px-12 py-16 space-y-12 pb-40">
 
-                    {/* API Configuration */}
-                    {activeSection === 'api' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <SectionHeader title={sidebarItems[0].label} />
-
-                            <InputGroup label={t('settings_api_key')} description={t('settings_api_key_desc')}>
-                                <div className="relative flex gap-2">
-                                    <div className="relative flex-1 group/field">
-                                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within/field:text-brand transition-colors" size={16} />
+                    {/* GROUP 1: AI CORE */}
+                    {activeGroup === 'ai' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <Card title={t('settings_section_api')} icon={Cpu} description={t('settings_api_key_desc')}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Field label={t('settings_api_key')}>
+                                        <div className="relative flex gap-2">
+                                            <div className="relative flex-1 group/field">
+                                                <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within/field:text-brand transition-colors" size={14} />
+                                                <input
+                                                    type="password"
+                                                    value={settings.apiKey}
+                                                    onChange={e => handleChange('apiKey', e.target.value)}
+                                                    className="w-full bg-black/40 border border-white/5 rounded-xl pl-9 pr-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                                    placeholder="sk-..."
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={() => handleVerifyKey('api')}
+                                                disabled={isValidating !== null}
+                                                className="px-4 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all flex items-center gap-2 active:scale-95"
+                                            >
+                                                {isValidating === 'api' ? <Loader2 size={14} className="animate-spin" /> : <Terminal size={14} />}
+                                            </button>
+                                        </div>
+                                    </Field>
+                                    <Field label={t('settings_model')} description={t('settings_model_desc')}>
                                         <input
-                                            type="password"
-                                            value={settings.apiKey}
-                                            onChange={e => handleChange('apiKey', e.target.value)}
-                                            placeholder="sk-..."
-                                            className="w-full bg-zinc-900/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm font-mono text-white focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none"
+                                            type="text"
+                                            value={settings.model}
+                                            onChange={e => handleChange('model', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
                                         />
-                                    </div>
-                                    <button
-                                        onClick={() => handleVerifyKey('api')}
-                                        disabled={isValidating !== null}
-                                        className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold border border-white/10 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
-                                    >
-                                        {isValidating === 'api' ? <Loader2 size={14} className="animate-spin" /> : <Terminal size={14} />}
-                                        {t('settings_verify')}
-                                    </button>
+                                    </Field>
                                 </div>
-                            </InputGroup>
+                                <Field label={t('settings_api_url')}>
+                                    <input
+                                        type="text"
+                                        value={settings.baseUrl}
+                                        onChange={e => handleChange('baseUrl', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                    />
+                                </Field>
+                            </Card>
 
-                            <InputGroup label={t('settings_api_url')} description={t('settings_api_url_desc')}>
-                                <input
-                                    type="text"
-                                    value={settings.baseUrl}
-                                    onChange={e => handleChange('baseUrl', e.target.value)}
-                                    placeholder="https://"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none"
-                                />
-                            </InputGroup>
-
-                            <InputGroup label={t('settings_model')} description={t('settings_model_desc')}>
-                                <input
-                                    type="text"
-                                    value={settings.model}
-                                    onChange={e => handleChange('model', e.target.value)}
-                                    placeholder="deepseek-chat"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none"
-                                />
-                            </InputGroup>
-                        </div>
-                    )}
-
-                    {/* Image Recognition */}
-                    {activeSection === 'vision' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <SectionHeader title={sidebarItems[1].label} />
-
-                            <InputGroup label={t('settings_vision_keys')} description={t('settings_vision_keys_desc')}>
-                                <div className="space-y-3">
+                            <Card title={t('settings_section_vision')} icon={Eye} description={t('settings_vision_keys_desc')}>
+                                <Field label={t('settings_vision_keys')} description={t('settings_vision_multi_line')}>
                                     <textarea
-                                        rows={4}
+                                        rows={3}
                                         value={settings.imageKeys}
                                         onChange={e => handleChange('imageKeys', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm font-mono text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
                                         placeholder="sk-..."
-                                        className="w-full bg-zinc-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-zinc-300 focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none resize-none no-scrollbar"
                                     />
-                                    <div className="flex items-center justify-between px-1">
-                                        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-600 uppercase">
-                                            <Database size={12} />
-                                            {t('settings_keys_loaded', { count: settings.imageKeys.split('\n').filter(Boolean).length })}
+                                </Field>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div onClick={() => handleChange('ocrEnabled', !settings.ocrEnabled)} className={cn(
+                                        "p-4 rounded-2xl border cursor-pointer transition-all",
+                                        settings.ocrEnabled ? "bg-brand/5 border-brand/20" : "bg-white/[0.01] border-white/5 text-zinc-600"
+                                    )}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <FileText size={18} className={settings.ocrEnabled ? "text-brand" : "text-zinc-600"} />
+                                            <div className={cn("w-8 h-4 rounded-full relative", settings.ocrEnabled ? "bg-brand" : "bg-zinc-800")}>
+                                                <div className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", settings.ocrEnabled ? "left-4.5" : "left-0.5")} />
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={() => handleVerifyKey('vision')}
-                                            disabled={isValidating !== null}
-                                            className="flex items-center gap-1.5 text-[10px] font-bold text-brand uppercase hover:text-brand-hover transition-colors disabled:opacity-50"
-                                        >
-                                            {isValidating === 'vision' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                                            {t('settings_verify')}
-                                        </button>
+                                        <p className="text-xs font-black uppercase tracking-tight">{t('settings_ocr_enable')}</p>
+                                    </div>
+                                    <div onClick={() => handleChange('visionEnabled', !settings.visionEnabled)} className={cn(
+                                        "p-4 rounded-2xl border cursor-pointer transition-all",
+                                        settings.visionEnabled ? "bg-emerald-500/5 border-emerald-500/20" : "bg-white/[0.01] border-white/5 text-zinc-600"
+                                    )}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <Eye size={18} className={settings.visionEnabled ? "text-emerald-500" : "text-zinc-600"} />
+                                            <div className={cn("w-8 h-4 rounded-full relative", settings.visionEnabled ? "bg-emerald-500" : "bg-zinc-800")}>
+                                                <div className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", settings.visionEnabled ? "left-4.5" : "left-0.5")} />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs font-black uppercase tracking-tight">{t('settings_vision_enable')}</p>
                                     </div>
                                 </div>
-                            </InputGroup>
-
-                            <div className="grid grid-cols-2 gap-4 mb-8">
-                                <div className={cn(
-                                    "p-4 rounded-2xl border transition-all cursor-pointer group/toggle",
-                                    settings.ocrEnabled ? "bg-brand/5 border-brand/20" : "bg-white/[0.02] border-white/5 grayscale"
-                                )} onClick={() => handleChange('ocrEnabled', !settings.ocrEnabled)}>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className={cn("p-2 rounded-lg", settings.ocrEnabled ? "bg-brand/10 text-brand" : "bg-zinc-800 text-zinc-500")}>
-                                            <FileText size={18} />
-                                        </div>
-                                        <div className={cn("w-8 h-4 rounded-full relative transition-colors", settings.ocrEnabled ? "bg-brand" : "bg-zinc-700")}>
-                                            <div className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", settings.ocrEnabled ? "left-4.5" : "left-0.5")} />
-                                        </div>
-                                    </div>
-                                    <p className="text-sm font-bold text-white uppercase tracking-tight">{t('settings_ocr_enable')}</p>
-                                    <p className="text-[10px] text-zinc-500 font-medium">{t('settings_ocr_desc')}</p>
-                                </div>
-
-                                <div className={cn(
-                                    "p-4 rounded-2xl border transition-all cursor-pointer group/toggle",
-                                    settings.visionEnabled ? "bg-emerald-500/5 border-emerald-500/20" : "bg-white/[0.02] border-white/5 grayscale"
-                                )} onClick={() => handleChange('visionEnabled', !settings.visionEnabled)}>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className={cn("p-2 rounded-lg", settings.visionEnabled ? "bg-emerald-500/10 text-emerald-500" : "bg-zinc-800 text-zinc-500")}>
-                                            <Eye size={18} />
-                                        </div>
-                                        <div className={cn("w-8 h-4 rounded-full relative transition-colors", settings.visionEnabled ? "bg-emerald-500" : "bg-zinc-700")}>
-                                            <div className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", settings.visionEnabled ? "left-4.5" : "left-0.5")} />
-                                        </div>
-                                    </div>
-                                    <p className="text-sm font-bold text-white uppercase tracking-tight">{t('settings_vision_enable')}</p>
-                                    <p className="text-[10px] text-zinc-500 font-medium">{t('settings_vision_desc')}</p>
-                                </div>
-                            </div>
-
-                            <InputGroup label={t('settings_max_images')} description={t('settings_max_images_desc')}>
-                                <div className="flex items-center gap-4">
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max="4"
-                                        value={settings.maxImagesPerTweet}
-                                        onChange={e => handleChange('maxImagesPerTweet', parseInt(e.target.value))}
-                                        className="flex-1 accent-brand"
-                                    />
-                                    <div className="w-12 h-10 bg-zinc-900 border border-white/10 rounded-xl flex items-center justify-center font-mono font-bold text-brand">
-                                        {settings.maxImagesPerTweet}
-                                    </div>
-                                </div>
-                            </InputGroup>
+                            </Card>
                         </div>
                     )}
 
-                    {/* AI Chat (Contemplation) */}
-                    {activeSection === 'chat' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <SectionHeader title={sidebarItems[2].label} />
-
-                            <InputGroup label={t('settings_api_key')} description={t('settings_chat_key_desc')}>
-                                <div className="relative group/field">
-                                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within/field:text-brand transition-colors" size={16} />
-                                    <input
-                                        type="password"
-                                        value={settings.chatApiKey}
-                                        onChange={e => handleChange('chatApiKey', e.target.value)}
-                                        placeholder="Optional fallback to global..."
-                                        className="w-full bg-zinc-900/50 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm font-mono text-white focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none"
-                                    />
-                                </div>
-                            </InputGroup>
-
-                            <InputGroup label={t('settings_api_url')} description={t('settings_api_url_desc')}>
-                                <input
-                                    type="text"
-                                    value={settings.chatBaseUrl}
-                                    onChange={e => handleChange('chatBaseUrl', e.target.value)}
-                                    placeholder="https://"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none"
-                                />
-                            </InputGroup>
-
-                            <InputGroup label={t('settings_model')} description={t('settings_model_desc')}>
-                                <input
-                                    type="text"
-                                    value={settings.chatModel}
-                                    onChange={e => handleChange('chatModel', e.target.value)}
-                                    placeholder="gpt-4o / Qwen-Max"
-                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none"
-                                />
-                            </InputGroup>
-                        </div>
-                    )}
-
-                    {/* RAG (Embeddings & Retrieval) */}
-                    {activeSection === 'rag' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <SectionHeader title={sidebarItems[3].label} />
-
-                            <div className={cn(
-                                "p-6 rounded-2xl border transition-all mb-10",
-                                settings.ragEnabled ? "bg-blue-500/5 border-blue-500/20" : "bg-white/[0.02] border-white/5 grayscale"
-                            )}>
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className={cn("p-2.5 rounded-xl", settings.ragEnabled ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-zinc-800 text-zinc-500")}>
-                                            <Search size={20} />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-white uppercase tracking-tight">{t('settings_rag_enable')}</p>
-                                            <p className="text-[10px] text-zinc-500 font-medium">{t('settings_rag_desc')}</p>
-                                        </div>
-                                    </div>
-                                    <div onClick={() => handleChange('ragEnabled', !settings.ragEnabled)} className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors", settings.ragEnabled ? "bg-blue-500" : "bg-zinc-700")}>
-                                        <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", settings.ragEnabled ? "left-7" : "left-1")} />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {settings.ragEnabled && (
-                                <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                                    <InputGroup label={t('settings_api_key')} description={t('settings_rag_key_desc')}>
+                    {/* GROUP 2: INTELLIGENCE */}
+                    {activeGroup === 'intelligence' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <Card title={t('settings_section_chat')} icon={MessageSquare} description={t('settings_chat_optional_fallback')}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Field label={t('settings_api_key')}>
                                         <input
                                             type="password"
-                                            value={settings.ragApiKey}
-                                            onChange={e => handleChange('ragApiKey', e.target.value)}
-                                            placeholder="sk-..."
-                                            className="w-full bg-zinc-900/50 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 focus:bg-zinc-900 transition-all outline-none"
+                                            value={settings.chatApiKey}
+                                            onChange={e => handleChange('chatApiKey', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
                                         />
-                                    </InputGroup>
+                                    </Field>
+                                    <Field label={t('settings_model')}>
+                                        <input
+                                            type="text"
+                                            value={settings.chatModel}
+                                            onChange={e => handleChange('chatModel', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                        />
+                                    </Field>
+                                </div>
+                            </Card>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="p-5 bg-white/[0.03] border border-white/[0.05] rounded-2xl space-y-4">
-                                            <div className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest">
-                                                <Zap size={14} className="text-blue-400" />
-                                                {t('settings_embedding')}
-                                            </div>
-                                            <input
-                                                type="text"
-                                                value={settings.embeddingModel}
-                                                onChange={e => handleChange('embeddingModel', e.target.value)}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-blue-500/30 outline-none"
-                                                placeholder={t('settings_model_id')}
-                                            />
-                                            <input
-                                                type="text"
-                                                value={settings.embeddingUrl}
-                                                onChange={e => handleChange('embeddingUrl', e.target.value)}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-blue-500/30 outline-none"
-                                                placeholder={t('settings_endpoint')}
-                                            />
+                            <Card title={t('settings_section_rag')} icon={Search} description={t('settings_rag_desc')}>
+                                <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className={cn("p-2 rounded-xl", settings.ragEnabled ? "bg-blue-500/10 text-blue-500" : "bg-zinc-900 text-zinc-600")}>
+                                            <Database size={18} />
                                         </div>
-
-                                        <div className="p-5 bg-white/[0.03] border border-white/[0.05] rounded-2xl space-y-4">
-                                            <div className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest">
-                                                <RefreshCw size={14} className="text-emerald-400" />
-                                                {t('settings_reranker')}
-                                            </div>
-                                            <input
-                                                type="text"
-                                                value={settings.rerankerModel}
-                                                onChange={e => handleChange('rerankerModel', e.target.value)}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-emerald-500/30 outline-none"
-                                                placeholder={t('settings_model_id')}
-                                            />
-                                            <input
-                                                type="text"
-                                                value={settings.rerankerUrl}
-                                                onChange={e => handleChange('rerankerUrl', e.target.value)}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-2 text-xs font-mono text-white focus:border-emerald-500/30 outline-none"
-                                                placeholder={t('settings_endpoint')}
-                                            />
-                                        </div>
+                                        <span className="text-sm font-bold text-white uppercase">{t('settings_rag_enable')}</span>
+                                    </div>
+                                    <div onClick={() => handleChange('ragEnabled', !settings.ragEnabled)} className={cn("w-10 h-5 rounded-full relative cursor-pointer", settings.ragEnabled ? "bg-blue-500" : "bg-zinc-800")}>
+                                        <div className={cn("absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all", settings.ragEnabled ? "left-5.5" : "left-0.5")} />
                                     </div>
                                 </div>
-                            )}
+                                {settings.ragEnabled && (
+                                    <div className="space-y-6 animate-in zoom-in-95 duration-300">
+                                        <Field label={t('settings_embedding')}>
+                                            <input type="text" value={settings.embeddingModel} onChange={e => handleChange('embeddingModel', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white mb-2" />
+                                            <input type="text" value={settings.embeddingUrl} onChange={e => handleChange('embeddingUrl', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white" />
+                                        </Field>
+                                        <Field label={t('settings_reranker')}>
+                                            <input type="text" value={settings.rerankerModel} onChange={e => handleChange('rerankerModel', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white mb-2" />
+                                            <input type="text" value={settings.rerankerUrl} onChange={e => handleChange('rerankerUrl', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white" />
+                                        </Field>
+                                    </div>
+                                )}
+                            </Card>
+
+                            <Card title={t('settings_section_prompts')} icon={FileText}>
+                                <Field label={t('settings_prompt_analysis')} description={t('settings_prompt_analysis_desc')}>
+                                    <textarea
+                                        rows={6}
+                                        value={settings.promptAnalysis}
+                                        onChange={e => handleChange('promptAnalysis', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
+                                    />
+                                </Field>
+                                <Field label={t('settings_prompt_summary')} description={t('settings_prompt_summary_desc')}>
+                                    <textarea
+                                        rows={4}
+                                        value={settings.promptSummary}
+                                        onChange={e => handleChange('promptSummary', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
+                                    />
+                                </Field>
+                            </Card>
                         </div>
                     )}
 
-                    {/* Automation & Tags */}
-                    {activeSection === 'workflow' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <SectionHeader title={sidebarItems[4].label} />
-
-                            <div className="flex items-center justify-between p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl mb-10 group translate-all hover:bg-white/[0.04]">
-                                <div>
-                                    <p className="text-sm font-bold text-white uppercase tracking-tight">{t('settings_automation_auto')}</p>
-                                    <p className="text-[10px] text-zinc-500 font-medium">{t('settings_automation_auto_desc')}</p>
+                    {/* GROUP 3: AUTOMATION */}
+                    {activeGroup === 'automation' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <Card title={t('settings_section_automation')} icon={Zap} description={t('settings_automation_auto_desc')}>
+                                <div className="flex items-center justify-between p-6 bg-white/[0.02] border border-white/10 rounded-3xl hover:bg-white/[0.04] transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className={cn("p-3 rounded-2xl", settings.autoAnalyze ? "bg-brand/10 text-brand" : "bg-zinc-900 text-zinc-600")}>
+                                            <RefreshCw size={24} className={settings.autoAnalyze ? "animate-spin-slow" : ""} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white uppercase">{t('settings_automation_auto')}</p>
+                                            <p className="text-[10px] text-zinc-500">{t('settings_automation_auto_desc')}</p>
+                                        </div>
+                                    </div>
+                                    <div onClick={() => handleChange('autoAnalyze', !settings.autoAnalyze)} className={cn("w-12 h-6 rounded-full relative cursor-pointer", settings.autoAnalyze ? "bg-brand" : "bg-zinc-800")}>
+                                        <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", settings.autoAnalyze ? "left-7" : "left-1")} />
+                                    </div>
                                 </div>
-                                <div onClick={() => handleChange('autoAnalyze', !settings.autoAnalyze)} className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors", settings.autoAnalyze ? "bg-brand" : "bg-zinc-700")}>
-                                    <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", settings.autoAnalyze ? "left-7" : "left-1")} />
-                                </div>
-                            </div>
 
-                            <InputGroup label={t('settings_categories')} description={t('settings_categories_desc')}>
-                                <div className="flex flex-wrap gap-2 mb-4 p-4 min-h-[120px] bg-zinc-900/50 border border-white/10 rounded-2xl">
+                                <div className="mt-8 pt-6 border-t border-white/5">
+                                    <Field label={t('settings_batch_process_size')} description={t('settings_batch_process_size_desc')}>
+                                        <div className="flex items-center gap-6 mt-2">
+                                            <input
+                                                type="range"
+                                                min="1"
+                                                max="50"
+                                                step="1"
+                                                value={settings.batchSize}
+                                                onChange={e => handleChange('batchSize', parseInt(e.target.value))}
+                                                className="flex-1 accent-brand h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                                            />
+                                            <div className="min-w-[48px] h-10 bg-brand/10 border border-brand/20 rounded-xl flex items-center justify-center font-mono font-bold text-brand shadow-lg shadow-brand/5">
+                                                {settings.batchSize}
+                                            </div>
+                                        </div>
+                                    </Field>
+                                </div>
+                            </Card>
+
+                            <Card title={t('settings_categories')} icon={BookOpen} description={t('settings_categories_desc')}>
+                                <div className="flex flex-wrap gap-2 p-6 bg-black/20 border border-white/5 rounded-3xl min-h-[140px]">
                                     {settings.categories.map((tag) => (
-                                        <div key={tag} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 border border-white/5 rounded-lg text-xs font-bold text-zinc-300 group/tag hover:border-brand/40 transition-all">
+                                        <div key={tag} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-white/5 rounded-xl text-xs font-bold text-zinc-300 hover:border-brand/40 hover:bg-zinc-800 transition-all group/tag">
                                             <span>{tag}</span>
-                                            <button onClick={() => removeTag(tag)} className="text-zinc-600 hover:text-rose-500 transition-colors">
-                                                <X size={12} />
+                                            <button onClick={() => handleChange('categories', settings.categories.filter(t => t !== tag))} className="text-zinc-700 hover:text-rose-500 transition-colors">
+                                                <X size={14} />
                                             </button>
                                         </div>
                                     ))}
-                                    <div className="inline-flex items-center relative">
+                                    <div className="inline-flex items-center relative ml-2">
                                         <input
                                             type="text"
                                             value={newTag}
                                             onChange={e => setNewTag(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && addTag()}
+                                            onKeyDown={e => e.key === 'Enter' && (() => {
+                                                if (newTag.trim()) {
+                                                    handleChange('categories', [...settings.categories, newTag.trim()]);
+                                                    setNewTag('');
+                                                }
+                                            })()}
                                             placeholder={t('settings_new_category')}
-                                            className="bg-transparent border-none text-xs font-bold text-brand focus:ring-0 w-24 outline-none placeholder:text-zinc-600"
+                                            className="bg-transparent border-none text-xs font-bold text-brand focus:ring-0 w-28 outline-none placeholder:text-zinc-700"
                                         />
-                                        <Plus size={12} className="text-brand opacity-50" />
+                                        <Plus size={14} className="text-brand opacity-40" />
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-end">
-                                    <button className="text-[10px] font-bold text-zinc-600 uppercase hover:text-zinc-400 transition-colors">
-                                        {t('settings_batch_replace')}
-                                    </button>
-                                </div>
-                            </InputGroup>
+                            </Card>
                         </div>
                     )}
 
-                    {/* Backup */}
-                    {activeSection === 'backup' && (
-                        <BackupSection />
-                    )}
+                    {/* GROUP 4: SYSTEM */}
+                    {activeGroup === 'system' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <BackupCard />
 
-
-                    {/* Custom Prompts */}
-                    {activeSection === 'prompts' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <SectionHeader title={sidebarItems[6].label} />
-
-                            <InputGroup label={t('settings_prompt_analysis')} description={t('settings_prompt_analysis_desc')}>
-                                <div className="space-y-3">
-                                    <textarea
-                                        rows={12}
-                                        value={settings.promptAnalysis}
-                                        onChange={e => handleChange('promptAnalysis', e.target.value)}
-                                        className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl px-5 py-4 text-xs font-medium leading-relaxed text-zinc-300 focus:border-brand/40 focus:bg-zinc-800 transition-all outline-none resize-none no-scrollbar font-mono"
-                                    />
-                                    <div className="flex justify-end">
-                                        <button
-                                            onClick={() => handleResetPrompt('promptAnalysis')}
-                                            className="flex items-center gap-1.5 text-[10px] font-black text-zinc-600 uppercase hover:text-brand transition-colors"
-                                        >
-                                            <RotateCcw size={12} />
-                                            {t('settings_reset')}
-                                        </button>
+                            <Card title={t('settings_support_title')} icon={Heart}>
+                                <div className="flex flex-col md:flex-row items-center gap-8 bg-brand/5 border border-brand/10 p-8 rounded-3xl">
+                                    <div className="w-32 h-32 shrink-0 rounded-2xl overflow-hidden shadow-2xl shadow-brand/20">
+                                        <img src={supportImg} alt="Support" className="w-full h-full object-cover" />
+                                    </div>
+                                    <div className="space-y-4">
+                                        <h4 className="text-lg font-bold text-white">{t('settings_support_title')}</h4>
+                                        <p className="text-xs text-zinc-400 leading-relaxed font-medium">{t('settings_support_subtitle')}</p>
+                                        <div className="flex items-center gap-2 p-2 bg-white/[0.04] rounded-xl border border-white/5 w-fit">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
+                                            <span className="text-[10px] font-black text-brand uppercase tracking-widest">v1.1.0 Experimental</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </InputGroup>
-
-                            <InputGroup label={t('settings_prompt_summary')} description={t('settings_prompt_summary_desc')}>
-                                <div className="space-y-3">
-                                    <textarea
-                                        rows={6}
-                                        value={settings.promptSummary}
-                                        onChange={e => handleChange('promptSummary', e.target.value)}
-                                        className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl px-5 py-4 text-xs font-medium leading-relaxed text-zinc-300 focus:border-brand/40 focus:bg-zinc-800 transition-all outline-none resize-none no-scrollbar font-mono"
-                                    />
-                                    <div className="flex justify-end">
-                                        <button
-                                            onClick={() => handleResetPrompt('promptSummary')}
-                                            className="flex items-center gap-1.5 text-[10px] font-black text-zinc-600 uppercase hover:text-brand transition-colors"
-                                        >
-                                            <RotateCcw size={12} />
-                                            {t('settings_reset')}
-                                        </button>
-                                    </div>
-                                </div>
-                            </InputGroup>
+                            </Card>
                         </div>
                     )}
-
-                    {/* Support Author (Bottom) */}
-                    <div className="mt-32 pt-16 border-t border-white/[0.05] flex flex-col items-center">
-                        <div className="flex flex-col items-center gap-6 group/support">
-                            <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 opacity-60 group-hover/support:opacity-100 transition-all">
-                                <Heart size={14} className="text-rose-500 fill-rose-500" />
-                                <span>{t('settings_support_title')}</span>
-                            </div>
-
-                            <div className="relative p-2 bg-zinc-900 rounded-3xl border border-white/10 shadow-2xl transition-all duration-700 hover:scale-[1.02]">
-                                <img
-                                    src={supportImg}
-                                    alt="Support"
-                                    className="w-48 h-auto object-contain rounded-2xl opacity-80 group-hover/support:opacity-100 transition-opacity"
-                                />
-                                <div className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-white/5 to-transparent pointer-events-none" />
-                            </div>
-
-                            <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest text-center max-w-xs leading-loose">
-                                {t('settings_support_subtitle')}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Floating Save Button */}
-                <div className="fixed bottom-10 right-10 flex items-center gap-3">
-                    {status && (
-                        <div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-[10px] font-black uppercase tracking-widest animate-in fade-in slide-in-from-right-4">
-                            {status}
-                        </div>
-                    )}
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className={cn(
-                            "flex items-center gap-3 px-8 py-4 rounded-2xl text-sm font-black transition-all shadow-[0_20px_40px_rgba(0,0,0,0.5)] active:scale-95 group",
-                            isSaving
-                                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                                : "bg-white text-black hover:bg-zinc-200"
-                        )}
-                    >
-                        {isSaving ? (
-                            <Loader2 size={18} className="animate-spin" />
-                        ) : (
-                            <Save size={18} className="transition-transform group-hover:-translate-y-0.5" />
-                        )}
-                        {t('settings_save')}
-                    </button>
                 </div>
             </main>
         </div>
