@@ -25,8 +25,10 @@ export class AIJobQueue {
             const toProcess = pendingTweets.filter(t => {
                 if (t.isArchived) return false;
 
-                // 如果启用了图片分析，且推文有图，必须等图片处理完
-                if (settings.visionEnabled || settings.ocrEnabled) {
+                // 如果启用了图片分析且推文有图，必须等图片处理完；
+                // 但如果 Vision 和 OCR 此时都是关闭状态，则直接视为不需要等待图片。
+                const isVisionActive = settings.visionEnabled || settings.ocrEnabled;
+                if (isVisionActive) {
                     const hasImages = t.media?.some(m => m.type === 'image');
                     if (hasImages && t.imageProcessStatus === ProcessStatus.Pending) {
                         return false;
@@ -35,30 +37,35 @@ export class AIJobQueue {
                 return true;
             }).slice(0, settings.batchSize);
 
-            console.log(`[ThatTweet] AI Queue found ${toProcess.length} tweets to process.`);
+            console.log(`[ThatTweet] AI Queue starting batch process for ${toProcess.length} tweets.`);
 
-            for (const tweet of toProcess) {
-                try {
-                    const result = await TweetAnalyzer.analyze(tweet, settings);
+            try {
+                const results = await TweetAnalyzer.analyzeBatch(toProcess, settings);
 
-                    // 写回数据库
-                    await db.tweets.update(tweet.id, {
-                        aiSummary: result.summary,
-                        aiReason: result.reason,
-                        aiTags: result.tags,
-                        aiCategory: result.category,
-                        aiScore: result.score,
-                        aiStatus: ProcessStatus.Completed,
-                        aiProcessedAt: Date.now()
-                    });
+                for (let i = 0; i < toProcess.length; i++) {
+                    const tweet = toProcess[i];
+                    const result = results[i];
 
-                    console.log(`%c[ThatTweet] AI Success: ${tweet.id}`, 'color: #4CAF50');
-
-                    // 限速等待
-                    await new Promise(r => setTimeout(r, settings.rateLimitMs));
-                } catch (err) {
-                    console.error(`[ThatTweet] AI Failed for ${tweet.id}:`, err);
-                    // 可以在此处实现重试计数逻辑
+                    if (result) {
+                        await db.tweets.update(tweet.id, {
+                            aiSummary: result.summary,
+                            aiReason: result.reason,
+                            aiTags: result.tags,
+                            aiCategory: result.category,
+                            aiScore: result.score,
+                            aiStatus: ProcessStatus.Completed,
+                            aiProcessedAt: Date.now()
+                        });
+                    } else {
+                        console.warn(`[ThatTweet] AI result missing for tweet ${tweet.id}`);
+                        await db.tweets.update(tweet.id, { aiStatus: ProcessStatus.Failed });
+                    }
+                }
+                console.log(`%c[ThatTweet] Batch AI Success: ${toProcess.length} tweets processed.`, 'color: #4CAF50');
+            } catch (err) {
+                console.error(`[ThatTweet] Batch AI Processing Failed:`, err);
+                // 标记该批次所有推文为失败，防止死循环
+                for (const tweet of toProcess) {
                     await db.tweets.update(tweet.id, { aiStatus: ProcessStatus.Failed });
                 }
             }

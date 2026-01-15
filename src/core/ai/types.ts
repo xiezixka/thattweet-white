@@ -14,4 +14,5 @@ export interface AIAnalysisResult {
  */
 export interface AIProviderAdapter {
     analyze(tweet: Tweet, settings: AISettings): Promise<AIAnalysisResult>;
+    analyzeBatch(tweets: Tweet[], settings: AISettings): Promise<(AIAnalysisResult | null)[]>;
 }

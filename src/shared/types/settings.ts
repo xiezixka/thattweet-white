@@ -47,8 +47,8 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
     model: 'xiaomi/mimo-v2-flash:free',
 
     imageKeys: '',
-    ocrEnabled: true,
-    visionEnabled: true,
+    ocrEnabled: false,
+    visionEnabled: false,
     maxImagesPerTweet: 2,
 
     chatApiKey: '',
@@ -63,7 +63,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
     rerankerUrl: 'https://api.siliconflow.cn/v1/rerank',
 
     autoAnalyze: true,
-    batchSize: 5,
+    batchSize: 25,
     rateLimitMs: 1000,
     categories: ['技术', '资讯', '观点', '教程', '工具', '灵感', '娱乐', '其他'],
 

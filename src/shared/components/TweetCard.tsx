@@ -16,6 +16,7 @@ interface TweetCardProps {
     author: UserCache;
     mode?: 'masonry' | 'compact' | 'reference';
     onAuthorClick?: (author: UserCache) => void;
+    onTagClick?: (tag: string) => void;
 }
 
 const formatNumber = (num: number) => {
@@ -52,7 +53,7 @@ const normalizeTwitterUrl = (url: string | undefined): string => {
     return processed;
 };
 
-export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry', onAuthorClick }) => {
+export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry', onAuthorClick, onTagClick }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
     const [imgFail, setImgFail] = useState(false);
@@ -124,9 +125,19 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                         <span className="font-bold text-[14px] leading-tight text-zinc-100 truncate max-w-[140px]">
                             {author?.name || 'Unknown'}
                         </span>
-                        <span className="text-[13px] text-zinc-500 leading-tight">
-                            @{author?.handle || 'unknown'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[13px] text-zinc-500 leading-tight">
+                                @{author?.handle || 'unknown'}
+                            </span>
+                            {tweet.aiCategory && (
+                                <span
+                                    onClick={(e) => { e.stopPropagation(); onTagClick?.(tweet.aiCategory!); }}
+                                    className="px-1.5 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.05] text-[10px] font-bold text-zinc-400 uppercase tracking-wider hover:bg-brand/10 hover:text-brand hover:border-brand/20 transition-colors cursor-pointer"
+                                >
+                                    {tweet.aiCategory}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -139,6 +150,21 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                     </div>
                 )}
             </div>
+
+            {/* AI Tags */}
+            {tweet.aiTags && tweet.aiTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                    {tweet.aiTags.map((tag, idx) => (
+                        <div
+                            key={idx}
+                            onClick={(e) => { e.stopPropagation(); onTagClick?.(tag); }}
+                            className="px-2 py-0.5 rounded-lg bg-zinc-800/80 border border-white/5 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:bg-brand/10 hover:border-brand/20 transition-colors cursor-pointer"
+                        >
+                            #{tag}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {tweet.aiSummary && (
                 <div className={cn(

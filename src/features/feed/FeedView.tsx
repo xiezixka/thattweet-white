@@ -27,13 +27,17 @@ export const FeedView: React.FC = () => {
     const filteredTweets = React.useMemo(() => {
         let result = tweets;
 
-        // Apply Search
+        // Apply Search (expanded to include AI fields)
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             result = result.filter(t =>
                 t.text.toLowerCase().includes(q) ||
                 (t.author?.name || '').toLowerCase().includes(q) ||
-                (t.author?.handle || '').toLowerCase().includes(q)
+                (t.author?.handle || '').toLowerCase().includes(q) ||
+                (t.aiSummary || '').toLowerCase().includes(q) ||
+                (t.aiReason || '').toLowerCase().includes(q) ||
+                (t.aiCategory || '').toLowerCase().includes(q) ||
+                (t.aiTags || []).some(tag => tag.toLowerCase().includes(q))
             );
         }
 
@@ -117,6 +121,7 @@ export const FeedView: React.FC = () => {
                                     author={item.author}
                                     mode="masonry"
                                     onAuthorClick={(author) => setSearchQuery(author.handle || author.name)}
+                                    onTagClick={(tag) => setSearchQuery(tag)}
                                 />
                             </div>
                         ))}

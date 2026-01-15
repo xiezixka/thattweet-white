@@ -9,7 +9,6 @@ class PromptBuilder {
     static buildFullContent(tweet: Tweet): string {
         let content = tweet.text ?? "(no text)";
 
-        // 注入 OCR 和 Vision 内容 (多模态融合)
         if (tweet.ocrText?.trim()) {
             content += `\n\n【图片文字内容】\n${tweet.ocrText}`;
         }
@@ -31,25 +30,29 @@ class PromptBuilder {
             .replace(/{author}/g, author);
     }
 
-    static buildCombinedPrompt(tweet: Tweet, settings: AISettings): string {
-        const fullContent = this.buildFullContent(tweet);
+    static buildBatchPrompt(tweets: Tweet[], settings: AISettings): string {
+        const tweetBlocks = tweets.map((tweet, index) => {
+            const fullContent = this.buildFullContent(tweet);
+            const author = typeof tweet.author === 'string' ? tweet.author : (tweet.author as any)?.handle || 'Unknown';
+            return `--- TWEET ID: ${tweet.id} ---\nAuthor: @${author}\nContent: ${fullContent}`;
+        }).join('\n\n');
 
-        // 分别填充两个模板
-        const analysisRules = this.fillVariables(settings.promptAnalysis, tweet, fullContent);
-        const summaryRules = this.fillVariables(settings.promptSummary, tweet, fullContent);
-
-        // 合并为单次请求指令
         return [
-            "You are a tweet analysis assistant. Strictly output valid JSON only.",
+            "You are a professional social media intelligence analyzer.",
+            "Analyze the following tweets and return a JSON array containing analysis results for EACH tweet.",
             `Available categories: ${settings.categories.join(', ')}`,
             "",
-            "[ANALYSIS & SCORING RULES]",
-            analysisRules,
+            "[SCORING & CATEGORIZATION RULES]",
+            settings.promptAnalysis.replace(/{tweet_text}/g, 'The tweet content').replace(/{author}/g, 'The author handle'),
             "",
             "[SUMMARY RULES]",
-            summaryRules,
+            settings.promptSummary.replace(/{tweet_text}/g, 'The tweet content').replace(/{author}/g, 'The author handle'),
             "",
-            "Final output must be a single JSON object with these fields: score(number), category(string), reason(string), summary(string)."
+            "[TWEETS TO ANALYZE]",
+            tweetBlocks,
+            "",
+            "CRITICAL: Final output must be a VALID JSON ARRAY starting with [ and ending with ]. Use no other text.",
+            "Each object inside the array must include: id(string), score(number), category(string), reason(string), summary(string), tags(array of strings)."
         ].join("\n");
     }
 }
@@ -58,31 +61,58 @@ class PromptBuilder {
  * 核心工具：负责响应解析与清洗
  */
 class OutputParser {
-    static cleanJson(text: string): string {
-        // 1. 尝试剔除 Markdown 代码块
-        const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-        let cleaned = codeBlockMatch ? codeBlockMatch[1] : text;
+    /**
+     * 更强悍的解析逻辑：支持标准的 [..] 数组，也支持 AI 抽风返回的多个 {..} {..} 对象
+     */
+    static tryParseArray(text: string): any[] {
+        let cleaned = text.trim();
 
-        // 2. 截取首个 { 到最后一个 } 之间的内容 (正则兜底)
-        cleaned = cleaned.trim();
-        const firstBrace = cleaned.indexOf("{");
-        const lastBrace = cleaned.lastIndexOf("}");
+        // 1. 尝试直接解析标准的 JSON 数组
+        try {
+            const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+            const target = codeBlockMatch ? codeBlockMatch[1] : cleaned;
 
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-            cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+            const firstBracket = target.indexOf("[");
+            const lastBracket = target.lastIndexOf("]");
+            if (firstBracket >= 0 && lastBracket > firstBracket) {
+                return JSON.parse(target.slice(firstBracket, lastBracket + 1));
+            }
+
+            // 如果是单个对象被解析成数组
+            const direct = JSON.parse(target);
+            if (Array.isArray(direct)) return direct;
+            if (typeof direct === 'object' && direct !== null) return [direct];
+        } catch (e) {
+            // 解析失败，进入容错逻辑
         }
 
-        return cleaned;
+        // 2. 容错逻辑：针对 AI 返回一连串 {..} {..} 的情况 (JSON Lines 风格)
+        try {
+            // 正则匹配所有独立的花括号对象
+            const matches = text.match(/\{[\s\S]*?\}/g);
+            if (matches && matches.length > 0) {
+                const results: any[] = [];
+                for (const match of matches) {
+                    try {
+                        results.push(JSON.parse(match));
+                    } catch (e) {
+                        // 忽略格式错误的单个块
+                    }
+                }
+                if (results.length > 0) return results;
+            }
+        } catch (e) {
+            // 容错也失败
+        }
+
+        throw new Error("Failed to parse structured AI response");
     }
 
     static normalize(parsed: any, settings: AISettings): AIAnalysisResult {
-        // 评分校验
         const score = typeof parsed.score === 'number' ? Math.max(0, Math.min(100, parsed.score)) : 0;
 
-        // 分类校验 (严格匹配 Settings 里的 categories)
         let category = parsed.category || '其他';
         if (!settings.categories.includes(category)) {
-            // 尝试模糊匹配或默认回退
             category = settings.categories.find(c => category.includes(c)) || '其他';
         }
 
@@ -100,9 +130,11 @@ class OutputParser {
  * 通用 OpenAI 兼容适配器
  */
 class OpenAIAdapter implements AIProviderAdapter {
-    async analyze(tweet: Tweet, settings: AISettings): Promise<AIAnalysisResult> {
+    async analyzeBatch(tweets: Tweet[], settings: AISettings): Promise<(AIAnalysisResult | null)[]> {
+        if (tweets.length === 0) return [];
+
         const url = `${settings.baseUrl}/chat/completions`;
-        const combinedPrompt = PromptBuilder.buildCombinedPrompt(tweet, settings);
+        const batchPrompt = PromptBuilder.buildBatchPrompt(tweets, settings);
 
         const response = await fetch(url, {
             method: 'POST',
@@ -117,35 +149,50 @@ class OpenAIAdapter implements AIProviderAdapter {
                 messages: [
                     {
                         role: 'system',
-                        content: "You are a helpful assistant that analyzes tweets and outputs structured JSON."
+                        content: "You are a professional social media analyzer. You MUST output results in a single JSON array format."
                     },
                     {
                         role: 'user',
-                        content: combinedPrompt
+                        content: batchPrompt
                     }
                 ],
-                // 某些 provider 支持 json_mode
-                response_format: { type: 'json_object' },
-                temperature: 0.3 // 降低随机性以保证 JSON 稳定
+                // response_format: { type: 'json_object' }, // 批量数组模式下有些模型开启后会报错（因为它强制输出 {} 而不是 []），故暂时关闭
+                temperature: 0.2
             })
         });
 
         if (!response.ok) {
             const error = await response.text();
-            throw new Error(`AI Provider Error: ${response.status} - ${error}`);
+            throw new Error(`Batch AI Provider Error: ${response.status} - ${error}`);
         }
 
         const data = await response.json();
         const rawContent = data.choices?.[0]?.message?.content || "";
 
         try {
-            const cleanedJson = OutputParser.cleanJson(rawContent);
-            const parsed = JSON.parse(cleanedJson);
-            return OutputParser.normalize(parsed, settings);
+            const parsedArray = OutputParser.tryParseArray(rawContent);
+            return this.mapResults(tweets, parsedArray, settings);
         } catch (err) {
-            console.error("[Analyzer] Failed to parse AI response:", rawContent);
-            throw new Error("Failed to parse structured AI response");
+            console.error("[Analyzer] Failed to parse Batch response:", rawContent);
+            throw new Error("Failed to parse structured Batch AI response");
         }
+    }
+
+    private mapResults(originalTweets: Tweet[], results: any[], settings: AISettings): (AIAnalysisResult | null)[] {
+        return originalTweets.map(tweet => {
+            // 提高 ID 匹配的容错率 (转为字符串比较)
+            const found = results.find(r => r && String(r.id) === String(tweet.id));
+            if (found) {
+                return OutputParser.normalize(found, settings);
+            }
+            return null;
+        });
+    }
+
+    async analyze(tweet: Tweet, settings: AISettings): Promise<AIAnalysisResult> {
+        const results = await this.analyzeBatch([tweet], settings);
+        if (results[0]) return results[0];
+        throw new Error("Single tweet analysis failed");
     }
 }
 
@@ -156,8 +203,11 @@ class AnalyzerManager {
     private adapter = new OpenAIAdapter();
 
     async analyze(tweet: Tweet, settings: AISettings): Promise<AIAnalysisResult> {
-        // 目前主要使用 OpenAI 兼容协议
         return this.adapter.analyze(tweet, settings);
+    }
+
+    async analyzeBatch(tweets: Tweet[], settings: AISettings): Promise<(AIAnalysisResult | null)[]> {
+        return this.adapter.analyzeBatch(tweets, settings);
     }
 }
 
