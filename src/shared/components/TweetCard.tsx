@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Tweet } from '../types/tweet';
 import { UserCache } from '../types/tweet';
-import { Calendar, MessageCircle, Heart, Repeat2, Tag, Eye, ChevronDown, ChevronUp, Play, User } from 'lucide-react';
+import { Calendar, MessageCircle, Heart, Repeat2, Tag, Eye, ChevronDown, ChevronUp, Play, User, Layers, Trash2 } from 'lucide-react';
 import { useTranslation } from '../hooks/useTranslation';
+import { useUIStore } from '../store/useUIStore';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -53,10 +54,24 @@ const normalizeTwitterUrl = (url: string | undefined): string => {
 
 export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry', onAuthorClick }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isPlayerActive, setIsPlayerActive] = useState(false);
+    const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
     const [imgFail, setImgFail] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState(false);
     const { t } = useTranslation();
+    const { openLightbox } = useUIStore();
     const isMasonry = mode === 'masonry';
+
+    const handleDelete = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!deleteConfirm) {
+            setDeleteConfirm(true);
+            setTimeout(() => setDeleteConfirm(false), 3000); // 3s reset
+            return;
+        }
+
+        const { db } = await import('../../core/storage/db');
+        await db.tweets.delete(tweet.id);
+    };
 
     const scoreStyles = tweet.aiScore !== undefined ? getScoreStyles(tweet.aiScore) : '';
     const hasLongText = tweet.text.length > 140;
@@ -68,13 +83,9 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
     // if (!avatarUrl) console.log(`[Card] No avatar for ${author?.name}`, author);
     // else console.log(`[Card] Avatar for ${author?.name}:`, avatarUrl);
 
-    // 2. 媒体处理 (增加容错)
-    const firstMedia = tweet.media?.[0];
-    // 强制探测预览图：如果 media 里没 previewUrl，尝试回退到 url (假设 url 是图片)
-    const rawPreview = firstMedia?.previewUrl || (firstMedia?.type === 'image' ? firstMedia.url : '');
-    const thumbnailUrl = normalizeTwitterUrl(rawPreview);
-
-    const videoUrl = firstMedia?.type === 'video' ? firstMedia.url.replace('http:', 'https:') : '';
+    // 2. 媒体处理 (多图逻辑)
+    const mediaItems = tweet.media || [];
+    const hasMedia = mediaItems.length > 0;
 
     return (
         <div
@@ -82,7 +93,8 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
             className={cn(
                 "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all duration-300 cursor-pointer hover:shadow-lg hover:border-white/10",
                 "p-3 gap-2 border-b border-white/5",
-                "break-inside-avoid w-full box-border mb-4"
+                "break-inside-avoid w-full box-border mb-4",
+                "select-none" // 阻止拖动时选中文本
             )}>
             {/* Header Area */}
             <div className="flex items-center justify-between mb-1">
@@ -147,7 +159,8 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                 <div className={cn(
                     "text-zinc-300 break-words transition-all duration-300",
                     "text-[14px] leading-[1.4]",
-                    !isExpanded && isMasonry && "line-clamp-5"
+                    !isExpanded && isMasonry && "line-clamp-5",
+                    "select-text" // 允许正文被选中
                 )}>
                     {tweet.text || "(No Text Content)"}
                 </div>
@@ -165,46 +178,67 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                 )}
             </div>
 
-            {/* Media/Video Area (重点修复封面显示) */}
-            {thumbnailUrl && (
-                <div className="aspect-video rounded-xl bg-zinc-900 overflow-hidden relative border border-white/5 mt-1 group-hover:border-white/10 transition-colors">
-                    {!isPlayerActive ? (
-                        <>
-                            <img
-                                src={thumbnailUrl}
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-pointer"
-                                alt="Media Thumbnail"
-                                onClick={(e) => {
-                                    if (firstMedia?.type === 'video') {
-                                        e.stopPropagation();
-                                        setIsPlayerActive(true);
-                                    }
-                                }}
-                                referrerPolicy="no-referrer"
-                            />
-                            {firstMedia?.type === 'video' && (
+            {/* Media/Video Area (Horizontal Scroll + Lightbox) */}
+            {hasMedia && (
+                <div className="relative group/media mt-1">
+                    <div
+                        className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar rounded-xl bg-zinc-900 border border-white/5 transition-colors group-hover:border-white/10"
+                        onScroll={(e) => {
+                            const container = e.currentTarget;
+                            const index = Math.round(container.scrollLeft / container.clientWidth);
+                            if (index !== currentMediaIndex) setCurrentMediaIndex(index);
+                        }}
+                    >
+                        {mediaItems.map((item, idx) => {
+                            const thumb = normalizeTwitterUrl(item.previewUrl || (item.type === 'image' ? item.url : ''));
+                            return (
                                 <div
-                                    className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition-colors cursor-pointer"
+                                    key={idx}
+                                    className="flex-none w-full aspect-video snap-center relative overflow-hidden flex items-center justify-center cursor-zoom-in"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setIsPlayerActive(true);
+                                        openLightbox(mediaItems, idx);
                                     }}
                                 >
-                                    <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 text-white shadow-2xl scale-90 group-hover:scale-100 transition-transform">
-                                        <Play size={20} fill="white" className="ml-1" />
-                                    </div>
+                                    <img
+                                        src={thumb}
+                                        className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                                        alt={`Media ${idx + 1}`}
+                                        referrerPolicy="no-referrer"
+                                    />
+                                    {item.type === 'video' && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/10 transition-colors">
+                                            <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 text-white shadow-2xl scale-95 group-hover/media:scale-100 transition-transform">
+                                                <Play size={16} fill="white" className="ml-0.5" />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Restore Media Count (Subtle Bottom Right) */}
+                                    {mediaItems.length > 1 && (
+                                        <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/40 backdrop-blur-md rounded text-[9px] font-black text-white/70 border border-white/5 flex items-center gap-1 group-hover/media:opacity-0 transition-opacity">
+                                            <Layers size={9} />
+                                            {mediaItems.length}
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </>
-                    ) : (
-                        <video
-                            src={videoUrl}
-                            className="w-full h-full object-contain bg-black"
-                            controls
-                            autoPlay
-                            playsInline
-                            onClick={(e) => e.stopPropagation()} // Prevent card click when clicking video controls
-                        />
+                            );
+                        })}
+                    </div>
+
+                    {/* Navigation Dots */}
+                    {mediaItems.length > 1 && (
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1 round-full bg-black/20 backdrop-blur-sm rounded-full opacity-0 group-hover/media:opacity-100 transition-opacity pointer-events-none">
+                            {mediaItems.map((_, idx) => (
+                                <div
+                                    key={idx}
+                                    className={cn(
+                                        "h-1 rounded-full transition-all duration-300",
+                                        idx === currentMediaIndex ? "w-4 bg-white" : "w-1 bg-white/40"
+                                    )}
+                                />
+                            ))}
+                        </div>
                     )}
                 </div>
             )}
@@ -234,6 +268,18 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                         title={t('int_bookmark') || 'Bookmark'}
                     >
                         <Tag size={13} fill={tweet.isBookmarked ? "currentColor" : "none"} />
+                    </button>
+                    <button
+                        onClick={handleDelete}
+                        className={cn(
+                            "p-1.5 rounded-lg transition-all",
+                            deleteConfirm
+                                ? "bg-rose-500/20 text-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500/50"
+                                : "hover:bg-rose-500/10 text-zinc-600 hover:text-rose-500"
+                        )}
+                        title="Delete Tweet"
+                    >
+                        <Trash2 size={13} className={cn(deleteConfirm && "animate-pulse")} />
                     </button>
                     <div className="text-[10px] font-medium opacity-50 italic">
                         {tweet.createdAt ? new Date(tweet.createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' }) : '00/00'}

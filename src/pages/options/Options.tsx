@@ -5,6 +5,7 @@ import { useUIStore } from '../../shared/store/useUIStore';
 import { FeedView } from '../../features/feed/FeedView';
 import { IntelligenceView } from '../../features/intelligence/IntelligenceView';
 import { SettingsView } from '../../features/settings/SettingsView';
+import { MediaLightbox } from '../../shared/components/MediaLightbox';
 
 const Options: React.FC = () => {
   const { activeView } = useUIStore();
@@ -27,6 +28,7 @@ const Options: React.FC = () => {
   return (
     <MainLayout>
       {renderView()}
+      <MediaLightbox />
     </MainLayout>
   );
 };

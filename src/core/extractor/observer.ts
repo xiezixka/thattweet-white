@@ -135,7 +135,7 @@ export class DomObserver {
                 }
             });
 
-            if (newTweets.length > 0) {
+            if (newTweets.length > 0 && chrome.runtime?.id) {
                 // 发送给 Background 保存
                 chrome.runtime.sendMessage({
                     type: 'SAVE_TWEETS_BATCH',
@@ -143,7 +143,11 @@ export class DomObserver {
                         tweets: newTweets,
                         users: [] // DOM 模式下很难提取完整的 UserCache，只依靠 Tweet 里的嵌入字段
                     }
-                }).catch(() => { /* ignore connection errors */ });
+                }).catch(err => {
+                    if (err.message?.includes('Extension context invalidated')) {
+                        this.stop(); // 停止观察
+                    }
+                });
             }
         } finally {
             this.isScanning = false;

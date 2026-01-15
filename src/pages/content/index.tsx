@@ -57,12 +57,19 @@ window.addEventListener('thattweet-tweet-data', (event: any) => {
   }
 
   // 2. 将数据发送到 Background 进一步处理 (持久化、AI 等)
-  chrome.runtime.sendMessage({
-    type: 'SAVE_TWEETS_BATCH',
-    payload: { tweets: tweetsToSave, users }
-  }).catch(err => {
-    console.warn('[ThatTweet] Failed to send tweets to background:', err);
-  });
+  if (chrome.runtime?.id) {
+    chrome.runtime.sendMessage({
+      type: 'SAVE_TWEETS_BATCH',
+      payload: { tweets: tweetsToSave, users }
+    }).catch(err => {
+      // 这里的错误通常可以忽略，或者是由于 context invalidated 引起的
+      if (err.message?.includes('Extension context invalidated')) {
+        console.log('[ThatTweet] Context invalidated, stopping events.');
+        return;
+      }
+      console.warn('[ThatTweet] Failed to send tweets to background:', err);
+    });
+  }
 });
 
 // 初始化注入
