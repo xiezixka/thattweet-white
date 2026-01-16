@@ -7,14 +7,20 @@ import { AIProviderAdapter, AIAnalysisResult } from './types';
  */
 class PromptBuilder {
     static buildFullContent(tweet: Tweet): string {
-        let content = tweet.text ?? "(no text)";
+        let content = tweet.text || "";
 
-        if (tweet.ocrText?.trim()) {
-            content += `\n\n【图片文字内容】\n${tweet.ocrText}`;
-        }
+        if (tweet.ocrText?.trim() || tweet.visionDescription?.trim()) {
+            content += "\n\n--- IMAGE ANALYSIS DATA ---";
 
-        if (tweet.visionDescription?.trim()) {
-            content += `\n\n【图片内容描述】\n${tweet.visionDescription}`;
+            if (tweet.ocrText?.trim()) {
+                content += `\n[TEXT DETECTED IN IMAGE]:\n${tweet.ocrText}`;
+            }
+
+            if (tweet.visionDescription?.trim()) {
+                content += `\n[VISUAL DESCRIPTION]:\n${tweet.visionDescription}`;
+            }
+
+            content += "\n--- END OF IMAGE DATA ---";
         }
 
         return content;
@@ -149,7 +155,7 @@ class OpenAIAdapter implements AIProviderAdapter {
                 messages: [
                     {
                         role: 'system',
-                        content: "You are a professional social media analyzer. You MUST output results in a single JSON array format."
+                        content: "You are a professional social media intelligence analyzer. Analyze both the tweet text and the provided image analysis data (OCR text and visual descriptions) to provide a comprehensive response. You MUST output results in a single JSON array format."
                     },
                     {
                         role: 'user',

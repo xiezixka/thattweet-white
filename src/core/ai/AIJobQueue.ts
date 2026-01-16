@@ -8,7 +8,7 @@ export class AIJobQueue {
     private static isProcessing = false;
 
     /**
-     * 启动一次队列处理任务
+     * 启动一次队列处理任务 (自动批处理)
      */
     static async processNextBatch() {
         if (this.isProcessing) return;
@@ -26,7 +26,6 @@ export class AIJobQueue {
                 if (t.isArchived) return false;
 
                 // 如果启用了图片分析且推文有图，必须等图片处理完；
-                // 但如果 Vision 和 OCR 此时都是关闭状态，则直接视为不需要等待图片。
                 const isVisionActive = settings.visionEnabled || settings.ocrEnabled;
                 if (isVisionActive) {
                     const hasImages = t.media?.some(m => m.type === 'image');
@@ -37,8 +36,8 @@ export class AIJobQueue {
                 return true;
             }).slice(0, settings.batchSize);
 
+            // 队列积压逻辑：必须满一整批才处理，节省 API 限额
             if (toProcess.length < settings.batchSize) {
-                // console.log(`[ThatTweet] Pending tweets (${toProcess.length}) not enough for batch size (${settings.batchSize}). Waiting...`);
                 return;
             }
 
@@ -69,13 +68,42 @@ export class AIJobQueue {
                 console.log(`%c[ThatTweet] Batch AI Success: ${toProcess.length} tweets processed.`, 'color: #4CAF50');
             } catch (err) {
                 console.error(`[ThatTweet] Batch AI Processing Failed:`, err);
-                // 标记该批次所有推文为失败，防止死循环
                 for (const tweet of toProcess) {
                     await db.tweets.update(tweet.id, { aiStatus: ProcessStatus.Failed });
                 }
             }
         } finally {
             this.isProcessing = false;
+        }
+    }
+
+    /**
+     * 强制立即处理单个推文 (用户手动点击收藏时触发)
+     */
+    static async forceProcessTweet(tweetId: string) {
+        const settings = await this.getSettings();
+        const tweet = await db.tweets.get(tweetId);
+        if (!tweet) return;
+
+        console.log(`[AIJobQueue] Forcing immediate analysis for ${tweetId}`);
+
+        try {
+            const result = await TweetAnalyzer.analyze(tweet, settings);
+            if (result) {
+                await db.tweets.update(tweet.id, {
+                    aiSummary: result.summary,
+                    aiReason: result.reason,
+                    aiTags: result.tags,
+                    aiCategory: result.category,
+                    aiScore: result.score,
+                    aiStatus: ProcessStatus.Completed,
+                    aiProcessedAt: Date.now()
+                });
+                console.log(`%c[AIJobQueue] Force success: ${tweetId}`, 'color: #4CAF50');
+            }
+        } catch (err) {
+            console.error(`[AIJobQueue] Force analysis failed for ${tweetId}:`, err);
+            await db.tweets.update(tweetId, { aiStatus: ProcessStatus.Failed });
         }
     }
 

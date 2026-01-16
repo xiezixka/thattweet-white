@@ -197,6 +197,8 @@ export const SettingsView: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [isValidating, setIsValidating] = useState<string | null>(null);
     const [newTag, setNewTag] = useState('');
+    const [availableVLMs, setAvailableVLMs] = useState<string[]>([]);
+    const [isFetchingModels, setIsFetchingModels] = useState(false);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -227,6 +229,55 @@ export const SettingsView: React.FC = () => {
         }
     };
 
+    const handleFetchVLMs = async () => {
+        setIsFetchingModels(true);
+        setStatus('Fetching available models...');
+        try {
+            // 优先使用 siliconFlowApiKeys，其次 imageKeys（旧版），最后 apiKey
+            let apiKeys: string[] = [];
+            if (settings.siliconFlowApiKeys && settings.siliconFlowApiKeys.length > 0) {
+                apiKeys = settings.siliconFlowApiKeys;
+            } else if (settings.imageKeys && settings.imageKeys.trim()) {
+                apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
+            } else if (settings.apiKey) {
+                apiKeys = [settings.apiKey];
+            }
+
+            console.log('[Settings] Fetching models with key count:', apiKeys.length);
+
+            if (apiKeys.length === 0) {
+                setStatus('No API key configured. Please add a key first.');
+                return;
+            }
+
+            const response = await fetch('https://api.siliconflow.cn/v1/models', {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${apiKeys[0]}` }
+            });
+
+            if (!response.ok) {
+                setStatus(`Failed to fetch models: ${response.status}`);
+                return;
+            }
+
+            const data = await response.json();
+            const models = data.data || [];
+
+            // Filter VLM models
+            const vlmModels = models
+                .filter((m: any) => /vl|vision|ocr|glm-4v|qwen.*vl/i.test(m.id))
+                .map((m: any) => m.id);
+
+            setAvailableVLMs(vlmModels);
+            setStatus(`Found ${vlmModels.length} VLM models`);
+        } catch (err: any) {
+            setStatus(`Error: ${err.message}`);
+        } finally {
+            setIsFetchingModels(false);
+            setTimeout(() => setStatus(''), 5000);
+        }
+    };
+
     const handleVerifyKey = async (type: 'api' | 'vision' | 'chat' | 'rag') => {
         setIsValidating(type);
         setStatus(t('settings_verifying'));
@@ -244,9 +295,12 @@ export const SettingsView: React.FC = () => {
             baseUrl = settings.chatBaseUrl || settings.baseUrl;
             model = settings.chatModel || settings.model;
         } else if (type === 'vision') {
-            apiKey = settings.imageKeys.split('\n').filter(Boolean)[0] || '';
-            baseUrl = 'https://api.siliconflow.cn/v1';
-            model = 'google/gemini-2.0-flash-exp';
+            const apiKeys = settings.siliconFlowApiKeys.length > 0
+                ? settings.siliconFlowApiKeys
+                : (settings.apiKey ? [settings.apiKey] : []);
+            apiKey = apiKeys[0] || '';
+            baseUrl = settings.baseUrl || 'https://api.siliconflow.cn/v1';
+            model = settings.visionModel;
         } else if (type === 'rag') {
             apiKey = settings.ragApiKey;
             baseUrl = settings.embeddingUrl;
@@ -468,6 +522,84 @@ export const SettingsView: React.FC = () => {
                                         </div>
                                         <p className="text-xs font-black uppercase tracking-tight">{t('settings_vision_enable')}</p>
                                     </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t border-white/5">
+                                    <Field label="Vision Model" description="SiliconFlow Multi-modal Model Name">
+                                        <div className="flex gap-2">
+                                            {availableVLMs.length > 0 ? (
+                                                <select
+                                                    value={settings.visionModel}
+                                                    onChange={e => handleChange('visionModel', e.target.value)}
+                                                    className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:border-brand/40 outline-none transition-all cursor-pointer"
+                                                    style={{ colorScheme: 'dark' }}
+                                                >
+                                                    <option value="" className="bg-zinc-900 text-zinc-400">Select a model...</option>
+                                                    {availableVLMs.map(m => (
+                                                        <option key={m} value={m} className="bg-zinc-900 text-white">{m}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={settings.visionModel}
+                                                    onChange={e => handleChange('visionModel', e.target.value)}
+                                                    placeholder="e.g. Qwen/Qwen2-VL-7B-Instruct"
+                                                    className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-zinc-400 focus:border-brand/40 outline-none transition-all"
+                                                />
+                                            )}
+                                            <button
+                                                onClick={handleFetchVLMs}
+                                                disabled={isFetchingModels}
+                                                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl border border-white/10 transition-all flex items-center gap-1.5 active:scale-95"
+                                            >
+                                                {isFetchingModels ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                                <span className="text-[10px] font-bold">Fetch</span>
+                                            </button>
+                                        </div>
+                                    </Field>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Field label="Max Images / Tweet">
+                                            <input
+                                                type="number"
+                                                value={settings.maxImagesPerTweet}
+                                                onChange={e => handleChange('maxImagesPerTweet', parseInt(e.target.value))}
+                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-zinc-400"
+                                            />
+                                        </Field>
+                                        <Field label="Batch Size (Tweets)">
+                                            <input
+                                                type="number"
+                                                value={settings.visionBatchSize}
+                                                onChange={e => handleChange('visionBatchSize', parseInt(e.target.value))}
+                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-zinc-400"
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    <Field label="Processing Scope">
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleChange('visionEnabledAt', 0)}
+                                                className={cn(
+                                                    "flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                                                    settings.visionEnabledAt === 0 ? "bg-brand/10 border-brand/40 text-brand" : "bg-white/5 border-white/5 text-zinc-500"
+                                                )}
+                                            >
+                                                Process All History
+                                            </button>
+                                            <button
+                                                onClick={() => handleChange('visionEnabledAt', Date.now())}
+                                                className={cn(
+                                                    "flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                                                    settings.visionEnabledAt > 0 ? "bg-brand/10 border-brand/40 text-brand" : "bg-white/5 border-white/5 text-zinc-500"
+                                                )}
+                                            >
+                                                Only New Tweets
+                                            </button>
+                                        </div>
+                                    </Field>
                                 </div>
                             </Card>
                         </div>

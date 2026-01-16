@@ -199,6 +199,26 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                     {tweet.text || "(No Text Content)"}
                 </div>
 
+                {/* VLM/OCR Badges */}
+                <div className="flex gap-1.5 mt-2">
+                    {tweet.visionDescription && (
+                        <div
+                            className="px-1.5 py-0.5 rounded bg-brand/10 border border-brand/20 text-[9px] font-bold text-brand uppercase tracking-wider cursor-help"
+                            title={tweet.visionDescription}
+                        >
+                            VLM
+                        </div>
+                    )}
+                    {tweet.ocrText && (
+                        <div
+                            className="px-1.5 py-0.5 rounded bg-amber-400/10 border border-amber-400/20 text-[9px] font-bold text-amber-400 uppercase tracking-wider cursor-help"
+                            title={tweet.ocrText}
+                        >
+                            OCR
+                        </div>
+                    )}
+                </div>
+
                 {hasLongText && isMasonry && (
                     <button
                         onClick={(e) => {
@@ -231,7 +251,7 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                                     className="flex-none w-full aspect-video snap-center relative overflow-hidden flex items-center justify-center cursor-zoom-in"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        openLightbox(mediaItems, idx);
+                                        openLightbox(mediaItems, idx, tweet.mediaAnalysis);
                                     }}
                                 >
                                     <img
@@ -291,7 +311,16 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                         onClick={async (e) => {
                             e.stopPropagation();
                             const { db } = await import('../../core/storage/db');
-                            await db.tweets.update(tweet.id, { isBookmarked: !tweet.isBookmarked });
+                            const newStatus = !tweet.isBookmarked;
+                            await db.tweets.update(tweet.id, { isBookmarked: newStatus });
+
+                            // 如果是点击“收藏”，则强制触发一次即时的深度重分析 (VLM + AI)
+                            if (newStatus) {
+                                chrome.runtime.sendMessage({
+                                    type: 'REANALYZE_TWEET',
+                                    payload: { tweetId: tweet.id }
+                                });
+                            }
                         }}
                         className={cn(
                             "p-1.5 rounded-lg transition-all",

@@ -6,6 +6,7 @@ export type ViewType = 'feed' | 'intelligence' | 'stats' | 'settings';
 
 interface LightboxState {
     media: MediaItem[];
+    analysis?: Array<{ ocr?: string; description?: string }>;
     index: number;
     isOpen: boolean;
 }
@@ -20,7 +21,11 @@ interface UIState {
 
     // Lightbox State
     lightbox: LightboxState;
-    openLightbox: (media: MediaItem[], index: number) => void;
+    openLightbox: (
+        media: MediaItem[],
+        index: number,
+        analysis?: Array<{ ocr?: string; description?: string }>
+    ) => void;
     closeLightbox: () => void;
     setLightboxIndex: (index: number) => void;
 }
@@ -41,8 +46,8 @@ export const useUIStore = create<UIState>()(
                 index: 0,
                 isOpen: false,
             },
-            openLightbox: (media, index) => set({
-                lightbox: { media, index, isOpen: true }
+            openLightbox: (media, index, analysis) => set({
+                lightbox: { media, index, analysis, isOpen: true }
             }),
             closeLightbox: () => set((state) => ({
                 lightbox: { ...state.lightbox, isOpen: false }

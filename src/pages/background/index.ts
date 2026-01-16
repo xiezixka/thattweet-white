@@ -1,6 +1,7 @@
 import { TweetRepository } from '../../core/storage/TweetRepository';
 import { Tweet, UserCache } from '../../shared/types/tweet';
 import { AIJobQueue } from '../../core/ai/AIJobQueue';
+import { VisionService } from '../../core/vision/visionService';
 import { triggerFullBackup, hasBackupDirectory } from '../../core/backup/backupService';
 
 /**
@@ -83,12 +84,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true;
     }
+
+    // Handle manual re-analyze trigger
+    if (message.type === 'REANALYZE_TWEET') {
+        const { tweetId } = message.payload;
+        handleReanalyze(tweetId).then(() => {
+            sendResponse({ success: true });
+        }).catch(err => {
+            console.error(err);
+            sendResponse({ success: false, error: err.message });
+        });
+        return true;
+    }
 });
 
 // ============ AI Job Queue Timer ============
-// 自动化定时：每隔 10 秒检查一次 AI 队列（测试阶段设短一点）
+// 自动化定时：检查 AI 队列与图片队列
 setInterval(() => {
     AIJobQueue.processNextBatch().catch(console.error);
+    VisionService.processQueue().catch(console.error);
 }, 10 * 1000);
 
 async function handleBatchSave(tweets: Tweet[], users: UserCache[]) {
@@ -101,10 +115,13 @@ async function handleBatchSave(tweets: Tweet[], users: UserCache[]) {
 
             // 🔧 关键修复：DOM 抓取模式下 users 为空，需要从推文嵌入字段构造用户
             if (!author && (tweet.author || tweet.authorName)) {
+                const authorHandle = typeof tweet.author === 'string' ? tweet.author : (tweet.author?.handle || tweet.authorId);
+                const authorName = tweet.authorName || (typeof tweet.author === 'object' ? tweet.author?.name : tweet.author) || 'Unknown';
+
                 author = {
                     id: tweet.authorId,
-                    handle: tweet.author || tweet.authorId,
-                    name: tweet.authorName || tweet.author || 'Unknown',
+                    handle: authorHandle,
+                    name: authorName,
                     avatar: tweet.authorAvatarUrl || '',
                     updatedAt: Date.now(),
                     followersCount: 0,
@@ -116,11 +133,26 @@ async function handleBatchSave(tweets: Tweet[], users: UserCache[]) {
                 await TweetRepository.saveTweet(tweet, author);
             }
         }
-        // 存完后立刻触发 AI
+        // 存完后立刻触发 AI 和图片处理 (自动批处理流程)
         AIJobQueue.processNextBatch().catch(console.error);
+        VisionService.processQueue().catch(console.error);
     } catch (error) {
         console.error('[ThatTweet] Batch save failed:', error);
         throw error; // Re-throw to be caught by the listener
+    }
+}
+
+async function handleReanalyze(tweetId: string) {
+    console.log(`[ThatTweet] Forcing re-analysis for tweet: ${tweetId}`);
+    try {
+        // 1. 先进行视觉分析 (如果推文有图，强制立即处理)
+        await VisionService.forceProcessTweet(tweetId);
+
+        // 2. 然后进行 AI 总结分析 (强制立即处理)
+        await AIJobQueue.forceProcessTweet(tweetId);
+    } catch (err) {
+        console.error(`[ThatTweet] Force re-analysis failed:`, err);
+        throw err;
     }
 }
 

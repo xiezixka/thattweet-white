@@ -6,11 +6,16 @@ export interface AISettings {
     baseUrl: string;
     model: string;
 
-    // 2. Image Recognition
-    imageKeys: string; // 一行一个
+    // 2. Image Recognition (SiliconFlow Multi-modal)
+    imageKeys: string;
+    siliconFlowApiKeys: string[]; // 持久化的多 Key 列表
     ocrEnabled: boolean;
     visionEnabled: boolean;
+    visionModel: string;
+    ocrModel: string;
+    visionEnabledAt: number;     // 时间戳：只处理此时间之后的推文
     maxImagesPerTweet: number;
+    visionBatchSize: number;     // 单次 API 调用处理的推文数量
 
     // 3. AI Chat (Contemplation)
     chatApiKey: string;
@@ -47,9 +52,14 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
     model: 'xiaomi/mimo-v2-flash:free',
 
     imageKeys: '',
+    siliconFlowApiKeys: [],
     ocrEnabled: false,
     visionEnabled: false,
-    maxImagesPerTweet: 2,
+    visionModel: 'vendor/google/siglip-so400b-patch14-384',
+    ocrModel: 'vendor/google/siglip-so400b-patch14-384',
+    visionEnabledAt: 0,
+    maxImagesPerTweet: 4,
+    visionBatchSize: 3,
 
     chatApiKey: '',
     chatBaseUrl: 'https://openrouter.ai/api/v1',

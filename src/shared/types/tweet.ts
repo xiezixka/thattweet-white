@@ -83,8 +83,12 @@ export interface Tweet {
   aiProcessedAt?: number;      // AI 处理完成时间
 
   // --- 图像视觉数据 ---
-  ocrText?: string;            // 图片中的文字内容
-  visionDescription?: string;  // 图片的视觉描述
+  ocrText?: string;            // 图片中的文字内容 (所有图片合并)
+  visionDescription?: string;  // 图片的视觉描述 (整体总结)
+  mediaAnalysis?: Array<{      // 每一张图片的单独分析 (按索引对应)
+    ocr?: string;
+    description?: string;
+  }>;
   imageProcessStatus: ProcessStatus; // 图像处理状态
   imageProcessedAt?: number;   // 图像处理完成时间
 
