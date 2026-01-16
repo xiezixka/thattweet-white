@@ -115,5 +115,12 @@ export const TweetRepository = {
      */
     async deleteTweet(id: string) {
         return await db.tweets.delete(id);
+    },
+
+    /**
+     * 更新作者信息 (特别是 AI Profile)
+     */
+    async updateAuthorProfile(id: string, updates: Partial<UserCache>) {
+        return await db.users.update(id, updates);
     }
 };

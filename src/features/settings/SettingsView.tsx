@@ -28,7 +28,8 @@ import {
     Sparkles,
     Settings,
     Activity,
-    BookOpen
+    BookOpen,
+    ScanFace
 } from 'lucide-react';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { useTranslation } from '../../shared/hooks/useTranslation';
@@ -787,6 +788,46 @@ export const SettingsView: React.FC = () => {
                                         value={settings.promptSummary}
                                         onChange={e => handleChange('promptSummary', e.target.value)}
                                         className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
+                                    />
+                                </Field>
+                                <Field label="Profile Prompt" description={t('settings_prompt_profile_desc')}>
+                                    <textarea
+                                        rows={6}
+                                        value={settings.promptProfile}
+                                        onChange={e => handleChange('promptProfile', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
+                                    />
+                                </Field>
+                            </Card>
+
+                            <Card title="AI Profile Engine" icon={ScanFace} description="Configure dedicated API settings for generating Author Profiles. Leave Key empty to use default Chat settings.">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Field label="API Key (Optional)">
+                                        <input
+                                            type="password"
+                                            value={settings.profileApiKey}
+                                            onChange={e => handleChange('profileApiKey', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                            placeholder="Leave empty to use Chat Key"
+                                        />
+                                    </Field>
+                                    <Field label="Model Name">
+                                        <input
+                                            type="text"
+                                            value={settings.profileModel}
+                                            onChange={e => handleChange('profileModel', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                            placeholder="mistralai/mistral-7b-instruct:free"
+                                        />
+                                    </Field>
+                                </div>
+                                <Field label="Base URL">
+                                    <input
+                                        type="text"
+                                        value={settings.profileBaseUrl}
+                                        onChange={e => handleChange('profileBaseUrl', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                        placeholder="https://openrouter.ai/api/v1"
                                     />
                                 </Field>
                             </Card>

@@ -207,6 +207,73 @@ class OpenAIAdapter implements AIProviderAdapter {
         if (results[0]) return results[0];
         throw new Error("Single tweet analysis failed");
     }
+
+    async generateProfile(tweets: Tweet[], settings: AISettings): Promise<{ summary: string; keywords: string[] }> {
+        // 1. 配置优先级 (Profile > Chat > Global)
+        const apiKey = settings.profileApiKey || settings.chatApiKey || settings.apiKey;
+        let baseUrl = settings.profileBaseUrl || settings.chatBaseUrl || settings.baseUrl || 'https://openrouter.ai/api/v1';
+        const modelToUse = settings.profileModel || settings.chatModel || settings.model || 'mistralai/mistral-7b-instruct:free';
+
+        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+        const url = `${baseUrl}/chat/completions`;
+
+        // 构造 Profile Prompt
+        const context = tweets.map((t, i) => {
+            const date = new Date(Number(t.savedAt)).toLocaleDateString();
+            const tags = (t.aiTags || []).join(', ');
+            // 风格分析必须基于原文 (Raw Text)，AI Summary 会丢失语气特征
+            // 增加截取长度至 500 字符，尽可能保留完整语境
+            const content = t.text.slice(0, 500);
+            return `#${i + 1} [${date}] [Tags: ${tags}]\n${content}`;
+        }).join('\n\n');
+
+        const prompt = settings.promptProfile
+            .replace('{count}', String(tweets.length))
+            .replace('{context}', context);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                    'X-Title': 'ThatTweet'
+                },
+                body: JSON.stringify({
+                    model: modelToUse,
+                    messages: [
+                        { role: 'system', content: 'You are an expert profiler. Return valid JSON.' },
+                        { role: 'user', content: prompt }
+                    ],
+                    // response_format: { type: 'json_object' }, // 保持兼容性，暂不开启
+                    temperature: 0.5
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`API Error ${response.status}: ${errText}`);
+            }
+
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content || "";
+
+            // 尝试提取 JSON
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            const target = jsonMatch ? jsonMatch[0] : content;
+            const parsed = JSON.parse(target);
+
+            return {
+                summary: parsed.summary || "",
+                keywords: Array.isArray(parsed.keywords) ? parsed.keywords : []
+            };
+
+        } catch (e: any) {
+            console.error("[Profile Gen Failed]", e);
+            throw new Error(e.message || "Profile generation failed");
+        }
+    }
 }
 
 /**
@@ -221,6 +288,10 @@ class AnalyzerManager {
 
     async analyzeBatch(tweets: Tweet[], settings: AISettings): Promise<(AIAnalysisResult | null)[]> {
         return this.adapter.analyzeBatch(tweets, settings);
+    }
+
+    async analyzeAuthorProfile(tweets: Tweet[], settings: AISettings) {
+        return this.adapter.generateProfile(tweets, settings);
     }
 }
 

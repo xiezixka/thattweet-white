@@ -24,6 +24,11 @@ export interface AISettings {
     chatBaseUrl: string;
     chatModel: string;
 
+    // 3.1 Profile AI (Independent)
+    profileApiKey: string;
+    profileBaseUrl: string;
+    profileModel: string;
+
     // 4. RAG (Embeddings & Retrieval)
     ragEnabled: boolean;
     ragApiKey: string;
@@ -47,6 +52,7 @@ export interface AISettings {
     promptAnalysis: string;
     promptSummary: string;
     promptVision: string;
+    promptProfile: string;
 
     // 8. Personal Preference
     aiStyleFocus: string;
@@ -72,6 +78,11 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
     chatApiKey: '',
     chatBaseUrl: 'https://openrouter.ai/api/v1',
     chatModel: 'xiaomi/mimo-v2-flash:free',
+
+    // New: Profile AI (Dedicated)
+    profileApiKey: '',
+    profileBaseUrl: 'https://openrouter.ai/api/v1',
+    profileModel: 'mistralai/mistral-7b-instruct:free',
 
     ragEnabled: false,
     ragApiKey: '',
@@ -158,5 +169,17 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 {tweet_text}
 作者：@{author}
 
-只返回摘要内容，不要添加任何说明。`
+只返回摘要内容，不要添加任何说明。`,
+
+    promptProfile: `Role: You are a social media personality profiler.
+Task: Analyze the following Top {count} high-impact tweets to create a deep psychological profile of the author.
+
+[TWEET CONTEXT]
+{context}
+
+[OUTPUT RULES]
+1. Summary: Create a 100-word summary of their character, writing style, and main topics. Be insightful, slightly sharp/witty (like a professional critic).
+2. Keywords: Extract 3-5 distinct persona tags (e.g., "Tech Evangelist", "Stoic Philosopher").
+3. Language: Output MUST be in the same language as the majority of the tweets (likely Chinese).
+4. Format: Return ONLY a JSON object: { "summary": string, "keywords": string[] }`
 };

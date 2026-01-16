@@ -482,6 +482,9 @@
   "analytics_visual_heavy": {
     "message": "视觉主导"
   },
+  "settings_prompt_profile_desc": {
+    "message": "自定义 AI 深度画像的生成提示词。"
+  },
   "analytics_link_driven": {
     "message": "链接驱动"
   },

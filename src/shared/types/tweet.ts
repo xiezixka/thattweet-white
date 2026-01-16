@@ -30,6 +30,12 @@ export interface UserCache {
   followersCount?: number;  // 粉丝数
   verified?: boolean;       // 是否认证
   updatedAt: number;        // 最后一次更新信息的时间
+  aiProfile?: {
+    summary: string;        // AI 生成的人物画像文本
+    keywords: string[];     // 提取的关键词标签
+    lastAnalyzedAt: number; // 上次分析的时间戳
+    tweetCountAtAnalysis: number; // 上次分析时，该作者存了多少条推文
+  }
 }
 
 export interface MediaItem {

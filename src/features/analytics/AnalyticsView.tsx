@@ -7,8 +7,13 @@ import { TweetWithUser } from '../../shared/types/tweet';
 import {
     TrendingUp, Search, Zap,
     ChevronRight, Sparkles, Activity,
-    BarChart3, Medal, Crown, Trophy
+    BarChart3, Medal, Crown, Trophy,
+    ScanFace, RefreshCw
 } from 'lucide-react';
+import { useSettingsStore } from '../../shared/store/useSettingsStore';
+import { TweetAnalyzer } from '../../core/ai/analyzer';
+import { TweetRepository } from '../../core/storage/TweetRepository';
+import { UserCache } from '../../shared/types/tweet';
 import { cn } from '../../shared/utils/cn';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -24,6 +29,7 @@ interface AuthorStats {
     maxHvi: number;
     totalHvi: number;
     lastActive: number;
+    aiProfile?: UserCache['aiProfile'];
 }
 
 interface ViralMetrics {
@@ -128,8 +134,41 @@ const MetricBar: React.FC<{ label: string; value: number; icon: React.ElementTyp
 export const AnalyticsView: React.FC = () => {
     const { tweets, loading } = useTweets();
     const { t } = useTranslation();
+    const settings = useSettingsStore((s) => s.settings);
     const [selectedHandle, setSelectedHandle] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [analyzing, setAnalyzing] = useState(false);
+
+    // --- Action: 生成/更新画像 ---
+    const handleGenerateProfile = async (author: AuthorStats) => {
+        if (analyzing || !author) return;
+        setAnalyzing(true);
+        try {
+            // 1. 获取 Top 10 Tweets (HVI Sorted)
+            const topTweets = author.tweets.slice(0, 15);
+
+            // 2. 调用 AI
+            const profile = await TweetAnalyzer.analyzeAuthorProfile(topTweets, settings);
+
+            // 3. 更新数据库
+            const userId = author.tweets[0]?.authorId;
+            if (userId) {
+                await TweetRepository.updateAuthorProfile(userId, {
+                    aiProfile: {
+                        summary: profile.summary,
+                        keywords: profile.keywords,
+                        lastAnalyzedAt: Date.now(),
+                        tweetCountAtAnalysis: author.tweets.length
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Profile Gen Error", e);
+            alert("生成失败，请检查 AI 设置或网络");
+        } finally {
+            setAnalyzing(false);
+        }
+    };
 
     // --- Data Processing ---
     const authors = useMemo(() => {
@@ -149,7 +188,8 @@ export const AnalyticsView: React.FC = () => {
                     avgScore: 0,
                     maxHvi: 0,
                     totalHvi: 0,
-                    lastActive: 0
+                    lastActive: 0,
+                    aiProfile: t.author?.aiProfile
                 });
             }
             const stat = map.get(handle)!;
@@ -398,15 +438,72 @@ export const AnalyticsView: React.FC = () => {
                                     )}
                                 </div>
 
-                                <div className="p-6 rounded-3xl bg-gradient-to-br from-brand/5 to-transparent border border-brand/10">
-                                    <h4 className="text-xs font-bold text-brand uppercase tracking-widest mb-2">{t('analytics_ai_insight')}</h4>
-                                    <p className="text-xs text-brand/80 leading-relaxed">
-                                        {t('analytics_insight_template')
-                                            .replace('{{name}}', current.name)
-                                            .replace('{{style}}', viralMetrics?.mediaRate && viralMetrics.mediaRate > 50 ? t('analytics_style_visual') : t('analytics_style_text'))
-                                            .replace('{{density}}', current.avgScore > 80 ? t('analytics_density_high') : t('analytics_density_moderate'))
-                                        }
-                                    </p>
+                                <div className="relative p-6 rounded-3xl bg-gradient-to-br from-brand/5 to-transparent border border-brand/10 overflow-hidden">
+                                    <h4 className="text-xs font-bold text-brand uppercase tracking-widest mb-3 flex items-center justify-between">
+                                        <span className="flex items-center gap-2"><ScanFace size={14} /> AI 深度画像</span>
+                                        {/* 更新指示器 */}
+                                        {current.aiProfile && (current.tweets.length - current.aiProfile.tweetCountAtAnalysis >= 25) && (
+                                            <span className="flex h-2 w-2 relative">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand"></span>
+                                            </span>
+                                        )}
+                                    </h4>
+
+                                    {current.aiProfile ? (
+                                        <div className="space-y-4">
+                                            {/* Keywords */}
+                                            <div className="flex flex-wrap gap-2">
+                                                {current.aiProfile.keywords.map(k => (
+                                                    <span key={k} className="px-2 py-1 rounded bg-brand/10 text-brand border border-brand/20 text-[10px] font-bold">
+                                                        #{k}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            {/* Summary */}
+                                            <p className="text-xs text-brand/90 leading-relaxed font-medium">
+                                                {current.aiProfile.summary}
+                                            </p>
+
+                                            {/* Update Trigger (Always Visible) */}
+                                            <button
+                                                onClick={() => handleGenerateProfile(current)}
+                                                disabled={analyzing}
+                                                className="w-full mt-2 py-2 flex items-center justify-center gap-2 text-[10px] font-bold text-brand/70 hover:text-brand bg-brand/5 hover:bg-brand/10 rounded-xl transition-all disabled:opacity-50"
+                                            >
+                                                {analyzing ? (
+                                                    <RefreshCw className="animate-spin" size={12} />
+                                                ) : (
+                                                    <RefreshCw size={12} />
+                                                )}
+                                                {(current.tweets.length - current.aiProfile.tweetCountAtAnalysis >= 25)
+                                                    ? `发现 ${current.tweets.length - current.aiProfile.tweetCountAtAnalysis} 条新内容，点击更新`
+                                                    : "重新生成画像"
+                                                }
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-4">
+                                            <p className="text-[10px] text-zinc-500 mb-4">暂无画像，点击生成基于 Top 15 代表作的深度分析</p>
+                                            <button
+                                                onClick={() => handleGenerateProfile(current)}
+                                                disabled={analyzing}
+                                                className="w-full py-2.5 flex items-center justify-center gap-2 rounded-xl bg-brand font-bold text-white text-xs hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {analyzing ? (
+                                                    <>
+                                                        <RefreshCw className="animate-spin" size={14} />
+                                                        思考中...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Sparkles size={14} fill="currentColor" />
+                                                        生成 AI 画像
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
