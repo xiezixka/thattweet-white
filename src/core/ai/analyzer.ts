@@ -342,15 +342,122 @@ class OpenAIAdapter implements AIProviderAdapter {
         if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
         const url = `${baseUrl}/chat/completions`;
 
-        const context = tweets.slice(0, 20).map((t, i) => `[Tweet ${i + 1}]: ${t.text}`).join('\n\n');
+        // === PHASE 1: Extract Keywords (Fast Model) ===
+        let keywords: string[] = [];
+        try {
+            const extractionModel = settings.model || 'xiaomi/mimo-v2-flash:free';
+            const extractionUrl = `${(settings.baseUrl || 'https://openrouter.ai/api/v1').replace(/\/$/, '')}/chat/completions`;
+
+            const extractionResponse = await fetch(extractionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${settings.apiKey}`,
+                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                    'X-Title': 'ThatTweet'
+                },
+                body: JSON.stringify({
+                    model: extractionModel,
+                    messages: [
+                        { role: 'system', content: 'Extract 3-5 core search keywords from the user question. Return ONLY a JSON array of strings, nothing else. Example: ["Web3", "decentralization", "future"]' },
+                        { role: 'user', content: query }
+                    ],
+                    temperature: 0.3,
+                    max_tokens: 100
+                })
+            });
+
+            if (extractionResponse.ok) {
+                const data = await extractionResponse.json();
+                const content = data.choices?.[0]?.message?.content || '[]';
+                try {
+                    const parsed = JSON.parse(content.replace(/```json\s*|\s*```/g, '').trim());
+                    if (Array.isArray(parsed)) keywords = parsed;
+                } catch {
+                    // Fallback: extract words from response
+                    keywords = content.match(/["']([^"']+)["']/g)?.map((s: string) => s.replace(/["']/g, '')) || [];
+                }
+            }
+        } catch (e) {
+            console.warn("[Keyword Extraction Failed]", e);
+        }
+
+        // Fallback keywords from query
+        if (keywords.length === 0) {
+            keywords = query.split(/\s+/).filter(w => w.length > 2).slice(0, 5);
+        }
+
+        console.log("[Thought Salon] Extracted keywords:", keywords);
+
+        // === PHASE 2: Local Search with Scoring ===
+        const scoredTweets = tweets.map(tweet => {
+            let score = 0;
+            const textLower = (tweet.text || '').toLowerCase();
+
+            for (const kw of keywords) {
+                if (textLower.includes(kw.toLowerCase())) {
+                    score += 10;
+                }
+            }
+
+            // Bonus for high engagement
+            const hvi = ((tweet.favoriteCount || 0) + (tweet.retweetCount || 0) * 2) / Math.max(tweet.viewCount || 1, 1) * 1000;
+            score += Math.min(hvi / 10, 5); // Max 5 bonus points
+
+            return { tweet, score };
+        });
+
+        // Sort by score and take top 20
+        const topTweets = scoredTweets
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 20)
+            .map(s => s.tweet);
+
+        console.log("[Thought Salon] Top tweets selected:", topTweets.length);
+
+        // === PHASE 3: Build Rich Context ===
+        const context = topTweets.map((t, i) => {
+            let block = `[Memory ${i + 1}]: ${t.text}`;
+
+            // Include image URLs if available
+            if (t.media && t.media.length > 0) {
+                const imageUrls = t.media
+                    .filter(m => m.type !== 'video' && m.type !== 'gif')
+                    .map(m => m.url)
+                    .slice(0, 2);
+                if (imageUrls.length > 0) {
+                    block += `\n[Images: ${imageUrls.join(', ')}]`;
+                }
+            }
+
+            return block;
+        }).join('\n\n');
+
+        const authorHandle = typeof tweets[0]?.author === 'string' ? tweets[0].author : (tweets[0]?.author?.handle || 'Unknown');
         const systemPrompt = [
-            "You are an expert analyst who has studied this author's tweets deeply.",
-            "Use the provided TWEET CONTEXT to answer the user's question about the author.",
-            "If the answer is not in the context, say you don't know based on existing data.",
-            "Keep the tone professional and analytical.",
+            `你现在是 @${authorHandle}。`,
             "",
-            "[TWEET CONTEXT]",
-            context
+            "你正在和一位对你思想感兴趣的朋友进行一场轻松的头脑风暴对话。",
+            "像真人一样说话：用「我」来指代自己，分享你的真实想法和观点。",
+            "",
+            "对话风格：",
+            "- 像朋友聊天一样自然，可以用语气词、反问、感叹",
+            "- 可以表达不确定性（\"我觉得...\"、\"也许...\"、\"说实话我也不太确定\"）",
+            "- 可以追问对方、引导深入讨论",
+            "- 如果对方的问题让你联想到你写过的某些内容，自然地引用它",
+            "- 如果你的记忆（下方的推文片段）中没有相关内容，可以基于你的风格进行合理推测，但要诚实说明",
+            "",
+            "格式建议：",
+            "- 回复不要太长，保持对话节奏感",
+            "- 可以用 Markdown 格式化重要观点（**加粗**、列表等）",
+            "- 如果引用了某条推文中的图片，可以用 ![简述](url) 展示",
+            "",
+            `[你的记忆片段 - 以下是你 @${authorHandle} 写过的部分推文]`,
+            context,
+            "",
+            `[用户搜索的话题锚点: ${keywords.join(', ')}]`,
+            "",
+            "现在，以 @" + authorHandle + " 的身份，用你的语言风格和对方对话吧。"
         ].join('\n');
 
         try {
@@ -375,7 +482,7 @@ class OpenAIAdapter implements AIProviderAdapter {
 
             if (!response.ok) {
                 const errText = await response.text();
-                throw new Error(`API Error ${response.status}: ${errText}`);
+                throw new Error(`${response.status} ${errText.includes('data policy') ? '- OpenRouter requires "Free model publication" enabled in Settings > Privacy' : errText}`);
             }
 
             const reader = response.body?.getReader();

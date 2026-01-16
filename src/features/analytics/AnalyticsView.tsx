@@ -21,6 +21,7 @@ import { TweetRepository } from '../../core/storage/TweetRepository';
 import { UserCache } from '../../shared/types/tweet';
 import { cn } from '../../shared/utils/cn';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MarkdownRenderer } from '../../shared/components/MarkdownRenderer';
 
 // --- Types ---
 type AnalyticsTab = 'persona' | 'rhythm' | 'semantic' | 'sentiment' | 'chat';
@@ -149,11 +150,29 @@ export const AnalyticsView: React.FC = () => {
     const [analyzing, setAnalyzing] = useState(false);
     const [activeTab, setActiveTab] = useState<AnalyticsTab>('persona');
 
-    // --- Chat State ---
+    // --- Chat State with Persistence ---
     const [chatQuery, setChatQuery] = useState('');
     const [sendingChat, setSendingChat] = useState(false);
-    const [chatHistory, setChatHistory] = useState<Record<string, { role: 'user' | 'assistant', content: string }[]>>({});
+    const [chatHistory, setChatHistory] = useState<Record<string, { role: 'user' | 'assistant', content: string }[]>>(() => {
+        // Load from localStorage on init
+        try {
+            const saved = localStorage.getItem('thattweet_thought_salon');
+            return saved ? JSON.parse(saved) : {};
+        } catch {
+            return {};
+        }
+    });
 
+    // Persist chat history to localStorage
+    React.useEffect(() => {
+        if (Object.keys(chatHistory).length > 0) {
+            try {
+                localStorage.setItem('thattweet_thought_salon', JSON.stringify(chatHistory));
+            } catch (e) {
+                console.warn('[Thought Salon] Failed to save chat history', e);
+            }
+        }
+    }, [chatHistory]);
 
 
     // --- Action: 生成/更新画像 ---
@@ -591,7 +610,7 @@ export const AnalyticsView: React.FC = () => {
                                         { id: 'rhythm', icon: Clock, label: '发布节律' },
                                         { id: 'semantic', icon: Database, label: '知识图谱' },
                                         { id: 'sentiment', icon: Heart, label: '情绪趋势' },
-                                        { id: 'chat', icon: MessageCircle, label: '问问他' },
+                                        { id: 'chat', icon: Sparkles, label: '思想沙龙' },
                                     ].map(tab => (
                                         <button
                                             key={tab.id}
@@ -938,51 +957,79 @@ export const AnalyticsView: React.FC = () => {
                                     )}
 
                                     {activeTab === 'chat' && (
-                                        <motion.div key="chat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex flex-col h-[600px] p-6 rounded-3xl bg-brand/5 border border-brand/20">
-                                            <h4 className="text-xs font-bold text-brand uppercase tracking-widest flex items-center gap-2 mb-4"><MessageCircle size={14} /> 博主专家对话 (AI Expert)</h4>
+                                        <motion.div key="chat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex flex-col h-[600px] rounded-3xl bg-[#09090b] border border-white/5">
+                                            {/* Thought Salon Header */}
+                                            <div className="px-6 py-4 border-b border-white/5">
+                                                <h4 className="text-[11px] font-medium text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                    <Sparkles size={12} className="text-zinc-600" />
+                                                    思想沙龙 · @{current.handle}
+                                                </h4>
+                                            </div>
 
-                                            {/* Chat History */}
-                                            <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 mb-4 pr-1" id="chat-container">
+                                            {/* Chat History - Vertical Flow */}
+                                            <div className="flex-1 overflow-y-auto no-scrollbar px-6 py-4 space-y-6" id="chat-container">
                                                 {currentChat.length === 0 ? (
                                                     <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                                                        <Sparkles size={32} className="text-brand/20 mb-4" />
-                                                        <p className="text-[10px] font-bold text-brand/60 uppercase tracking-widest mb-2">深度洞察对话已就绪</p>
-                                                        <p className="text-xs text-zinc-500 leading-relaxed italic">“我是专门研究 @{current.handle} 内容的专家。你可以问我关于他推文中的观点、写作风格、近期关注重心等任何问题。”</p>
+                                                        <div className="w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center mb-4">
+                                                            <Sparkles size={20} className="text-zinc-700" />
+                                                        </div>
+                                                        <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-widest mb-3">思想沙龙已就绪</p>
+                                                        <p className="text-[11px] text-zinc-600 leading-relaxed max-w-[240px]">
+                                                            在这里，我将化身 @{current.handle} 的思想映射。基于他的历史推文，与你进行深度对话。
+                                                        </p>
                                                     </div>
                                                 ) : (
                                                     currentChat.map((msg, i) => (
-                                                        <div key={i} className={cn("flex flex-col", msg.role === 'user' ? "items-end" : "items-start")}>
-                                                            <div className={cn(
-                                                                "max-w-[90%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed transition-all",
-                                                                msg.role === 'user'
-                                                                    ? "bg-brand text-white rounded-tr-none"
-                                                                    : "bg-white/5 border border-white/5 text-zinc-300 rounded-tl-none"
-                                                            )}>
-                                                                {msg.content || (msg.role === 'assistant' && <div className="flex gap-1 py-1"><div className="w-1 h-1 bg-brand rounded-full animate-bounce" /><div className="w-1 h-1 bg-brand rounded-full animate-bounce [animation-delay:0.2s]" /><div className="w-1 h-1 bg-brand rounded-full animate-bounce [animation-delay:0.4s]" /></div>)}
-                                                            </div>
+                                                        <div key={i} className="space-y-1">
+                                                            {msg.role === 'user' ? (
+                                                                <div className="flex justify-end">
+                                                                    <div className="max-w-[85%] px-4 py-3 rounded-2xl bg-white/[0.03] border border-zinc-800 text-[13px] text-zinc-300 leading-relaxed">
+                                                                        {msg.content}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="space-y-2">
+                                                                    {msg.content ? (
+                                                                        <div className="text-[13px] leading-relaxed">
+                                                                            <MarkdownRenderer content={msg.content} />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="flex items-center gap-2 py-2">
+                                                                            <div className="flex gap-1">
+                                                                                <div className="w-1.5 h-1.5 bg-zinc-600 rounded-full animate-pulse" />
+                                                                                <div className="w-1.5 h-1.5 bg-zinc-600 rounded-full animate-pulse [animation-delay:0.15s]" />
+                                                                                <div className="w-1.5 h-1.5 bg-zinc-600 rounded-full animate-pulse [animation-delay:0.3s]" />
+                                                                            </div>
+                                                                            <span className="text-[10px] text-zinc-700 italic">正在检索记忆...</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))
                                                 )}
                                                 <div id="chat-bottom" />
                                             </div>
 
-                                            {/* Input Area */}
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={chatQuery}
-                                                    onChange={(e) => setChatQuery(e.target.value)}
-                                                    onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                                                    placeholder="输入问题，深挖博主思考..."
-                                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-4 pr-12 text-xs text-white placeholder:text-zinc-600 outline-none focus:border-brand/40 transition-all"
-                                                />
-                                                <button
-                                                    onClick={handleSendChat}
-                                                    disabled={!chatQuery.trim() || sendingChat}
-                                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-brand hover:text-white disabled:opacity-30 disabled:hover:text-brand transition-colors"
-                                                >
-                                                    {sendingChat ? <RefreshCw size={16} className="animate-spin" /> : <TrendingUp size={16} className="rotate-90" />}
-                                                </button>
+                                            {/* Input Area - Minimalist */}
+                                            <div className="px-6 py-4 border-t border-white/5">
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={chatQuery}
+                                                        onChange={(e) => setChatQuery(e.target.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                                                        placeholder="与思想对话..."
+                                                        className="w-full bg-white/[0.02] border border-white/5 rounded-xl py-3 pl-4 pr-12 text-[13px] text-zinc-300 placeholder:text-zinc-700 outline-none focus:border-zinc-700 transition-all"
+                                                    />
+                                                    <button
+                                                        onClick={handleSendChat}
+                                                        disabled={!chatQuery.trim() || sendingChat}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-30 transition-colors"
+                                                    >
+                                                        {sendingChat ? <RefreshCw size={14} className="animate-spin" /> : <TrendingUp size={14} className="rotate-90" />}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </motion.div>
                                     )}
