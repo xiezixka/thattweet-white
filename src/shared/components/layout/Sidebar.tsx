@@ -4,21 +4,24 @@ import {
     BrainCircuit,
     BarChart3,
     LineChart,
-    Settings2,
-    ChevronLeft,
-    ChevronRight
+    Settings2
 } from 'lucide-react';
 import { useUIStore, ViewType } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { motion } from 'framer-motion';
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-export const Sidebar: React.FC = () => {
-    const { activeView, setActiveView, sidebarCollapsed, toggleSidebar } = useUIStore();
+interface SidebarProps {
+    forceExpand?: boolean;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false }) => {
+    const { activeView, setActiveView } = useUIStore();
     const { t } = useTranslation();
 
     const navItems = [
@@ -32,73 +35,66 @@ export const Sidebar: React.FC = () => {
     return (
         <aside
             className={cn(
-                "h-screen flex flex-col relative transition-[width] duration-300 ease-in-out glass-panel border-r border-white/5 select-none shrink-0 will-change-[width]",
-                sidebarCollapsed ? "w-[88px]" : "w-[260px]"
+                "h-screen flex flex-col relative transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] bg-zinc-900/95 backdrop-blur-xl border-r border-white/10 select-none shrink-0 overflow-hidden shadow-[20px_0_50px_rgba(0,0,0,0.5)]",
+                forceExpand ? "w-[200px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-full"
             )}
         >
-            {/* Logo Area */}
-            <div className={cn(
-                "h-20 flex items-center gap-4 overflow-hidden transition-all duration-300",
-                sidebarCollapsed ? "justify-center px-0" : "px-6"
-            )}>
-                <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 shadow-lg shadow-black/20">
-                    <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
+            {/* Header: Logo Only */}
+            <div className="h-20 flex items-center px-6 shrink-0 border-b border-white/[0.05]">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-xl">
+                        <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
+                    </div>
+                    <span className="font-bold text-base tracking-tight text-white">ThatTweet</span>
                 </div>
-                <span className={cn(
-                    "font-bold text-xl tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent whitespace-nowrap transition-opacity duration-300",
-                    sidebarCollapsed ? "opacity-0 w-0 hidden" : "opacity-100"
-                )}>
-                    ThatTweet
-                </span>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-4 space-y-2 mt-4 overflow-hidden">
-                {navItems.map((item) => (
-                    <button
-                        key={item.id}
-                        onClick={() => setActiveView(item.id as ViewType)}
-                        className={cn(
-                            "w-full flex items-center gap-4 px-3 py-3.5 rounded-2xl transition-all group relative overflow-hidden",
-                            activeView === item.id
-                                ? "bg-brand/10 text-brand"
-                                : "text-zinc-500 hover:bg-white/5 hover:text-zinc-200",
-                            sidebarCollapsed && "justify-center px-0"
-                        )}
-                        title={sidebarCollapsed ? item.label : undefined}
-                    >
-                        {/* Active Indicator Background */}
-                        {activeView === item.id && (
-                            <div className="absolute inset-0 bg-brand/5 opacity-50" />
-                        )}
-
-                        <item.icon
-                            size={24}
-                            strokeWidth={activeView === item.id ? 2.5 : 2}
+            <nav className="flex-1 px-3 space-y-1 mt-6">
+                {navItems.map((item) => {
+                    const isActive = activeView === item.id;
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => setActiveView(item.id as ViewType)}
                             className={cn(
-                                "shrink-0 transition-transform duration-300",
-                                activeView === item.id ? "scale-105" : "group-hover:scale-110"
+                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all relative group",
+                                isActive
+                                    ? "text-brand"
+                                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"
                             )}
-                        />
+                        >
+                            {isActive && (
+                                <motion.div
+                                    layoutId="sidebar-active-bg"
+                                    className="absolute inset-0 bg-brand/10 border border-brand/20 rounded-xl"
+                                    initial={false}
+                                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                />
+                            )}
 
-                        <span className={cn(
-                            "font-medium whitespace-nowrap transition-all duration-300 origin-left",
-                            sidebarCollapsed ? "opacity-0 w-0 hidden scale-90" : "opacity-100 scale-100"
-                        )}>
-                            {item.label}
-                        </span>
-                    </button>
-                ))}
+                            <item.icon
+                                size={18}
+                                strokeWidth={isActive ? 2.5 : 2}
+                                className={cn(
+                                    "shrink-0 transition-transform duration-300 z-10",
+                                    isActive ? "scale-100" : "group-hover:translate-x-0.5"
+                                )}
+                            />
+
+                            <span className="text-[13px] font-medium whitespace-nowrap z-10">
+                                {item.label}
+                            </span>
+                        </button>
+                    );
+                })}
             </nav>
 
-            {/* Footer / Toggle */}
-            <div className="p-4 flex justify-center">
-                <button
-                    onClick={toggleSidebar}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-zinc-600 hover:text-white transition-colors"
-                >
-                    {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-                </button>
+            {/* Bottom Section */}
+            <div className="p-5 mt-auto border-t border-white/[0.05]">
+                <div className="text-[10px] text-zinc-500 font-medium tracking-tight">
+                    Hover edge to reveal
+                </div>
             </div>
         </aside>
     );

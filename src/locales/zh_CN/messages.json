@@ -24,22 +24,22 @@
     "message": "进入管理控制台"
   },
   "nav_feed": {
-    "message": "见闻"
+    "message": "拾遗"
   },
   "nav_intelligence": {
     "message": "沉思"
   },
   "nav_stats": {
-    "message": "数据看板"
+    "message": "量观"
   },
   "nav_analytics": {
-    "message": "深度透视"
+    "message": "入微"
   },
   "nav_settings": {
     "message": "实验室"
   },
   "feed_title": {
-    "message": "见闻录"
+    "message": "拾遗簿"
   },
   "feed_subtitle": {
     "message": "捕捉流动的思考与灵感"
@@ -366,7 +366,7 @@
     "message": "累积多少条推文后才触发 AI 分析 (减少 API 调用频率)"
   },
   "stats_title": {
-    "message": "数据看板"
+    "message": "量观"
   },
   "stats_subtitle": {
     "message": "深度洞察你的推文知识库"
@@ -534,7 +534,7 @@
     "message": "博主专家引擎"
   },
   "settings_section_expert_engine_desc": {
-    "message": "深度透视中“博主专家问答”的专用 API (留空则默认使用沉思设置)"
+    "message": "入微中“博主专家问答”的专用 API (留空则默认使用沉思设置)"
   },
   "analytics_analyzing": {
     "message": "正在深度挖掘中..."

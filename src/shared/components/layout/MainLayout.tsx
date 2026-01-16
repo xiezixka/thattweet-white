@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar';
 import { useUIStore } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PanelLeftOpen } from 'lucide-react'; // Added import for PanelLeftOpen
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -11,15 +12,42 @@ interface MainLayoutProps {
 export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const { activeView } = useUIStore();
     const { t } = useTranslation();
+    const [isHovered, setIsHovered] = React.useState(false);
+    const hoverTimeoutRef = React.useRef<number | null>(null);
+
+    const handleMouseEnter = () => {
+        if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
+        setIsHovered(true);
+    };
+
+    const handleMouseLeave = () => {
+        hoverTimeoutRef.current = window.setTimeout(() => {
+            setIsHovered(false);
+        }, 300); // 300ms delay to prevent accidental closing
+    };
 
     return (
-        <div className="flex h-screen w-screen overflow-hidden bg-zinc-950">
-            {/* 侧边导航 */}
-            <Sidebar />
+        <div className="flex h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100 relative">
+            {/* 边缘触发感应区 (最左侧 16px) */}
+            <div
+                className="fixed left-0 top-0 bottom-0 w-4 z-[60]"
+                onMouseEnter={handleMouseEnter}
+            />
 
-            {/* 主画布 */}
+            {/* 侧边导航 (作为 Overlay 浮层) */}
+            <div
+                className="fixed left-0 top-0 bottom-0 z-50 pointer-events-none"
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+            >
+                <div className="pointer-events-auto h-full">
+                    <Sidebar forceExpand={isHovered} />
+                </div>
+            </div>
+
+            {/* 主画布 (始终占据全屏，不被挤压) */}
             <main
-                className="flex-1 relative overflow-hidden flex flex-col"
+                className="flex-1 relative overflow-hidden flex flex-col z-10"
                 style={{ contain: 'content' } as React.CSSProperties}
             >
                 {/* 页面切换动效 */}
