@@ -32,9 +32,14 @@ function shouldSaveTweet(tweet: Tweet): boolean {
     return tweet.id === mainTweetId;
   }
 
-  // 3. 其他页面 (如个人主页 Profile, 列表 List 等)
-  // 根据用户指令 "Only ... home ... search ... acquire"，这里应当返回 false。
-  return false;
+  // 3. 避免在系统页面抓取 (Notification, Messages, Settings, Bookmarks, Explore)
+  const systemPages = ['/notifications', '/messages', '/settings', '/explore', '/i/', '/bookmarks', '/compose/'];
+  if (systemPages.some(p => path.startsWith(p))) {
+    return false;
+  }
+
+  // 4. 其他页面 (默认视为用户主页 Profile, 列表 List 等) -> 允许抓取
+  return true;
 }
 
 // 初始化 DOM 观察者 (作为兜底)

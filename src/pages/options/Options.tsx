@@ -6,6 +6,7 @@ import { FeedView } from '../../features/feed/FeedView';
 import { IntelligenceView } from '../../features/intelligence/IntelligenceView';
 import { SettingsView } from '../../features/settings/SettingsView';
 import { StatsView } from '../../features/stats/StatsView';
+import { AnalyticsView } from '../../features/analytics/AnalyticsView';
 import { MediaLightbox } from '../../shared/components/MediaLightbox';
 
 const Options: React.FC = () => {
@@ -17,6 +18,8 @@ const Options: React.FC = () => {
         return <FeedView />;
       case 'intelligence':
         return <IntelligenceView />;
+      case 'analytics':
+        return <AnalyticsView />;
       case 'stats':
         return <StatsView />;
       case 'settings':

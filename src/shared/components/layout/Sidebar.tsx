@@ -3,6 +3,7 @@ import {
     LayoutDashboard,
     BrainCircuit,
     BarChart3,
+    LineChart,
     Settings2,
     ChevronLeft,
     ChevronRight
@@ -24,6 +25,7 @@ export const Sidebar: React.FC = () => {
         { id: 'feed', icon: LayoutDashboard, label: t('nav_feed') },
         { id: 'intelligence', icon: BrainCircuit, label: t('nav_intelligence') },
         { id: 'stats', icon: BarChart3, label: t('nav_stats') },
+        { id: 'analytics', icon: LineChart, label: t('nav_analytics') },
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];
 

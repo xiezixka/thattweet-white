@@ -19,6 +19,8 @@ interface TweetCardProps {
     onTagClick?: (tag: string) => void;
 }
 
+import { normalizeTwitterImage } from '../utils/image';
+
 const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -30,26 +32,6 @@ const getScoreStyles = (score: number) => {
     if (score >= 70) return 'text-amber-400 bg-amber-400/10 border-amber-400/20 shadow-md shadow-amber-400/10';
     if (score >= 40) return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
     return 'text-zinc-500 bg-zinc-500/10 border-white/5';
-};
-
-/**
- * 🛠️ 强力 URL 规范化 (增加容错与推导)
- */
-const normalizeTwitterUrl = (url: string | undefined): string => {
-    if (!url) return '';
-
-    // 🛡️ 拦截 blob URL，由于跨域和生命周期限制，它们在扩展控制台必然失败
-    if (url.startsWith('blob:')) return '';
-
-    let processed = url.replace('http:', 'https:');
-
-    // 只对媒体图 (media) 追加参数，头像保持原样！
-    if (processed.includes('pbs.twimg.com') && !processed.includes('/profile_images/')) {
-        if (!processed.includes('?')) {
-            processed += '?format=jpg&name=large';
-        }
-    }
-    return processed;
 };
 
 export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, mode = 'masonry', onAuthorClick, onTagClick }) => {
@@ -80,7 +62,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
     const hasLongText = tweet.text.length > 140;
 
     // 1. 头像处理 (增加 fallback 状态)
-    const avatarUrl = React.useMemo(() => normalizeTwitterUrl(author?.avatar), [author?.avatar]);
+    const avatarUrl = React.useMemo(() => normalizeTwitterImage(author?.avatar, 'avatar'), [author?.avatar]);
 
     // 2. 媒体处理 (多图逻辑)
     const mediaItems = tweet.media || [];
@@ -90,12 +72,13 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
         <div
             onClick={() => window.open(tweet.tweetUrl, '_blank')}
             className={cn(
-                "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all duration-300 cursor-pointer hover:shadow-lg hover:border-white/10",
+                "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all cursor-pointer hover:shadow-lg hover:border-white/10",
                 "p-3 gap-2 border-b border-white/5",
                 "break-inside-avoid w-full box-border mb-4",
                 "select-none",
-                // 性能优化：硬件加速与渲染隔离
-                "will-change-transform animate-in fade-in duration-700 ease-out"
+                // 高级数据看板动效：渐显 + 缩放 + 向上滑入
+                "animate-in fade-in zoom-in-[0.98] slide-in-from-bottom-2 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                "will-change-transform"
             )}
             style={{
                 contentVisibility: 'auto',
@@ -253,7 +236,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                         }}
                     >
                         {mediaItems.map((item, idx) => {
-                            const thumb = normalizeTwitterUrl(item.previewUrl || (item.type === 'image' ? item.url : ''));
+                            const thumb = normalizeTwitterImage(item.previewUrl || (item.type === 'image' ? item.url : ''), 'media');
                             return (
                                 <div
                                     key={idx}

@@ -154,7 +154,7 @@ function parseDateValue(value: string): number | undefined {
 /**
  * 根据解析后的查询过滤推文
  */
-export function filterTweetsByQuery(tweets: Tweet[], parsed: ParsedQuery): Tweet[] {
+export function filterTweetsByQuery<T extends Tweet>(tweets: T[], parsed: ParsedQuery): T[] {
     return tweets.filter(tweet => {
         // 1. 文本搜索 (在正文、摘要、理由中匹配)
         if (parsed.text) {

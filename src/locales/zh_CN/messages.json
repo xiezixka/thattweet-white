@@ -32,6 +32,9 @@
   "nav_stats": {
     "message": "数据看板"
   },
+  "nav_analytics": {
+    "message": "深度透视"
+  },
   "nav_settings": {
     "message": "实验室"
   },

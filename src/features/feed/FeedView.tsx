@@ -77,12 +77,14 @@ export const FeedView: React.FC = () => {
     // 检测是否使用了高级语法
     const hasAdvancedSyntax = /\w+:/.test(searchQuery);
 
-    // 响应式布局：根据宽度决定列数
+    // 响应式布局：根据容器宽度决定列数
     const [columnCount, setColumnCount] = React.useState(3);
+    const containerRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
-        const updateColumns = () => {
-            const width = window.innerWidth;
+        if (!containerRef.current) return;
+
+        const updateColumns = (width: number) => {
             if (width < 640) setColumnCount(1);
             else if (width < 900) setColumnCount(2);
             else if (width < 1200) setColumnCount(3);
@@ -91,13 +93,21 @@ export const FeedView: React.FC = () => {
             else setColumnCount(6);
         };
 
-        updateColumns();
-        window.addEventListener('resize', updateColumns);
-        return () => window.removeEventListener('resize', updateColumns);
+        // 初始化一次
+        updateColumns(containerRef.current.clientWidth);
+
+        const observer = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                updateColumns(entry.contentRect.width);
+            }
+        });
+
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
     }, []);
 
     return (
-        <div className="p-4 lg:p-8 w-full min-h-screen flex flex-col">
+        <div ref={containerRef} className="p-4 lg:p-8 w-full min-h-screen flex flex-col">
             {/* Header Area ... */}
             <header className="relative w-full flex items-center justify-between mb-12 px-2">
                 {/* Left Area */}
@@ -226,20 +236,31 @@ export const FeedView: React.FC = () => {
                             <div key={colIndex} className="flex-1 flex flex-col gap-6 min-w-0">
                                 {displayedTweets
                                     .filter((_, idx) => idx % columnCount === colIndex)
-                                    .map((item) => {
+                                    .map((item, localIdx) => {
+                                        // 修正 TypeScript: Tweet 类型中 author 可能是 string，而 TweetCard 需要 UserCache
+                                        // 这里进行防御性处理并强制转型
                                         const author = (typeof item.author === 'object' && item.author !== null)
                                             ? item.author
-                                            : { name: 'Unknown', handle: 'unknown', avatar: '' };
+                                            : { id: 'unknown', name: 'Unknown', handle: 'unknown', avatar: '', updatedAt: 0 };
+
+                                        // 计算交错延迟：同一批次内的卡片依次出现
+                                        // 这里的 localIdx * 40ms 能产生美妙的阶梯加载感
+                                        const delay = `${(localIdx % 40) * 40}ms`;
 
                                         return (
-                                            <TweetCard
+                                            <div
                                                 key={item.id}
-                                                tweet={item}
-                                                author={author as any}
-                                                mode="masonry"
-                                                onAuthorClick={(auth) => setSearchQuery(`from:${auth.handle || auth.name}`)}
-                                                onTagClick={(tag) => setSearchQuery(`tag:${tag}`)}
-                                            />
+                                                style={{ animationDelay: delay, animationFillMode: 'backwards' }}
+                                                className="animate-in fade-in zoom-in-[0.98] slide-in-from-bottom-2 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                                            >
+                                                <TweetCard
+                                                    tweet={item}
+                                                    author={author as any}
+                                                    mode="masonry"
+                                                    onAuthorClick={(auth) => setSearchQuery(`from:${auth.handle || auth.name}`)}
+                                                    onTagClick={(tag) => setSearchQuery(`tag:${tag}`)}
+                                                />
+                                            </div>
                                         );
                                     })}
                             </div>

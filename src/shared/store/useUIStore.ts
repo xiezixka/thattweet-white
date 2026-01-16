@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { MediaItem } from '../types/tweet';
 
-export type ViewType = 'feed' | 'intelligence' | 'stats' | 'settings';
+export type ViewType = 'feed' | 'intelligence' | 'analytics' | 'stats' | 'settings';
 
 interface LightboxState {
     media: MediaItem[];
