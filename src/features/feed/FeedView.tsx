@@ -24,10 +24,14 @@ export const FeedView: React.FC = () => {
     const [searchQuery, setSearchQuery] = React.useState('');
     const [showSyntaxHelp, setShowSyntaxHelp] = React.useState(false);
 
+    // 性能优化：增量渲染
+    const [displayLimit, setDisplayLimit] = React.useState(40);
+    const loadMoreRef = React.useRef<HTMLDivElement>(null);
+
     const filteredTweets = React.useMemo(() => {
         let result = tweets;
 
-        // 使用高级搜索解析器 (已覆盖了旧的过滤逻辑)
+        // 使用高级搜索解析器
         if (searchQuery.trim()) {
             const parsed = parseSearchQuery(searchQuery);
             result = filterTweetsByQuery(result, parsed);
@@ -36,14 +40,67 @@ export const FeedView: React.FC = () => {
         return result;
     }, [tweets, searchQuery]);
 
+    // 只展示限制数量内的推文
+    const displayedTweets = React.useMemo(() => {
+        return filteredTweets.slice(0, displayLimit);
+    }, [filteredTweets, displayLimit]);
+
+    // 当搜索条件变化时，重置展示数量
+    React.useEffect(() => {
+        setDisplayLimit(40);
+    }, [searchQuery]);
+
+    // 提前加载逻辑：使用 IntersectionObserver
+    React.useEffect(() => {
+        if (!loadMoreRef.current) return;
+
+        const observer = new IntersectionObserver((entries) => {
+            // entries[0].isIntersecting 代表 sentinel 进入了（视口 + rootMargin）区域
+            if (entries[0].isIntersecting && displayedTweets.length < filteredTweets.length) {
+                setDisplayLimit(prev => prev + 40);
+            }
+        }, {
+            // 极致无感加载：设置 1500px 的偏移量
+            // 确保用户在距离底部还有 4-5 个屏幕高度时，下一批卡片就已经静默加载完成了
+            rootMargin: '1500px',
+            threshold: 0
+        });
+
+        const currentTarget = loadMoreRef.current;
+        observer.observe(currentTarget);
+
+        return () => {
+            if (currentTarget) observer.unobserve(currentTarget);
+        };
+    }, [displayedTweets.length, filteredTweets.length]);
+
     // 检测是否使用了高级语法
     const hasAdvancedSyntax = /\w+:/.test(searchQuery);
 
+    // 响应式布局：根据宽度决定列数
+    const [columnCount, setColumnCount] = React.useState(3);
+
+    React.useEffect(() => {
+        const updateColumns = () => {
+            const width = window.innerWidth;
+            if (width < 640) setColumnCount(1);
+            else if (width < 900) setColumnCount(2);
+            else if (width < 1200) setColumnCount(3);
+            else if (width < 1500) setColumnCount(4);
+            else if (width < 1800) setColumnCount(5);
+            else setColumnCount(6);
+        };
+
+        updateColumns();
+        window.addEventListener('resize', updateColumns);
+        return () => window.removeEventListener('resize', updateColumns);
+    }, []);
+
     return (
         <div className="p-4 lg:p-8 w-full min-h-screen flex flex-col">
-            {/* 核心 Header: 左右 Title，中间 Search */}
+            {/* Header Area ... */}
             <header className="relative w-full flex items-center justify-between mb-12 px-2">
-                {/* Left: Title Area (fixed width to prevent shifting) */}
+                {/* Left Area */}
                 <div className="w-1/4 shrink-0">
                     <h1 className="text-3xl font-black bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent italic tracking-tight">
                         {t('feed_title')}
@@ -53,7 +110,7 @@ export const FeedView: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Center: Search Area (Absolute or Centered Flex) */}
+                {/* Center Search Area */}
                 <div className="flex-1 flex justify-center px-4">
                     <div className="relative w-full max-w-xl group">
                         <div className={cn(
@@ -80,7 +137,6 @@ export const FeedView: React.FC = () => {
                                 )}
                             />
 
-                            {/* Actions Group (Right) */}
                             <div className="absolute right-4 flex items-center gap-2">
                                 {searchQuery && (
                                     <button
@@ -103,7 +159,6 @@ export const FeedView: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Syntax Menu Dropdown */}
                         {showSyntaxHelp && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setShowSyntaxHelp(false)} />
@@ -122,7 +177,7 @@ export const FeedView: React.FC = () => {
                                                 }}
                                                 className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/5 transition-all group"
                                             >
-                                                <code className="px-2 py-0.5 bg-zinc-800 text-brand text-xs font-mono rounded border border-white/5 group-hover:border-brand/30">
+                                                <code className="px-3 py-0.5 bg-zinc-800 text-brand text-xs font-mono rounded border border-white/5 group-hover:border-brand/30">
                                                     {item.syntax}
                                                 </code>
                                                 <span className="text-[11px] text-zinc-500 font-medium">{item.desc}</span>
@@ -155,10 +210,7 @@ export const FeedView: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Right: Functional/Empty Space (To balance layout) */}
-                <div className="w-1/4 flex justify-end">
-                    {/* 这个区域可以放切换视图模式的按钮或者其他操作 */}
-                </div>
+                <div className="w-1/4" />
             </header>
 
             {/* Masonry Grid */}
@@ -168,19 +220,48 @@ export const FeedView: React.FC = () => {
                 </div>
             ) : (
                 <div className="w-full px-2">
-                    <div className="columns-[320px] gap-6 space-y-6">
-                        {filteredTweets.map((item) => (
-                            <div key={item.id} className="break-inside-avoid">
-                                <TweetCard
-                                    tweet={item}
-                                    author={item.author}
-                                    mode="masonry"
-                                    onAuthorClick={(author) => setSearchQuery(`from:${author.handle || author.name}`)}
-                                    onTagClick={(tag) => setSearchQuery(`tag:${tag}`)}
-                                />
+                    {/* 自适应列数，保持加载更多时的物理顺序稳定性 */}
+                    <div className="flex flex-row gap-6 items-start">
+                        {Array.from({ length: columnCount }).map((_, colIndex) => (
+                            <div key={colIndex} className="flex-1 flex flex-col gap-6 min-w-0">
+                                {displayedTweets
+                                    .filter((_, idx) => idx % columnCount === colIndex)
+                                    .map((item) => {
+                                        const author = (typeof item.author === 'object' && item.author !== null)
+                                            ? item.author
+                                            : { name: 'Unknown', handle: 'unknown', avatar: '' };
+
+                                        return (
+                                            <TweetCard
+                                                key={item.id}
+                                                tweet={item}
+                                                author={author as any}
+                                                mode="masonry"
+                                                onAuthorClick={(auth) => setSearchQuery(`from:${auth.handle || auth.name}`)}
+                                                onTagClick={(tag) => setSearchQuery(`tag:${tag}`)}
+                                            />
+                                        );
+                                    })}
                             </div>
                         ))}
                     </div>
+
+                    {/* Sentinel Element for Infinite Scroll */}
+                    {displayedTweets.length < filteredTweets.length && (
+                        <div
+                            ref={loadMoreRef}
+                            className="h-20 flex items-center justify-center mt-12 mb-8"
+                        >
+                            <Loader2 className="animate-spin text-zinc-800" size={24} />
+                        </div>
+                    )}
+
+                    {/* End of List Text */}
+                    {displayedTweets.length >= filteredTweets.length && filteredTweets.length > 0 && (
+                        <div className="py-12 text-center text-zinc-700 text-[11px] font-bold uppercase tracking-[0.2em] opacity-30">
+                            ~ {t('feed_end_reached') || 'End of archive'} ~
+                        </div>
+                    )}
                 </div>
             )}
         </div>

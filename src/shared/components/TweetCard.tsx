@@ -52,7 +52,7 @@ const normalizeTwitterUrl = (url: string | undefined): string => {
     return processed;
 };
 
-export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'masonry', onAuthorClick, onTagClick }) => {
+export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, mode = 'masonry', onAuthorClick, onTagClick }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
     const [imgFail, setImgFail] = useState(false);
@@ -73,15 +73,14 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
         await db.tweets.delete(tweet.id);
     };
 
-    const scoreStyles = tweet.aiScore !== undefined ? getScoreStyles(tweet.aiScore) : '';
+    const scoreStyles = React.useMemo(() =>
+        tweet.aiScore !== undefined ? getScoreStyles(tweet.aiScore) : ''
+        , [tweet.aiScore]);
+
     const hasLongText = tweet.text.length > 140;
 
     // 1. 头像处理 (增加 fallback 状态)
-    const avatarUrl = normalizeTwitterUrl(author?.avatar);
-
-    // 调试日志 (已关闭)
-    // if (!avatarUrl) console.log(`[Card] No avatar for ${author?.name}`, author);
-    // else console.log(`[Card] Avatar for ${author?.name}:`, avatarUrl);
+    const avatarUrl = React.useMemo(() => normalizeTwitterUrl(author?.avatar), [author?.avatar]);
 
     // 2. 媒体处理 (多图逻辑)
     const mediaItems = tweet.media || [];
@@ -94,8 +93,18 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                 "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all duration-300 cursor-pointer hover:shadow-lg hover:border-white/10",
                 "p-3 gap-2 border-b border-white/5",
                 "break-inside-avoid w-full box-border mb-4",
-                "select-none" // 阻止拖动时选中文本
-            )}>
+                "select-none",
+                // 性能优化：硬件加速与渲染隔离
+                "will-change-transform animate-in fade-in duration-700 ease-out"
+            )}
+            style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: '1px 400px',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transform: 'translateZ(0)',
+            } as React.CSSProperties}
+        >
             {/* Header Area */}
             <div className="flex items-center justify-between mb-1">
                 <div
@@ -113,6 +122,7 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                                 className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
                                 onError={() => setImgFail(true)}
+                                loading="lazy"
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center bg-brand/10 text-brand">
@@ -193,7 +203,7 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                     "text-zinc-300 break-words transition-all duration-300",
                     "text-[14px] leading-[1.4]",
                     !isExpanded && isMasonry && "line-clamp-5",
-                    "select-text" // 允许正文被选中
+                    "select-text"
                 )}>
                     {tweet.text || "(No Text Content)"}
                 </div>
@@ -231,11 +241,11 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                 )}
             </div>
 
-            {/* Media/Video Area (Horizontal Scroll + Lightbox) */}
+            {/* Media Area */}
             {hasMedia && (
                 <div className="relative group/media mt-1">
                     <div
-                        className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar rounded-xl bg-zinc-900 border border-white/5 transition-colors group-hover:border-white/10"
+                        className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar rounded-xl bg-zinc-900/50 border border-white/5 transition-colors group-hover:border-white/10"
                         onScroll={(e) => {
                             const container = e.currentTarget;
                             const index = Math.round(container.scrollLeft / container.clientWidth);
@@ -247,18 +257,21 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                             return (
                                 <div
                                     key={idx}
-                                    className="flex-none w-full aspect-video snap-center relative overflow-hidden flex items-center justify-center cursor-zoom-in"
+                                    className="flex-none w-full aspect-video snap-center relative overflow-hidden flex items-center justify-center cursor-zoom-in bg-white/[0.02]"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         openLightbox(mediaItems, idx, tweet.mediaAnalysis);
                                     }}
                                 >
-                                    <img
-                                        src={thumb}
-                                        className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                                        alt={`Media ${idx + 1}`}
-                                        referrerPolicy="no-referrer"
-                                    />
+                                    <picture className="w-full h-full">
+                                        <img
+                                            src={thumb}
+                                            className="w-full h-full object-cover transition-all duration-700 hover:scale-105"
+                                            alt={`Media ${idx + 1}`}
+                                            referrerPolicy="no-referrer"
+                                            loading="lazy"
+                                        />
+                                    </picture>
                                     {item.type === 'video' && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/10 transition-colors">
                                             <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 text-white shadow-2xl scale-95 group-hover/media:scale-100 transition-transform">
@@ -266,8 +279,6 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                                             </div>
                                         </div>
                                     )}
-
-                                    {/* Restore Media Count (Subtle Bottom Right) */}
                                     {mediaItems.length > 1 && (
                                         <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/40 backdrop-blur-md rounded text-[9px] font-black text-white/70 border border-white/5 flex items-center gap-1 group-hover/media:opacity-0 transition-opacity">
                                             <Layers size={9} />
@@ -279,7 +290,6 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                         })}
                     </div>
 
-                    {/* Navigation Dots */}
                     {mediaItems.length > 1 && (
                         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1 round-full bg-black/20 backdrop-blur-sm rounded-full opacity-0 group-hover/media:opacity-100 transition-opacity pointer-events-none">
                             {mediaItems.map((_, idx) => (
@@ -312,8 +322,6 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
                             const { db } = await import('../../core/storage/db');
                             const newStatus = !tweet.isBookmarked;
                             await db.tweets.update(tweet.id, { isBookmarked: newStatus });
-
-                            // 如果是点击“收藏”，则强制触发一次即时的深度重分析 (VLM + AI)
                             if (newStatus) {
                                 chrome.runtime.sendMessage({
                                     type: 'REANALYZE_TWEET',
@@ -350,4 +358,4 @@ export const TweetCard: React.FC<TweetCardProps> = ({ tweet, author, mode = 'mas
             </div>
         </div>
     );
-};
+});

@@ -264,14 +264,37 @@ export class VisionService {
                 }
 
                 const data = await response.json();
-                const message = data.choices?.[0]?.message;
-                const rawContent = message?.content || message?.reasoning_content;
+
+                // Enhanced response parsing: check multiple possible response structures
+                const choice = data.choices?.[0];
+                const message = choice?.message;
+
+                // Try multiple possible content fields
+                let rawContent = message?.content
+                    || message?.text
+                    || message?.reasoning_content
+                    || choice?.text  // Some APIs put text directly on choice
+                    || (typeof message === 'string' ? message : null); // Some APIs return message as string directly
+
+                // If still no content, check for error messages in the response
+                if (!rawContent && data.error) {
+                    console.error('[VisionService] API returned error:', data.error);
+                    throw new Error(`API error: ${data.error.message || JSON.stringify(data.error)}`);
+                }
 
                 console.log(`[VisionService] Raw VLM Response Content:`, rawContent);
 
                 if (!rawContent) {
-                    console.error('[VisionService] VLM Response missing content:', data);
-                    throw new Error('Empty response from VLM');
+                    // Log the full response structure for debugging
+                    console.error('[VisionService] VLM Response missing content. Full response structure:', JSON.stringify(data, null, 2));
+                    console.error('[VisionService] Response keys:', Object.keys(data));
+                    if (data.choices) {
+                        console.error('[VisionService] choices[0] keys:', data.choices[0] ? Object.keys(data.choices[0]) : 'no choices');
+                        if (data.choices[0]?.message) {
+                            console.error('[VisionService] message keys:', Object.keys(data.choices[0].message));
+                        }
+                    }
+                    throw new Error('Empty response from VLM - could not find content in response');
                 }
 
                 // 尝试解析 JSON (更加鲁棒的提取方式)

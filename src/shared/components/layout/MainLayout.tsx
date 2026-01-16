@@ -18,7 +18,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             <Sidebar />
 
             {/* 主画布 */}
-            <main className="flex-1 relative overflow-hidden flex flex-col">
+            <main
+                className="flex-1 relative overflow-hidden flex flex-col"
+                style={{ contain: 'content' } as React.CSSProperties}
+            >
                 {/* 页面切换动效 */}
                 <AnimatePresence mode="wait">
                     <motion.div

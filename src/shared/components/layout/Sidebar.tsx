@@ -30,7 +30,7 @@ export const Sidebar: React.FC = () => {
     return (
         <aside
             className={cn(
-                "h-screen flex flex-col relative transition-all duration-300 ease-in-out glass-panel border-r border-white/5 select-none shrink-0",
+                "h-screen flex flex-col relative transition-[width] duration-300 ease-in-out glass-panel border-r border-white/5 select-none shrink-0 will-change-[width]",
                 sidebarCollapsed ? "w-[88px]" : "w-[260px]"
             )}
         >
