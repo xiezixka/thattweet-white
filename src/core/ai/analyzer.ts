@@ -246,7 +246,6 @@ class OpenAIAdapter implements AIProviderAdapter {
                         { role: 'system', content: 'You are an expert profiler. Return valid JSON.' },
                         { role: 'user', content: prompt }
                     ],
-                    // response_format: { type: 'json_object' }, // 保持兼容性，暂不开启
                     temperature: 0.5
                 })
             });
@@ -274,6 +273,145 @@ class OpenAIAdapter implements AIProviderAdapter {
             throw new Error(e.message || "Profile generation failed");
         }
     }
+
+    async chatWithAuthorExpert(query: string, tweets: Tweet[], settings: AISettings): Promise<string> {
+        const apiKey = settings.expertApiKey || settings.chatApiKey || settings.apiKey;
+        let baseUrl = settings.expertBaseUrl || settings.chatBaseUrl || settings.baseUrl || 'https://openrouter.ai/api/v1';
+        const modelToUse = settings.expertModel || settings.chatModel || settings.model || 'mistralai/mistral-7b-instruct:free';
+
+        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+        const url = `${baseUrl}/chat/completions`;
+
+        // 构造 RAG Context
+        const context = tweets.slice(0, 20).map((t, i) => {
+            return `[Tweet ${i + 1}]: ${t.text}`;
+        }).join('\n\n');
+
+        const systemPrompt = [
+            "You are an expert analyst who has studied this author's tweets deeply.",
+            "Use the provided TWEET CONTEXT to answer the user's question about the author.",
+            "If the answer is not in the context, say you don't know based on existing data.",
+            "Keep the tone professional and analytical.",
+            "",
+            "[TWEET CONTEXT]",
+            context
+        ].join('\n');
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                    'X-Title': 'ThatTweet'
+                },
+                body: JSON.stringify({
+                    model: modelToUse,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: query }
+                    ],
+                    temperature: 0.7
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`API Error ${response.status}: ${errText}`);
+            }
+
+            const data = await response.json();
+            return data.choices?.[0]?.message?.content || "No response.";
+        } catch (e: any) {
+            console.error("[Chat Expert Failed]", e);
+            return `分析失败: ${e.message}`;
+        }
+    }
+
+    async chatWithAuthorExpertStream(
+        query: string,
+        tweets: Tweet[],
+        settings: AISettings,
+        onChunk: (text: string) => void
+    ): Promise<void> {
+        const apiKey = settings.expertApiKey || settings.chatApiKey || settings.apiKey;
+        let baseUrl = settings.expertBaseUrl || settings.chatBaseUrl || settings.baseUrl || 'https://openrouter.ai/api/v1';
+        const modelToUse = settings.expertModel || settings.chatModel || settings.model || 'mistralai/mistral-7b-instruct:free';
+
+        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+        const url = `${baseUrl}/chat/completions`;
+
+        const context = tweets.slice(0, 20).map((t, i) => `[Tweet ${i + 1}]: ${t.text}`).join('\n\n');
+        const systemPrompt = [
+            "You are an expert analyst who has studied this author's tweets deeply.",
+            "Use the provided TWEET CONTEXT to answer the user's question about the author.",
+            "If the answer is not in the context, say you don't know based on existing data.",
+            "Keep the tone professional and analytical.",
+            "",
+            "[TWEET CONTEXT]",
+            context
+        ].join('\n');
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                    'X-Title': 'ThatTweet'
+                },
+                body: JSON.stringify({
+                    model: modelToUse,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: query }
+                    ],
+                    temperature: 0.7,
+                    stream: true
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`API Error ${response.status}: ${errText}`);
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) return;
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                buffer += chunk;
+
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const cleanLine = line.replace(/^data: /, '').trim();
+                    if (!cleanLine || cleanLine === '[DONE]') continue;
+
+                    try {
+                        const json = JSON.parse(cleanLine);
+                        const content = json.choices?.[0]?.delta?.content;
+                        if (content) onChunk(content);
+                    } catch (e) {
+                        // Ignore partial JSON
+                    }
+                }
+            }
+        } catch (e: any) {
+            console.error("[Stream Chat Failed]", e);
+            throw e;
+        }
+    }
 }
 
 /**
@@ -292,6 +430,38 @@ class AnalyzerManager {
 
     async analyzeAuthorProfile(tweets: Tweet[], settings: AISettings) {
         return this.adapter.generateProfile(tweets, settings);
+    }
+
+    async chatWithAuthorExpert(query: string, tweets: Tweet[], settings: AISettings) {
+        return this.adapter.chatWithAuthorExpert(query, tweets, settings);
+    }
+
+    async chatWithAuthorExpertStream(query: string, tweets: Tweet[], settings: AISettings, onChunk: (text: string) => void) {
+        return this.adapter.chatWithAuthorExpertStream(query, tweets, settings, onChunk);
+    }
+
+    async fetchAvailableModels(baseUrl: string, apiKey: string): Promise<string[]> {
+        try {
+            const url = `${baseUrl.replace(/\/$/, '')}/models`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                    'X-Title': 'ThatTweet'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch models: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return (data.data || []).map((m: any) => m.id);
+        } catch (e: any) {
+            console.error("[Fetch Models Failed]", e);
+            throw e;
+        }
     }
 }
 

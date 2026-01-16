@@ -497,6 +497,9 @@
   "analytics_avg_length": {
     "message": "平均字数"
   },
+  "analytics_ai_profile": {
+    "message": "AI 智慧画像"
+  },
   "analytics_ai_insight": {
     "message": "AI 洞察"
   },
@@ -520,5 +523,26 @@
   },
   "analytics_filter_placeholder": {
     "message": "搜索博主姓名..."
+  },
+  "settings_section_profile_engine": {
+    "message": "AI 画像引擎"
+  },
+  "settings_section_profile_engine_desc": {
+    "message": "配置生成博主画像的专用 API (留空则默认使用沉思设置)"
+  },
+  "settings_section_expert_engine": {
+    "message": "博主专家引擎"
+  },
+  "settings_section_expert_engine_desc": {
+    "message": "深度透视中“博主专家问答”的专用 API (留空则默认使用沉思设置)"
+  },
+  "analytics_analyzing": {
+    "message": "正在深度挖掘中..."
+  },
+  "analytics_sync_suggest": {
+    "message": "新增 {{count}} 条见闻，建议同步"
+  },
+  "analytics_up_to_date": {
+    "message": "当前画像已是最新"
   }
 }

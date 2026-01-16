@@ -29,6 +29,11 @@ export interface AISettings {
     profileBaseUrl: string;
     profileModel: string;
 
+    // 3.2 Expert Chat AI (Independent)
+    expertApiKey: string;
+    expertBaseUrl: string;
+    expertModel: string;
+
     // 4. RAG (Embeddings & Retrieval)
     ragEnabled: boolean;
     ragApiKey: string;
@@ -79,10 +84,14 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
     chatBaseUrl: 'https://openrouter.ai/api/v1',
     chatModel: 'xiaomi/mimo-v2-flash:free',
 
-    // New: Profile AI (Dedicated)
     profileApiKey: '',
     profileBaseUrl: 'https://openrouter.ai/api/v1',
     profileModel: 'mistralai/mistral-7b-instruct:free',
+
+    // New: Expert Chat AI (Dedicated)
+    expertApiKey: '',
+    expertBaseUrl: 'https://openrouter.ai/api/v1',
+    expertModel: 'xiaomi/mimo-v2-flash:free',
 
     ragEnabled: false,
     ragApiKey: '',

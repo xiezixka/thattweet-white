@@ -29,13 +29,16 @@ import {
     Settings,
     Activity,
     BookOpen,
-    ScanFace
+    ScanFace,
+    ChevronDown,
+    Globe
 } from 'lucide-react';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import supportImg from '../../assets/img/支持一下.png';
 import { cn } from '../../shared/utils/cn';
 import { selectBackupDirectory, hasBackupDirectory, BackupResult, importBackupFromFile, ImportResult } from '../../core/backup/backupService';
+import { TweetAnalyzer } from '../../core/ai/analyzer';
 
 // ============ Reorganized Types ============
 type SettingsGroup = 'ai' | 'advanced' | 'intelligence' | 'automation' | 'system';
@@ -189,6 +192,112 @@ const BackupCard: React.FC = () => {
     );
 };
 
+// ============ Helper Components (Moved Out to Fix Focus Loss) ============
+const Card = ({ children, title, icon: Icon, description }: any) => (
+    <section className="bg-white/[0.02] border border-white/[0.05] rounded-[32px] p-8 space-y-8 relative group/card hover:bg-white/[0.03] transition-all duration-500">
+        <div className="absolute top-0 right-0 p-8 text-white/[0.02] pointer-events-none group-hover/card:text-white/[0.04] transition-colors duration-700">
+            {Icon && <Icon size={120} strokeWidth={1} />}
+        </div>
+        <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-2">
+                {Icon && <div className="p-2 bg-brand/10 rounded-xl text-brand"><Icon size={20} /></div>}
+                <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
+            </div>
+            {description && <p className="text-xs text-zinc-500 font-medium mb-8 max-w-lg leading-relaxed">{description}</p>}
+            <div className="space-y-6">
+                {children}
+            </div>
+        </div>
+    </section>
+);
+
+const Field = ({ label, description, children }: any) => (
+    <div className="space-y-2 group/field">
+        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block group-focus-within/field:text-brand transition-colors">
+            {label}
+        </label>
+        {children}
+        {description && <p className="text-[10px] text-zinc-600 font-medium italic">{description}</p>}
+    </div>
+);
+
+// ============ Model Selection Component ============
+const ModelSelect = ({ value, onChange, baseUrl, apiKey, placeholder }: any) => {
+    const [models, setModels] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleFetch = async () => {
+        if (!baseUrl || !apiKey) return;
+        setLoading(true);
+        setError(null);
+        try {
+            const list = await TweetAnalyzer.fetchAvailableModels(baseUrl, apiKey);
+            setModels(list);
+            setIsOpen(true);
+            if (list.length === 0) setError('No models found');
+        } catch (e: any) {
+            console.error("Fetch models failed", e);
+            setError(e.message || 'Fetch failed');
+            setIsOpen(true);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="relative flex gap-2 w-full">
+            <div className="relative flex-1">
+                <input
+                    type="text"
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    placeholder={placeholder}
+                    className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                />
+                {isOpen && (
+                    <div className="absolute z-[100] top-full left-0 right-0 mt-2 max-h-64 overflow-y-auto bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-200 no-scrollbar">
+                        {error ? (
+                            <div className="px-4 py-3 text-[10px] text-zinc-500 italic flex items-center gap-2">
+                                <AlertCircle size={12} className="text-zinc-700" />
+                                {error}
+                            </div>
+                        ) : models.length > 0 ? (
+                            models.map(m => (
+                                <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => {
+                                        onChange(m);
+                                        setIsOpen(false);
+                                    }}
+                                    className={cn(
+                                        "w-full text-left px-4 py-2.5 text-[10px] font-mono rounded-xl transition-all truncate",
+                                        value === m ? "bg-brand text-white shadow-lg shadow-brand/20" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                    )}
+                                >
+                                    {m}
+                                </button>
+                            ))
+                        ) : null}
+                    </div>
+                )}
+            </div>
+            <button
+                type="button"
+                onClick={handleFetch}
+                disabled={loading || !baseUrl || !apiKey}
+                className="px-4 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30"
+                title="Fetch models from API"
+            >
+                {loading ? <Loader2 size={16} className="animate-spin text-brand" /> : <ChevronDown size={16} />}
+            </button>
+            {isOpen && <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />}
+        </div>
+    );
+};
+
 // ============ Main View Component ============
 export const SettingsView: React.FC = () => {
     const { t } = useTranslation();
@@ -198,8 +307,6 @@ export const SettingsView: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [isValidating, setIsValidating] = useState<string | null>(null);
     const [newTag, setNewTag] = useState('');
-    const [availableVLMs, setAvailableVLMs] = useState<string[]>([]);
-    const [isFetchingModels, setIsFetchingModels] = useState(false);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -263,78 +370,6 @@ export const SettingsView: React.FC = () => {
         }
     };
 
-    const handleFetchVLMs = async () => {
-        setIsFetchingModels(true);
-        setStatus('Fetching available models...');
-        try {
-            let apiUrl = '';
-            let apiKeys: string[] = [];
-
-            if (settings.visionProvider === 'siliconflow') {
-                apiUrl = 'https://api.siliconflow.cn/v1/models';
-                if (settings.siliconFlowApiKeys && settings.siliconFlowApiKeys.length > 0) {
-                    apiKeys = settings.siliconFlowApiKeys;
-                } else if (settings.imageKeys && settings.imageKeys.trim()) {
-                    apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
-                } else if (settings.apiKey) {
-                    apiKeys = [settings.apiKey];
-                }
-            } else {
-                apiUrl = 'https://openrouter.ai/api/v1/models';
-                if (settings.visionApiKeyOpenRouter) {
-                    apiKeys = [settings.visionApiKeyOpenRouter];
-                } else if (settings.apiKey && (settings.apiKey.startsWith('sk-or') || settings.baseUrl.includes('openrouter'))) {
-                    apiKeys = [settings.apiKey];
-                }
-            }
-
-            console.log(`[Settings] Fetching ${settings.visionProvider} models with key count:`, apiKeys.length);
-
-            if (apiKeys.length === 0) {
-                setStatus('No API key configured for the selected provider.');
-                return;
-            }
-
-            const response = await fetch(apiUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${apiKeys[0]}`,
-                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
-                    'X-Title': 'ThatTweet'
-                }
-            });
-
-            if (!response.ok) {
-                setStatus(`Failed to fetch models: ${response.status}`);
-                return;
-            }
-
-            const data = await response.json();
-            const models = data.data || [];
-
-            const vlmModels = models
-                .filter((m: any) => {
-                    const id = m.id.toLowerCase();
-
-                    // 如果是 OpenRouter，只筛选带有 ':free' 的模型
-                    if (settings.visionProvider === 'openrouter') {
-                        return id.includes(':free');
-                    }
-
-                    // SiliconFlow 默认显示全部模型
-                    return true;
-                })
-                .map((m: any) => m.id);
-
-            setAvailableVLMs(vlmModels);
-            setStatus(`Found ${vlmModels.length} VLM models`);
-        } catch (err: any) {
-            setStatus(`Error: ${err.message}`);
-        } finally {
-            setIsFetchingModels(false);
-            setTimeout(() => setStatus(''), 5000);
-        }
-    };
 
     const handleVerifyKey = async (type: 'api' | 'vision' | 'chat' | 'rag') => {
         setIsValidating(type);
@@ -412,34 +447,6 @@ export const SettingsView: React.FC = () => {
         { id: 'automation', icon: Terminal, label: t('settings_group_workflow'), sublabel: 'Automation & Tags' },
         { id: 'system', icon: Settings, label: t('settings_group_system'), sublabel: 'Data & Maintenance' },
     ];
-
-    const Card = ({ children, title, icon: Icon, description }: any) => (
-        <section className="bg-white/[0.02] border border-white/[0.05] rounded-[32px] p-8 space-y-8 relative overflow-hidden group/card hover:bg-white/[0.03] transition-all duration-500">
-            <div className="absolute top-0 right-0 p-8 text-white/[0.02] pointer-events-none group-hover/card:text-white/[0.04] transition-colors duration-700">
-                {Icon && <Icon size={120} strokeWidth={1} />}
-            </div>
-            <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-2">
-                    {Icon && <div className="p-2 bg-brand/10 rounded-xl text-brand"><Icon size={20} /></div>}
-                    <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
-                </div>
-                {description && <p className="text-xs text-zinc-500 font-medium mb-8 max-w-lg leading-relaxed">{description}</p>}
-                <div className="space-y-6">
-                    {children}
-                </div>
-            </div>
-        </section>
-    );
-
-    const Field = ({ label, description, children }: any) => (
-        <div className="space-y-2 group/field">
-            <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block group-focus-within/field:text-brand transition-colors">
-                {label}
-            </label>
-            {children}
-            {description && <p className="text-[10px] text-zinc-600 font-medium italic">{description}</p>}
-        </div>
-    );
 
     return (
         <div className="flex h-full bg-[#050505]">
@@ -534,11 +541,12 @@ export const SettingsView: React.FC = () => {
                                         </div>
                                     </Field>
                                     <Field label={t('settings_model')} description={t('settings_model_desc')}>
-                                        <input
-                                            type="text"
+                                        <ModelSelect
                                             value={settings.model}
-                                            onChange={e => handleChange('model', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                            onChange={(v: string) => handleChange('model', v)}
+                                            baseUrl={settings.baseUrl}
+                                            apiKey={settings.apiKey}
+                                            placeholder="gpt-3.5-turbo..."
                                         />
                                     </Field>
                                 </div>
@@ -554,7 +562,7 @@ export const SettingsView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* GROUP 2: ADVANCED (Vision & RAG) */}
+                    {/* GROUP 2: ADVANCED (Vision & RAG & Engines) */}
                     {activeGroup === 'advanced' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <Card title={t('settings_section_vision')} icon={Eye} description={t('settings_vision_keys_desc')}>
@@ -627,37 +635,16 @@ export const SettingsView: React.FC = () => {
 
                                 <div className="space-y-4 pt-4 border-t border-white/5">
                                     <Field label="Vision Model" description={`${settings.visionProvider === 'siliconflow' ? 'SiliconFlow' : 'OpenRouter'} Multi-modal Model Name`}>
-                                        <div className="flex gap-2">
-                                            {availableVLMs.length > 0 ? (
-                                                <select
-                                                    value={settings.visionModel}
-                                                    onChange={e => handleChange('visionModel', e.target.value)}
-                                                    className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:border-brand/40 outline-none transition-all cursor-pointer"
-                                                    style={{ colorScheme: 'dark' }}
-                                                >
-                                                    <option value="" className="bg-zinc-900 text-zinc-400">Select a model...</option>
-                                                    {availableVLMs.map(m => (
-                                                        <option key={m} value={m} className="bg-zinc-900 text-white">{m}</option>
-                                                    ))}
-                                                </select>
-                                            ) : (
-                                                <input
-                                                    type="text"
-                                                    value={settings.visionModel}
-                                                    onChange={e => handleChange('visionModel', e.target.value)}
-                                                    placeholder={settings.visionProvider === 'siliconflow' ? "e.g. Qwen/Qwen2-VL-7B-Instruct" : "e.g. google/gemini-pro-1.5-exp"}
-                                                    className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                                />
-                                            )}
-                                            <button
-                                                onClick={handleFetchVLMs}
-                                                disabled={isFetchingModels}
-                                                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl border border-white/10 transition-all flex items-center gap-1.5 active:scale-95"
-                                            >
-                                                {isFetchingModels ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                                <span className="text-[10px] font-bold">Fetch</span>
-                                            </button>
-                                        </div>
+                                        <ModelSelect
+                                            value={settings.visionModel}
+                                            onChange={(v: string) => handleChange('visionModel', v)}
+                                            baseUrl={settings.visionProvider === 'siliconflow' ? 'https://api.siliconflow.cn/v1' : 'https://openrouter.ai/api/v1'}
+                                            apiKey={settings.visionProvider === 'siliconflow'
+                                                ? (settings.siliconFlowApiKeys[0] || settings.imageKeys.split('\n')[0] || settings.apiKey)
+                                                : (settings.visionApiKeyOpenRouter || settings.apiKey)
+                                            }
+                                            placeholder={settings.visionProvider === 'siliconflow' ? "e.g. Qwen/Qwen2-VL-7B-Instruct" : "e.g. google/gemini-pro-1.5-exp"}
+                                        />
                                     </Field>
 
                                     <div className="grid grid-cols-2 gap-4">
@@ -729,6 +716,70 @@ export const SettingsView: React.FC = () => {
                                     </div>
                                 )}
                             </Card>
+
+                            <Card title={t('settings_section_profile_engine')} icon={ScanFace} description={t('settings_section_profile_engine_desc')}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Field label={`${t('settings_api_key')} (Optional)`}>
+                                        <input
+                                            type="password"
+                                            value={settings.profileApiKey}
+                                            onChange={e => handleChange('profileApiKey', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                            placeholder="Leave empty to use Chat Key"
+                                        />
+                                    </Field>
+                                    <Field label={t('settings_model')}>
+                                        <ModelSelect
+                                            value={settings.profileModel}
+                                            onChange={(v: string) => handleChange('profileModel', v)}
+                                            baseUrl={settings.profileBaseUrl || settings.chatBaseUrl || settings.baseUrl}
+                                            apiKey={settings.profileApiKey || settings.chatApiKey || settings.apiKey}
+                                            placeholder="mistralai/mistral-7b-instruct:free"
+                                        />
+                                    </Field>
+                                </div>
+                                <Field label={t('settings_api_url')}>
+                                    <input
+                                        type="text"
+                                        value={settings.profileBaseUrl}
+                                        onChange={e => handleChange('profileBaseUrl', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                        placeholder="https://openrouter.ai/api/v1"
+                                    />
+                                </Field>
+                            </Card>
+
+                            <Card title={t('settings_section_expert_engine')} icon={MessageSquare} description={t('settings_section_expert_engine_desc')}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Field label={`${t('settings_api_key')} (Optional)`}>
+                                        <input
+                                            type="password"
+                                            value={settings.expertApiKey}
+                                            onChange={e => handleChange('expertApiKey', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                            placeholder="Leave empty to use Chat Key"
+                                        />
+                                    </Field>
+                                    <Field label={t('settings_model')}>
+                                        <ModelSelect
+                                            value={settings.expertModel}
+                                            onChange={(v: string) => handleChange('expertModel', v)}
+                                            baseUrl={settings.expertBaseUrl || settings.chatBaseUrl || settings.baseUrl}
+                                            apiKey={settings.expertApiKey || settings.chatApiKey || settings.apiKey}
+                                            placeholder="xiaomi/mimo-v2-flash:free"
+                                        />
+                                    </Field>
+                                </div>
+                                <Field label={t('settings_api_url')}>
+                                    <input
+                                        type="text"
+                                        value={settings.expertBaseUrl}
+                                        onChange={e => handleChange('expertBaseUrl', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                        placeholder="https://openrouter.ai/api/v1"
+                                    />
+                                </Field>
+                            </Card>
                         </div>
                     )}
 
@@ -746,11 +797,12 @@ export const SettingsView: React.FC = () => {
                                         />
                                     </Field>
                                     <Field label={t('settings_model')}>
-                                        <input
-                                            type="text"
+                                        <ModelSelect
                                             value={settings.chatModel}
-                                            onChange={e => handleChange('chatModel', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                            onChange={(v: string) => handleChange('chatModel', v)}
+                                            baseUrl={settings.chatBaseUrl || settings.baseUrl}
+                                            apiKey={settings.chatApiKey || settings.apiKey}
+                                            placeholder="claude-3-haiku..."
                                         />
                                     </Field>
                                 </div>
@@ -796,38 +848,6 @@ export const SettingsView: React.FC = () => {
                                         value={settings.promptProfile}
                                         onChange={e => handleChange('promptProfile', e.target.value)}
                                         className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
-                                    />
-                                </Field>
-                            </Card>
-
-                            <Card title="AI Profile Engine" icon={ScanFace} description="Configure dedicated API settings for generating Author Profiles. Leave Key empty to use default Chat settings.">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <Field label="API Key (Optional)">
-                                        <input
-                                            type="password"
-                                            value={settings.profileApiKey}
-                                            onChange={e => handleChange('profileApiKey', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                            placeholder="Leave empty to use Chat Key"
-                                        />
-                                    </Field>
-                                    <Field label="Model Name">
-                                        <input
-                                            type="text"
-                                            value={settings.profileModel}
-                                            onChange={e => handleChange('profileModel', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                            placeholder="mistralai/mistral-7b-instruct:free"
-                                        />
-                                    </Field>
-                                </div>
-                                <Field label="Base URL">
-                                    <input
-                                        type="text"
-                                        value={settings.profileBaseUrl}
-                                        onChange={e => handleChange('profileBaseUrl', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                        placeholder="https://openrouter.ai/api/v1"
                                     />
                                 </Field>
                             </Card>

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://api.siliconflow.cn https://api.deepseek.com https://api.openai.com https://openrouter.ai https://pbs.twimg.com https://abs.twimg.com https://video.twimg.com; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https:; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:;"
   },
   "name": "__MSG_extName__",
   "description": "__MSG_extDescription__",
@@ -26,13 +26,9 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://api.siliconflow.cn/*",
-    "https://api.deepseek.com/*",
-    "https://api.openai.com/*",
-    "https://openrouter.ai/*",
-    "https://pbs.twimg.com/*",
-    "https://abs.twimg.com/*",
-    "https://video.twimg.com/*"
+    "https://*/*",
+    "https://twitter.com/*",
+    "https://x.com/*"
   ],
   "content_scripts": [
     {

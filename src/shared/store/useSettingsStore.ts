@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../types/settings';
 
-interface SettingsState {
+export interface SettingsState {
     settings: AISettings;
     setSettings: (settings: AISettings) => void;
     updateSettings: (updates: Partial<AISettings>) => void;
