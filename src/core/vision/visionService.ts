@@ -172,30 +172,14 @@ export class VisionService {
         settings: AISettings
     ): Promise<Record<string, { overall: string; details: Array<{ ocr: string; description: string }> }> | 'BUSY'> {
 
-        const prompt = `请分析以下提供的一组推文图片。
-    
-### 推文索引映射：
-${tweets.map(t => {
+        const mappingInfo = tweets.map(t => {
             const indices = mapping.map((m, i) => m.tweetId === t.id ? i : -1).filter(idx => idx !== -1);
             return `- Tweet ID [${t.id}]: 包含图片索引 ${JSON.stringify(indices)}`;
-        }).join('\n')}
+        }).join('\n');
 
-### 任务要求：
-1. 请根据映射关系，分别为每个 Tweet ID 提供分析。
-2. 识别并提取图中所有可见文字（OCR）。
-3. 用中文简洁描述图片内容。
-4. 如果推文有多张图，请在 "overall" 字段给出一个整合这些图片的连贯描述。
-
-### 强制返回格式 (JSON ONLY):
-{
-  "tweet_id": {
-     "overall": "该推文多张图片的整体总结描述",
-     "details": [
-        { "ocr": "图1提取的文字", "description": "图1的内容描述" },
-        { "ocr": "图2提取的文字", "description": "图2的内容描述" }
-     ]
-  }
-}`;
+        const prompt = (settings.promptVision || DEFAULT_AI_SETTINGS.promptVision)
+            .replace(/{ai_style_focus}/g, settings.aiStyleFocus || '')
+            .replace(/{tweet_mapping}/g, mappingInfo);
 
 
         const model = settings.visionModel || 'Qwen/Qwen2-VL-7B-Instruct';
@@ -258,15 +242,45 @@ ${tweets.map(t => {
             }
 
             // 尝试解析 JSON (更加鲁棒的提取方式)
+            let jsonStr = '';
             try {
                 const firstBrace = rawContent.indexOf('{');
                 const lastBrace = rawContent.lastIndexOf('}');
                 if (firstBrace === -1 || lastBrace === -1) throw new Error('No JSON object found');
 
-                const jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
-                return JSON.parse(jsonStr);
+                jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
+
+                // 1. 基础清理：移除常见的 JSON 污染（如 Markdown 代码块标记在内部被误切）
+                // 已经在 substring 处理过了，主要是处理内部内容
+
+                // 2. 移除尾随逗号 (Trailing Commas)
+                let cleanedJson = jsonStr.replace(/,\s*([\]}])/g, '$1');
+
+                // 3. 移除单行/多行注释 (有些模型喜欢在 JSON 里写注释)
+                cleanedJson = cleanedJson.replace(/\/\/.*$/gm, '');
+                cleanedJson = cleanedJson.replace(/\/\*[\s\S]*?\*\//g, '');
+
+                return JSON.parse(cleanedJson);
             } catch (e: any) {
-                console.warn('[VisionService] Failed to parse JSON, raw content length:', rawContent.length);
+                console.warn('[VisionService] Failed to parse JSON. Error:', e.message);
+                console.warn('[VisionService] Extracted JSON string slice:', jsonStr.substring(0, 100) + '...' + jsonStr.substring(jsonStr.length - 100));
+                console.log('[VisionService] Raw content for debugging:', rawContent);
+
+                // 最后的挣扎：如果解析失败且内容很多，尝试简单的 Regex 匹配提取
+                try {
+                    console.log('[VisionService] Attempting emergency regex recovery...');
+                    const recovered: any = {};
+                    tweets.forEach(t => {
+                        const overallMatch = rawContent.match(new RegExp(`"${t.id}"\\s*:\\s*{\\s*"overall"\\s*:\\s*"([^"]+)"`, 'i'));
+                        if (overallMatch) {
+                            recovered[t.id] = { overall: overallMatch[1], details: [] };
+                        }
+                    });
+                    if (Object.keys(recovered).length > 0) return recovered;
+                } catch (recoveryError) {
+                    console.error('[VisionService] Recovery failed:', recoveryError);
+                }
+
                 throw new Error('VLM JSON parse failed: ' + e.message);
             }
 

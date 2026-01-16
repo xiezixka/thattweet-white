@@ -17,12 +17,20 @@ export const llmService = {
         if (contextTweets.length > 0) {
             contextSection = `
 <SEARCH_RESULTS>
-${contextTweets.map((t, i) => `
-[Source ID: ${i + 1}]
+${contextTweets.map((t, i) => {
+                let textContent = t.text || "";
+                if (t.ocrText || t.visionDescription) {
+                    textContent += "\n[Media Analysis]";
+                    if (t.ocrText) textContent += `\n- OCR: ${t.ocrText}`;
+                    if (t.visionDescription) textContent += `\n- Vision: ${t.visionDescription}`;
+                }
+
+                return `[Source ID: ${i + 1}]
 Author: @${t.authorName || t.author || 'Unknown'}
 Date: ${new Date(t.createdAt).toLocaleDateString()}
-Content: ${t.text}
----`).join('\n')}
+Content: ${textContent}
+---`;
+            }).join('\n')}
 </SEARCH_RESULTS>`;
         }
 

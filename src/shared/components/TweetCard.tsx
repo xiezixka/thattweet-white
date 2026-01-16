@@ -37,10 +37,9 @@ const getScoreStyles = (score: number) => {
  */
 const normalizeTwitterUrl = (url: string | undefined): string => {
     if (!url) return '';
-    // 🧪 实验：回退到最原始状态，除了 HTTPS 协议外，不做任何处理
-    // 如果 URL 有效，直接返回。
-    // 旧版能显示，说明原始 URL 本身就是好的。
-    // 唯一保留：视频/媒体图可能需要 format 参数，但头像我们先不动。
+
+    // 🛡️ 拦截 blob URL，由于跨域和生命周期限制，它们在扩展控制台必然失败
+    if (url.startsWith('blob:')) return '';
 
     let processed = url.replace('http:', 'https:');
 

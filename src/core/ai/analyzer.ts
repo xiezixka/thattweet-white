@@ -26,21 +26,22 @@ class PromptBuilder {
         return content;
     }
 
-    static fillVariables(template: string, tweet: Tweet, fullContent: string): string {
+    static fillVariables(template: string, tweet: Tweet, fullContent: string, settings: AISettings): string {
         const author = typeof tweet.author === 'string'
             ? tweet.author
             : (tweet.author as any)?.handle || 'Unknown';
 
         return template
             .replace(/{tweet_text}/g, fullContent)
-            .replace(/{author}/g, author);
+            .replace(/{author}/g, author)
+            .replace(/{tweet_id}/g, tweet.id)
+            .replace(/{ai_style_focus}/g, settings.aiStyleFocus || '');
     }
 
     static buildBatchPrompt(tweets: Tweet[], settings: AISettings): string {
         const tweetBlocks = tweets.map((tweet, index) => {
             const fullContent = this.buildFullContent(tweet);
-            const author = typeof tweet.author === 'string' ? tweet.author : (tweet.author as any)?.handle || 'Unknown';
-            return `--- TWEET ID: ${tweet.id} ---\nAuthor: @${author}\nContent: ${fullContent}`;
+            return this.fillVariables(`--- TWEET ID: {tweet_id} ---\nAuthor: @{author}\nContent: {tweet_text}`, tweet, fullContent, settings);
         }).join('\n\n');
 
         return [
@@ -49,10 +50,16 @@ class PromptBuilder {
             `Available categories: ${settings.categories.join(', ')}`,
             "",
             "[SCORING & CATEGORIZATION RULES]",
-            settings.promptAnalysis.replace(/{tweet_text}/g, 'The tweet content').replace(/{author}/g, 'The author handle'),
+            settings.promptAnalysis
+                .replace(/{tweet_text}/g, 'The tweet content')
+                .replace(/{author}/g, 'The author handle')
+                .replace(/{tweet_id}/g, 'The tweet ID')
+                .replace(/{ai_style_focus}/g, settings.aiStyleFocus || ''),
             "",
             "[SUMMARY RULES]",
-            settings.promptSummary.replace(/{tweet_text}/g, 'The tweet content').replace(/{author}/g, 'The author handle'),
+            settings.promptSummary
+                .replace(/{tweet_text}/g, 'The tweet content')
+                .replace(/{author}/g, 'The author handle'),
             "",
             "[TWEETS TO ANALYZE]",
             tweetBlocks,
@@ -155,7 +162,7 @@ class OpenAIAdapter implements AIProviderAdapter {
                 messages: [
                     {
                         role: 'system',
-                        content: "You are a professional social media intelligence analyzer. Analyze both the tweet text and the provided image analysis data (OCR text and visual descriptions) to provide a comprehensive response. You MUST output results in a single JSON array format."
+                        content: "You are a professional social media intelligence analyzer. Analyze the provided tweet text and its associated image analysis data (OCR text and visual descriptions). Your goal is to synthesize the text and visual information to provide a deep, correlated analysis. For each tweet, identify how the images relate to or support the written content. You MUST output results in a single standard JSON array format."
                     },
                     {
                         role: 'user',

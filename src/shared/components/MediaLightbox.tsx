@@ -107,10 +107,23 @@ export const MediaLightbox: React.FC = () => {
 
                                     {item.type === 'video' || item.type === 'gif' ? (
                                         <video
-                                            src={item.url}
+                                            src={item.url?.startsWith('blob:') ? '' : item.url}
+                                            poster={item.previewUrl}
                                             controls
-                                            autoPlay
-                                            className="relative max-w-full max-h-[80vh] rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-white/5 object-contain z-10 select-none"
+                                            autoPlay={!item.url?.startsWith('blob:')}
+                                            loop={item.type === 'gif'}
+                                            muted={item.type === 'gif'}
+                                            playsInline
+                                            className="relative max-w-full max-h-[80vh] rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-white/5 object-contain z-10 select-none bg-black/40"
+                                            onError={(e) => {
+                                                // 如果视频加载失败 (比如 URL 失效)，尝试降级显示封面图
+                                                const target = e.currentTarget;
+                                                target.style.display = 'none';
+                                                const img = document.createElement('img');
+                                                img.src = item.previewUrl || '';
+                                                img.className = target.className;
+                                                target.parentElement?.appendChild(img);
+                                            }}
                                         />
                                     ) : (
                                         <img

@@ -224,8 +224,26 @@
   "settings_prompt_analysis": {
     "message": "评分与分析"
   },
+  "settings_prompt_analysis_desc": {
+    "message": "决定推文如何评分与分类的系统提示词"
+  },
+  "settings_ai_style_focus": {
+    "message": "评分偏好 (Style Focus)"
+  },
+  "settings_ai_style_focus_desc": {
+    "message": "描述你眼中的“高价值”模型应如何定义（如：深度技术、商业洞察、灵感采集）"
+  },
+  "settings_prompt_vision": {
+    "message": "视觉分析逻辑"
+  },
+  "settings_prompt_vision_desc": {
+    "message": "指导 VLM 模型如何观察图片（支持 {ai_style_focus} 和 {tweet_mapping}）"
+  },
   "settings_prompt_summary": {
-    "message": "精简摘要"
+    "message": "摘要生成"
+  },
+  "settings_prompt_summary_desc": {
+    "message": "用于在见闻列表中生成精简摘要的提示词"
   },
   "settings_support_title": {
     "message": "觉得 ThatTweet 帮到了你？支持作者一下"
@@ -274,12 +292,6 @@
   },
   "settings_no_folder": {
     "message": "未选择文件夹"
-  },
-  "settings_prompt_analysis_desc": {
-    "message": "决定推文如何评分与分类的系统提示词"
-  },
-  "settings_prompt_summary_desc": {
-    "message": "用于在见闻列表中生成精简摘要的提示词"
   },
   "settings_save_success": {
     "message": "配置已保存"

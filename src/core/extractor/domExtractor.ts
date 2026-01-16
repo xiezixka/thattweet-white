@@ -219,7 +219,16 @@ export class DomExtractor {
                 const thumbnailUrl = poster || siblingImg || '';
 
                 // 视频源
-                const source = videoEl.querySelector('source')?.getAttribute('src') || videoEl.getAttribute('src');
+                let source = videoEl.querySelector('source')?.getAttribute('src') || videoEl.getAttribute('src');
+
+                // 🛡️ 核心修复：不要存 blob: URL，它在扩展页面无效
+                if (source && source.startsWith('blob:')) {
+                    source = null;
+                }
+
+                if (thumbnailUrl && thumbnailUrl.startsWith('blob:')) {
+                    // 如果封面也是 blob，尝试置空，由下游逻辑处理或由 TweetCard normalize 处理
+                }
 
                 // 去重
                 const key = source || thumbnailUrl;
@@ -231,8 +240,8 @@ export class DomExtractor {
 
                 media.push({
                     type: isGif ? 'gif' : 'video',
-                    url: source || thumbnailUrl, // 如果没源，至少把封面存下来
-                    previewUrl: thumbnailUrl
+                    url: source || (thumbnailUrl && !thumbnailUrl.startsWith('blob:') ? thumbnailUrl : ''),
+                    previewUrl: thumbnailUrl && !thumbnailUrl.startsWith('blob:') ? thumbnailUrl : ''
                 });
             }
         }

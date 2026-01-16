@@ -656,11 +656,28 @@ export const SettingsView: React.FC = () => {
                             </Card>
 
                             <Card title={t('settings_section_prompts')} icon={FileText}>
+                                <Field label={t('settings_ai_style_focus')} description={t('settings_ai_style_focus_desc')}>
+                                    <input
+                                        type="text"
+                                        value={settings.aiStyleFocus}
+                                        onChange={e => handleChange('aiStyleFocus', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-medium text-zinc-300 focus:border-brand/40 outline-none transition-all"
+                                        placeholder="e.g. 技术干货、灵感采集、深度见解..."
+                                    />
+                                </Field>
                                 <Field label={t('settings_prompt_analysis')} description={t('settings_prompt_analysis_desc')}>
                                     <textarea
                                         rows={6}
                                         value={settings.promptAnalysis}
                                         onChange={e => handleChange('promptAnalysis', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
+                                    />
+                                </Field>
+                                <Field label={t('settings_prompt_vision')} description={t('settings_prompt_vision_desc')}>
+                                    <textarea
+                                        rows={6}
+                                        value={settings.promptVision}
+                                        onChange={e => handleChange('promptVision', e.target.value)}
                                         className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
                                     />
                                 </Field>
