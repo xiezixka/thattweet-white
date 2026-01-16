@@ -436,5 +436,86 @@
   },
   "stats_score_low": {
     "message": "低价值"
+  },
+  "analytics_select_creator": {
+    "message": "选择博主进行分析"
+  },
+  "analytics_archives": {
+    "message": "归档推文"
+  },
+  "analytics_high_quality": {
+    "message": "高质量"
+  },
+  "analytics_viral_creator": {
+    "message": "爆款创作者"
+  },
+  "analytics_momentum": {
+    "message": "动量趋势"
+  },
+  "analytics_viral_index": {
+    "message": "传播指数"
+  },
+  "analytics_peak_play": {
+    "message": "巅峰表现"
+  },
+  "analytics_avg_quality": {
+    "message": "平均质量"
+  },
+  "analytics_total_likes": {
+    "message": "获赞总数"
+  },
+  "analytics_masterpiece": {
+    "message": "代表作合集"
+  },
+  "analytics_sorted_by_hvi": {
+    "message": "按传播指数排序"
+  },
+  "analytics_supernova": {
+    "message": "超新星"
+  },
+  "analytics_viral_hit": {
+    "message": "爆款"
+  },
+  "analytics_content_dna": {
+    "message": "内容基因"
+  },
+  "analytics_visual_heavy": {
+    "message": "视觉主导"
+  },
+  "analytics_link_driven": {
+    "message": "链接驱动"
+  },
+  "analytics_text_driven": {
+    "message": "文字输出"
+  },
+  "analytics_prime_domain": {
+    "message": "核心领域"
+  },
+  "analytics_avg_length": {
+    "message": "平均字数"
+  },
+  "analytics_ai_insight": {
+    "message": "AI 洞察"
+  },
+  "analytics_insight_template": {
+    "message": "{{name}} 擅长 {{style}}。根据 HVI 分析，其内容信息密度{{density}}。最佳策略：研究其 Top 3 代表作的结构。"
+  },
+  "analytics_style_visual": {
+    "message": "视觉叙事"
+  },
+  "analytics_style_text": {
+    "message": "深度长文"
+  },
+  "analytics_density_high": {
+    "message": "极高"
+  },
+  "analytics_density_moderate": {
+    "message": "适中"
+  },
+  "analytics_global_ranking": {
+    "message": "全库排行"
+  },
+  "analytics_filter_placeholder": {
+    "message": "搜索博主姓名..."
   }
 }
