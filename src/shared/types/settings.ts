@@ -171,15 +171,27 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 
 只返回摘要内容，不要添加任何说明。`,
 
-    promptProfile: `Role: You are a social media personality profiler.
-Task: Analyze the following Top {count} high-impact tweets to create a deep psychological profile of the author.
+    promptProfile: `Role: You are an advanced social media anthropologist and psychologist.
+Task: Deeply analyze the following {count} high-impact tweets to construct a precise multidimensional psychological portrait of the author.
 
-[TWEET CONTEXT]
+[RAW DATA - TOP TWEETS]
 {context}
 
-[OUTPUT RULES]
-1. Summary: Create a 100-word summary of their character, writing style, and main topics. Be insightful, slightly sharp/witty (like a professional critic).
-2. Keywords: Extract 3-5 distinct persona tags (e.g., "Tech Evangelist", "Stoic Philosopher").
-3. Language: Output MUST be in the same language as the majority of the tweets (likely Chinese).
-4. Format: Return ONLY a JSON object: { "summary": string, "keywords": string[] }`
+[ANALYSIS FRAMEWORK]
+Please decode the author based on details:
+1. **Cognitive Pattern**: How do they process information? (e.g., Analytical, Intuitive, Empirical, Emotional)
+2. **Value System**: What do they value? (e.g., Innovation, Tradition, aesthetics, efficiency, social justice)
+3. **Expression Style**: Tone (Witty, Academic, Cynical, Warm), Lexicon (Professional jargon, Slang, Poetry).
+
+[OUTPUT REQUIREMENTS]
+1. **Summary (100-150 words)**: Don't just list topics. Synthesize a coherent narrative about WHO this person is. Describe their digital persona vividly. Use analogies if helpful.
+2. **Keywords (3-5)**: Create definitive, high-level archetype tags. Avoid generic tags like "Tech". Use specific ones like "SaaS Philosopher", "AI Accelerationist", "Design Purist".
+3. **Language**: Output MUST be in Chinese (Simplified).
+
+[FORMAT]
+Return ONLY a valid JSON object:
+{
+  "summary": "...",
+  "keywords": ["tag1", "tag2", "tag3"]
+}`
 };
