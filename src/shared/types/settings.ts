@@ -6,9 +6,11 @@ export interface AISettings {
     baseUrl: string;
     model: string;
 
-    // 2. Image Recognition (SiliconFlow Multi-modal)
+    // 2. Image Recognition (Multi-modal)
+    visionProvider: 'siliconflow' | 'openrouter';
     imageKeys: string;
     siliconFlowApiKeys: string[]; // 持久化的多 Key 列表
+    visionApiKeyOpenRouter: string;
     ocrEnabled: boolean;
     visionEnabled: boolean;
     visionModel: string;
@@ -55,8 +57,10 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
     baseUrl: 'https://openrouter.ai/api/v1',
     model: 'xiaomi/mimo-v2-flash:free',
 
+    visionProvider: 'siliconflow',
     imageKeys: '',
     siliconFlowApiKeys: [],
+    visionApiKeyOpenRouter: '',
     ocrEnabled: false,
     visionEnabled: false,
     visionModel: 'vendor/google/siglip-so400b-patch14-384',
@@ -91,30 +95,32 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 {ai_style_focus}
 
 ### 执行指令：
-1. **分类研判**：在观察每张图前，先快速判断其类型（如：技术架构、代码片段、数据看板、设计UI、实拍场景、文档截图等）。
+1. **分类研判**：在观察每张图前，先快速判断其类型（如：技术架构图、代码截图、数据看板、设计 UI、实景照片、文档扫描等）。
 2. **差异化描述**：
-    - **技术/架构图**：提取流程节点、关键指标、以及元素间的链路关系。
-    - **代码/配置**：识别确切的编程语言，提取核心逻辑或关键的配置参数。
-    - **数据图表**：不仅描述形状，更要分析出“增长/下降趋势”、“峰值点”及“背后反映的结论”。
-    - **UI/平面设计**：分析视觉重心、设计风格、布局亮点，尝试推测其交互意图。
-    - **实拍/活动**：捕捉主体人物、正在发生的事件细节、以及环境传递的核心氛围。
-3. **高精度 OCR**：完整、准确地提取图中所有关键文字，保持基本的排版逻辑。
-4. **多图互联 (Overall)**：如果推文包含多图，请识别其内在联系（如：步骤演示、不同视角、对比关系），并给出一个高度集成的洞察总结。
+    - **技术/架构图**：提取逻辑路径、核心组件、指标说明及它们之间的依赖关系。
+    - **代码/配置**：精准识别语言与框架，浓缩功能逻辑，提取关键的 API 或配置参数。
+    - **数据图表**：分析趋势（上升/平稳/波动）、峰值点及数据背后反映的业务洞察。
+    - **UI/平面设计**：解析视觉重心、设计规范、交互意图及亮点。
+    - **实拍/活动**：捕捉人物行为、现场关键细节及传递的核心情报。
+3. **高精度 OCR**：准确提取图中所有文本，保留自然的排版逻辑。
+4. **多图集成 (Overall)**：若推文有多图，请识别其逻辑联系（对比、步骤、细节放大等），给出高度集成的洞察总结。
 
 ### 映射关系：
 {tweet_mapping}
 
-### 约束条件：
-- 必须严格以标准 JSON 格式返回，禁止任何 Markdown 标记或额外解释。
+### 约束条件 (极其重要)：
+- 必须严格以标准 JSON 格式返回。
+- ！！关键：JSON 的键名必须是上述映射关系中提供的具体【Tweet ID】，禁止直接使用 "tweet_id" 作为键名！！
+- ！！注意：如果 OCR 或描述中包含双引号，请务必使用 \\\" 进行转义，确保 JSON 可解析！！
 - 内容必须使用中文。
-- 描述应当包含“洞察”而非仅仅是“陈述”。
+- 描述应当包含“深度洞察”而非仅仅是“画面陈述”。
 
-### 强制 JSON 格式：
+### 正确的输出示例：
 {
-  "tweet_id": {
+  "1234567890123456789": {
      "overall": "针对该推文所有图片的深度洞察总结",
      "details": [
-        { "ocr": "文字内容", "description": "针对性的深度价值描述" }
+        { "ocr": "文字内容", "description": "深度价值描述" }
      ]
   }
 }`,

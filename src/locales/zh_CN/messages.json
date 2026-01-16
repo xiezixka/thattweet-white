@@ -170,6 +170,15 @@
   "settings_vision_keys_desc": {
     "message": "用于 OCR 和视觉识别 (支持多行)"
   },
+  "settings_vision_provider": {
+    "message": "视觉识别提供商"
+  },
+  "settings_openrouter_key": {
+    "message": "OpenRouter 密钥"
+  },
+  "settings_openrouter_key_desc": {
+    "message": "如果全局已配置 OpenRouter，可留空"
+  },
   "settings_ocr_enable": {
     "message": "启用 OCR"
   },
@@ -331,6 +340,9 @@
   },
   "settings_group_ai": {
     "message": "AI 基础"
+  },
+  "settings_group_advanced": {
+    "message": "AI 进阶"
   },
   "settings_group_intelligence": {
     "message": "智能分析"

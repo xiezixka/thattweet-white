@@ -23,19 +23,25 @@ export class VisionService {
 
         // 获取可能的 Key
         let apiKeys: string[] = [];
-        if (settings.siliconFlowApiKeys && settings.siliconFlowApiKeys.length > 0) {
-            apiKeys = settings.siliconFlowApiKeys;
-        } else if (settings.imageKeys && settings.imageKeys.trim()) {
-            apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
-        } else if (settings.apiKey) {
-            apiKeys = [settings.apiKey];
+        if (settings.visionProvider === 'siliconflow') {
+            if (settings.siliconFlowApiKeys && settings.siliconFlowApiKeys.length > 0) {
+                apiKeys = settings.siliconFlowApiKeys;
+            } else if (settings.imageKeys && settings.imageKeys.trim()) {
+                apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
+            } else if (settings.apiKey) {
+                apiKeys = [settings.apiKey];
+            }
+        } else {
+            // OpenRouter: Use specific vision key, or fallback to global if it looks like OpenRouter
+            const orKey = settings.visionApiKeyOpenRouter || (settings.apiKey?.startsWith('sk-or') ? settings.apiKey : '');
+            if (orKey) apiKeys = [orKey];
         }
 
         const availableKeys = apiKeys.filter(k => !this.activeKeys.has(k));
-        console.log(`[VisionService] Starting queue process. Keys found: ${apiKeys.length}, Available: ${availableKeys.length}`);
+        console.log(`[VisionService] Starting ${settings.visionProvider} queue process. Keys found: ${apiKeys.length}, Available: ${availableKeys.length}`);
 
         if (availableKeys.length === 0) {
-            if (apiKeys.length === 0) console.warn('[VisionService] No API keys found in any field!');
+            if (apiKeys.length === 0) console.warn(`[VisionService] No API keys found for provider: ${settings.visionProvider}`);
             return;
         }
 
@@ -182,9 +188,20 @@ export class VisionService {
             .replace(/{tweet_mapping}/g, mappingInfo);
 
 
-        const model = settings.visionModel || 'Qwen/Qwen2-VL-7B-Instruct';
-        // 视觉服务强制使用 SiliconFlow 的 API 地址，不受全局 baseUrl (可能是 OpenRouter) 的影响
-        const baseUrl = 'https://api.siliconflow.cn/v1';
+        const model = settings.visionModel || (settings.visionProvider === 'siliconflow' ? 'Qwen/Qwen2-VL-7B-Instruct' : 'google/gemini-pro-1.5-exp');
+
+        let baseUrl = 'https://api.siliconflow.cn/v1';
+        const headers: Record<string, string> = {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        };
+
+        if (settings.visionProvider === 'openrouter') {
+            baseUrl = 'https://openrouter.ai/api/v1';
+            headers['HTTP-Referer'] = 'https://github.com/RechardLLee/thattweet-vite';
+            headers['X-Title'] = 'ThatTweet (Advanced Vision)';
+        }
+
         const url = `${baseUrl}/chat/completions`;
 
         console.log(`[VisionService] Calling VLM API:`, { url, model, images: imageBase64List.length });
@@ -218,10 +235,7 @@ export class VisionService {
 
             const response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                },
+                headers,
                 body: JSON.stringify(body)
             });
 
@@ -260,28 +274,100 @@ export class VisionService {
                 cleanedJson = cleanedJson.replace(/\/\/.*$/gm, '');
                 cleanedJson = cleanedJson.replace(/\/\*[\s\S]*?\*\//g, '');
 
-                return JSON.parse(cleanedJson);
+                // 4. 修复控制字符 (Bad control character)
+                // 模型在 OCR 提取时常在字符串中直接输出真实换行符或制表符，这在 JSON 字符串中是非法的
+                // 我们通过正则锁定所有引号内的内容，并将这些物理控制字符转换为转义形式
+                cleanedJson = cleanedJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, content) => {
+                    return `"${content
+                        .replace(/\n/g, '\\n')
+                        .replace(/\r/g, '\\r')
+                        .replace(/\t/g, '\\t')
+                        .replace(/[\x00-\x1F]/g, '')}"`;
+                });
+
+                // 5. 修复引号内未转义的双引号
+                // 寻找在引号内但未转义的引号（不包括该字段开头和结尾的引号）
+                cleanedJson = cleanedJson.replace(/(?<=: \s*")(.+?)(?="\s*[,}\]])/gs, (match, content) => {
+                    return content.replace(/(?<!\\)"/g, '\\"');
+                });
+
+                let parsed = JSON.parse(cleanedJson);
+
+                // 6. 逻辑纠错：处理模型直接返回 "tweet_id" 作为键名的情况
+                if (parsed.tweet_id && tweets.length === 1) {
+                    const actualId = tweets[0].id;
+                    parsed = { [actualId]: parsed.tweet_id };
+                }
+
+                return parsed;
             } catch (e: any) {
                 console.warn('[VisionService] Failed to parse JSON. Error:', e.message);
-                console.warn('[VisionService] Extracted JSON string slice:', jsonStr.substring(0, 100) + '...' + jsonStr.substring(jsonStr.length - 100));
+
+                // 打印错误附近的上下文，方便准确定位
+                if (e.message.includes('position')) {
+                    const posMatch = e.message.match(/position (\d+)/);
+                    if (posMatch) {
+                        const pos = parseInt(posMatch[1], 10);
+                        const start = Math.max(0, pos - 50);
+                        const end = Math.min(jsonStr.length, pos + 50);
+                        console.warn('[VisionService] Error near position ' + pos + ':\n' +
+                            jsonStr.substring(start, pos) + ' >>>' + jsonStr[pos] + '<<< ' + jsonStr.substring(pos + 1, end));
+                    }
+                }
+
                 console.log('[VisionService] Raw content for debugging:', rawContent);
 
-                // 最后的挣扎：如果解析失败且内容很多，尝试简单的 Regex 匹配提取
+                // 最后的挣扎：更加鲁棒的正则恢复 + 终极截断兜底
                 try {
-                    console.log('[VisionService] Attempting emergency regex recovery...');
+                    console.log('[VisionService] Attempting improved emergency regex recovery...');
                     const recovered: any = {};
+                    const hasGenericKey = rawContent.includes('"tweet_id"');
+
                     tweets.forEach(t => {
-                        const overallMatch = rawContent.match(new RegExp(`"${t.id}"\\s*:\\s*{\\s*"overall"\\s*:\\s*"([^"]+)"`, 'i'));
+                        const key = (hasGenericKey && tweets.length === 1) ? 'tweet_id' : t.id;
+
+                        // 尝试抓取 overall
+                        const overallMatch = rawContent.match(new RegExp(`"${key}"\\s*:\\s*{\\s*"overall"\\s*:\\s*"([^"]+)"`, 'i'));
+
                         if (overallMatch) {
-                            recovered[t.id] = { overall: overallMatch[1], details: [] };
+                            const details: any[] = [];
+                            // 简单的正则抓取 OCR 和 Description 对
+                            const detailRegex = /\{\s*"ocr"\s*:\s*"([^"]+)"\s*,\s*"description"\s*:\s*"([^"]+)"\s*\}/gi;
+                            let m;
+                            while ((m = detailRegex.exec(rawContent)) !== null) {
+                                details.push({
+                                    ocr: m[1].replace(/\\n/g, '\n'),
+                                    description: m[2].replace(/\\n/g, '\n')
+                                });
+                            }
+                            recovered[t.id] = {
+                                overall: overallMatch[1].replace(/\\n/g, '\n'),
+                                details: details.length > 0 ? details : []
+                            };
+                        } else {
+                            // 最终兜底：如果连正则都抓不到，直接截断原文作为描述
+                            console.warn(`[VisionService] No regex match for ${t.id}, using raw content truncation.`);
+                            recovered[t.id] = {
+                                overall: rawContent.substring(0, 500).replace(/["{}]/g, '') + '... (解析失败，保留原文片段)',
+                                details: []
+                            };
                         }
                     });
+
                     if (Object.keys(recovered).length > 0) return recovered;
                 } catch (recoveryError) {
                     console.error('[VisionService] Recovery failed:', recoveryError);
                 }
 
-                throw new Error('VLM JSON parse failed: ' + e.message);
+                // 如果走到这里依然没有数据（理论上不可能，因为有最终兜底），返回一个结构化的错误展示
+                const fallback: any = {};
+                tweets.forEach(t => {
+                    fallback[t.id] = {
+                        overall: "视觉分析解析彻底失败。原始响应：" + rawContent.substring(0, 200),
+                        details: []
+                    };
+                });
+                return fallback;
             }
 
         } catch (err) {
@@ -325,19 +411,26 @@ export class VisionService {
         if (!tweet) return;
 
         // 获取 Key
-        let apiKeys: string[] = [];
-        if (settings.siliconFlowApiKeys?.length > 0) {
-            apiKeys = settings.siliconFlowApiKeys;
-        } else if (settings.imageKeys?.trim()) {
-            apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
-        } else if (settings.apiKey) {
-            apiKeys = [settings.apiKey];
+        let apiKey = '';
+        if (settings.visionProvider === 'siliconflow') {
+            if (settings.siliconFlowApiKeys?.length > 0) {
+                apiKey = settings.siliconFlowApiKeys[0];
+            } else if (settings.imageKeys?.trim()) {
+                apiKey = settings.imageKeys.split('\n')[0].trim();
+            } else if (settings.apiKey) {
+                apiKey = settings.apiKey;
+            }
+        } else {
+            apiKey = settings.visionApiKeyOpenRouter || (settings.apiKey?.startsWith('sk-or') ? settings.apiKey : '');
         }
 
-        if (apiKeys.length === 0) return;
+        if (!apiKey) {
+            console.warn(`[VisionService] No API key for ${settings.visionProvider}`);
+            return;
+        }
 
-        console.log(`[VisionService] Forcing immediate vision analysis for ${tweetId}`);
-        await this.processBatch([tweet], apiKeys[0], settings);
+        console.log(`[VisionService] Forcing immediate ${settings.visionProvider} vision analysis for ${tweetId}`);
+        await this.processBatch([tweet], apiKey, settings);
     }
 
     private static async getSettings(): Promise<AISettings> {
@@ -352,11 +445,16 @@ export class VisionService {
      * 获取 SiliconFlow 可用的模型列表
      * 可用于调试和模型选择
      */
-    static async fetchAvailableModels(apiKey: string): Promise<Array<{ id: string; type?: string }>> {
+    static async fetchAvailableModels(apiKey: string, provider: 'siliconflow' | 'openrouter' = 'siliconflow'): Promise<Array<{ id: string; type?: string }>> {
+        const baseUrl = provider === 'siliconflow' ? 'https://api.siliconflow.cn/v1' : 'https://openrouter.ai/api/v1';
         try {
-            const response = await fetch('https://api.siliconflow.cn/v1/models', {
+            const response = await fetch(`${baseUrl}/models`, {
                 method: 'GET',
-                headers: { 'Authorization': `Bearer ${apiKey}` }
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                    'X-Title': 'ThatTweet'
+                }
             });
 
             if (!response.ok) {
@@ -368,9 +466,13 @@ export class VisionService {
             const models = data.data || [];
 
             // 过滤出可能支持视觉的模型（包含 VL, Vision, OCR 等关键词）
-            const vlmModels = models.filter((m: any) =>
-                /vl|vision|ocr|glm-4v|qwen.*vl/i.test(m.id)
-            );
+            const vlmModels = models.filter((m: any) => {
+                const id = m.id.toLowerCase();
+                if (provider === 'openrouter') {
+                    return id.includes(':free');
+                }
+                return true;
+            });
 
             console.log('[VisionService] Available VLM models:', vlmModels.map((m: any) => m.id));
             return vlmModels;
@@ -394,7 +496,7 @@ export class VisionService {
             return;
         }
 
-        const models = await this.fetchAvailableModels(apiKeys[0]);
+        const models = await this.fetchAvailableModels(apiKeys[0], settings.visionProvider);
         console.table(models);
     }
 }

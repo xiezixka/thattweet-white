@@ -37,7 +37,7 @@ import { cn } from '../../shared/utils/cn';
 import { selectBackupDirectory, hasBackupDirectory, BackupResult, importBackupFromFile, ImportResult } from '../../core/backup/backupService';
 
 // ============ Reorganized Types ============
-type SettingsGroup = 'ai' | 'intelligence' | 'automation' | 'system';
+type SettingsGroup = 'ai' | 'advanced' | 'intelligence' | 'automation' | 'system';
 
 // ============ Backup Card Component ============
 const BackupCard: React.FC = () => {
@@ -212,6 +212,39 @@ export const SettingsView: React.FC = () => {
         }
     }, []);
 
+    // Debounced Auto-save
+    const isFirstMount = useRef(true);
+    const hasLoaded = useRef(false);
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        if (isFirstMount.current) {
+            isFirstMount.current = false;
+            return;
+        }
+
+        // 避免在数据加载完成前触发保存
+        if (!hasLoaded.current) {
+            hasLoaded.current = true;
+            return;
+        }
+
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+        saveTimeoutRef.current = setTimeout(() => {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({ aiSettings: settings }, () => {
+                    setStatus(t('settings_save_success'));
+                    setTimeout(() => setStatus(''), 2000);
+                });
+            }
+        }, 1000);
+
+        return () => {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        };
+    }, [settings]);
+
     const handleChange = (key: keyof AISettings, value: any) => {
         setSettings(prev => ({ ...prev, [key]: value }));
     };
@@ -233,26 +266,41 @@ export const SettingsView: React.FC = () => {
         setIsFetchingModels(true);
         setStatus('Fetching available models...');
         try {
-            // 优先使用 siliconFlowApiKeys，其次 imageKeys（旧版），最后 apiKey
+            let apiUrl = '';
             let apiKeys: string[] = [];
-            if (settings.siliconFlowApiKeys && settings.siliconFlowApiKeys.length > 0) {
-                apiKeys = settings.siliconFlowApiKeys;
-            } else if (settings.imageKeys && settings.imageKeys.trim()) {
-                apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
-            } else if (settings.apiKey) {
-                apiKeys = [settings.apiKey];
+
+            if (settings.visionProvider === 'siliconflow') {
+                apiUrl = 'https://api.siliconflow.cn/v1/models';
+                if (settings.siliconFlowApiKeys && settings.siliconFlowApiKeys.length > 0) {
+                    apiKeys = settings.siliconFlowApiKeys;
+                } else if (settings.imageKeys && settings.imageKeys.trim()) {
+                    apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
+                } else if (settings.apiKey) {
+                    apiKeys = [settings.apiKey];
+                }
+            } else {
+                apiUrl = 'https://openrouter.ai/api/v1/models';
+                if (settings.visionApiKeyOpenRouter) {
+                    apiKeys = [settings.visionApiKeyOpenRouter];
+                } else if (settings.apiKey && (settings.apiKey.startsWith('sk-or') || settings.baseUrl.includes('openrouter'))) {
+                    apiKeys = [settings.apiKey];
+                }
             }
 
-            console.log('[Settings] Fetching models with key count:', apiKeys.length);
+            console.log(`[Settings] Fetching ${settings.visionProvider} models with key count:`, apiKeys.length);
 
             if (apiKeys.length === 0) {
-                setStatus('No API key configured. Please add a key first.');
+                setStatus('No API key configured for the selected provider.');
                 return;
             }
 
-            const response = await fetch('https://api.siliconflow.cn/v1/models', {
+            const response = await fetch(apiUrl, {
                 method: 'GET',
-                headers: { 'Authorization': `Bearer ${apiKeys[0]}` }
+                headers: {
+                    'Authorization': `Bearer ${apiKeys[0]}`,
+                    'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                    'X-Title': 'ThatTweet'
+                }
             });
 
             if (!response.ok) {
@@ -263,9 +311,18 @@ export const SettingsView: React.FC = () => {
             const data = await response.json();
             const models = data.data || [];
 
-            // Filter VLM models
             const vlmModels = models
-                .filter((m: any) => /vl|vision|ocr|glm-4v|qwen.*vl/i.test(m.id))
+                .filter((m: any) => {
+                    const id = m.id.toLowerCase();
+
+                    // 如果是 OpenRouter，只筛选带有 ':free' 的模型
+                    if (settings.visionProvider === 'openrouter') {
+                        return id.includes(':free');
+                    }
+
+                    // SiliconFlow 默认显示全部模型
+                    return true;
+                })
                 .map((m: any) => m.id);
 
             setAvailableVLMs(vlmModels);
@@ -295,11 +352,17 @@ export const SettingsView: React.FC = () => {
             baseUrl = settings.chatBaseUrl || settings.baseUrl;
             model = settings.chatModel || settings.model;
         } else if (type === 'vision') {
-            const apiKeys = settings.siliconFlowApiKeys.length > 0
-                ? settings.siliconFlowApiKeys
-                : (settings.apiKey ? [settings.apiKey] : []);
-            apiKey = apiKeys[0] || '';
-            baseUrl = settings.baseUrl || 'https://api.siliconflow.cn/v1';
+            if (settings.visionProvider === 'siliconflow') {
+                const apiKeys = settings.siliconFlowApiKeys.length > 0
+                    ? settings.siliconFlowApiKeys
+                    : (settings.imageKeys.trim() ? settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean) : []);
+
+                apiKey = apiKeys[0] || settings.apiKey;
+                baseUrl = 'https://api.siliconflow.cn/v1';
+            } else {
+                apiKey = settings.visionApiKeyOpenRouter || (settings.apiKey?.startsWith('sk-or') ? settings.apiKey : '');
+                baseUrl = 'https://openrouter.ai/api/v1';
+            }
             model = settings.visionModel;
         } else if (type === 'rag') {
             apiKey = settings.ragApiKey;
@@ -343,8 +406,9 @@ export const SettingsView: React.FC = () => {
 
     const groups = [
         { id: 'ai', icon: Shield, label: t('settings_group_ai'), sublabel: 'Connections & Models' },
-        { id: 'intelligence', icon: Zap, label: t('settings_group_intelligence'), sublabel: 'Analysis & Search' },
-        { id: 'automation', icon: Activity, label: t('settings_group_workflow'), sublabel: 'Rules & Tags' },
+        { id: 'advanced', icon: Zap, label: t('settings_group_advanced'), sublabel: 'Vision & Knowledge' },
+        { id: 'intelligence', icon: Activity, label: t('settings_group_intelligence'), sublabel: 'Prompts & Rules' },
+        { id: 'automation', icon: Terminal, label: t('settings_group_workflow'), sublabel: 'Automation & Tags' },
         { id: 'system', icon: Settings, label: t('settings_group_system'), sublabel: 'Data & Maintenance' },
     ];
 
@@ -486,17 +550,53 @@ export const SettingsView: React.FC = () => {
                                     />
                                 </Field>
                             </Card>
+                        </div>
+                    )}
 
+                    {/* GROUP 2: ADVANCED (Vision & RAG) */}
+                    {activeGroup === 'advanced' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <Card title={t('settings_section_vision')} icon={Eye} description={t('settings_vision_keys_desc')}>
-                                <Field label={t('settings_vision_keys')} description={t('settings_vision_multi_line')}>
-                                    <textarea
-                                        rows={3}
-                                        value={settings.imageKeys}
-                                        onChange={e => handleChange('imageKeys', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm font-mono text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
-                                        placeholder="sk-..."
-                                    />
+                                {/* Provider Selection */}
+                                <Field label={t('settings_vision_provider')}>
+                                    <div className="flex gap-2">
+                                        {(['siliconflow', 'openrouter'] as const).map(p => (
+                                            <button
+                                                key={p}
+                                                onClick={() => handleChange('visionProvider', p)}
+                                                className={cn(
+                                                    "flex-1 py-3 rounded-xl text-xs font-bold border transition-all uppercase tracking-widest",
+                                                    settings.visionProvider === p ? "bg-brand/10 border-brand/40 text-brand" : "bg-white/5 border-white/5 text-zinc-500"
+                                                )}
+                                            >
+                                                {p === 'siliconflow' ? 'SiliconFlow' : 'OpenRouter'}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </Field>
+
+                                {settings.visionProvider === 'siliconflow' ? (
+                                    <Field label={t('settings_vision_keys')} description={t('settings_vision_multi_line')}>
+                                        <textarea
+                                            rows={3}
+                                            value={settings.imageKeys}
+                                            onChange={e => handleChange('imageKeys', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
+                                            placeholder="sk-..."
+                                        />
+                                    </Field>
+                                ) : (
+                                    <Field label={t('settings_openrouter_key')} description={t('settings_openrouter_key_desc')}>
+                                        <input
+                                            type="password"
+                                            value={settings.visionApiKeyOpenRouter}
+                                            onChange={e => handleChange('visionApiKeyOpenRouter', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                            placeholder={settings.apiKey?.startsWith('sk-or') ? "Using Global Key (OpenRouter Detected)" : "sk-or-..."}
+                                        />
+                                    </Field>
+                                )}
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div onClick={() => handleChange('ocrEnabled', !settings.ocrEnabled)} className={cn(
                                         "p-4 rounded-2xl border cursor-pointer transition-all",
@@ -525,7 +625,7 @@ export const SettingsView: React.FC = () => {
                                 </div>
 
                                 <div className="space-y-4 pt-4 border-t border-white/5">
-                                    <Field label="Vision Model" description="SiliconFlow Multi-modal Model Name">
+                                    <Field label="Vision Model" description={`${settings.visionProvider === 'siliconflow' ? 'SiliconFlow' : 'OpenRouter'} Multi-modal Model Name`}>
                                         <div className="flex gap-2">
                                             {availableVLMs.length > 0 ? (
                                                 <select
@@ -544,8 +644,8 @@ export const SettingsView: React.FC = () => {
                                                     type="text"
                                                     value={settings.visionModel}
                                                     onChange={e => handleChange('visionModel', e.target.value)}
-                                                    placeholder="e.g. Qwen/Qwen2-VL-7B-Instruct"
-                                                    className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-zinc-400 focus:border-brand/40 outline-none transition-all"
+                                                    placeholder={settings.visionProvider === 'siliconflow' ? "e.g. Qwen/Qwen2-VL-7B-Instruct" : "e.g. google/gemini-pro-1.5-exp"}
+                                                    className="flex-1 bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:border-brand/40 outline-none transition-all"
                                                 />
                                             )}
                                             <button
@@ -565,7 +665,7 @@ export const SettingsView: React.FC = () => {
                                                 type="number"
                                                 value={settings.maxImagesPerTweet}
                                                 onChange={e => handleChange('maxImagesPerTweet', parseInt(e.target.value))}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-zinc-400"
+                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-white"
                                             />
                                         </Field>
                                         <Field label="Batch Size (Tweets)">
@@ -573,7 +673,7 @@ export const SettingsView: React.FC = () => {
                                                 type="number"
                                                 value={settings.visionBatchSize}
                                                 onChange={e => handleChange('visionBatchSize', parseInt(e.target.value))}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-zinc-400"
+                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-white"
                                             />
                                         </Field>
                                     </div>
@@ -602,32 +702,6 @@ export const SettingsView: React.FC = () => {
                                     </Field>
                                 </div>
                             </Card>
-                        </div>
-                    )}
-
-                    {/* GROUP 2: INTELLIGENCE */}
-                    {activeGroup === 'intelligence' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card title={t('settings_section_chat')} icon={MessageSquare} description={t('settings_chat_optional_fallback')}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <Field label={t('settings_api_key')}>
-                                        <input
-                                            type="password"
-                                            value={settings.chatApiKey}
-                                            onChange={e => handleChange('chatApiKey', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                        />
-                                    </Field>
-                                    <Field label={t('settings_model')}>
-                                        <input
-                                            type="text"
-                                            value={settings.chatModel}
-                                            onChange={e => handleChange('chatModel', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                        />
-                                    </Field>
-                                </div>
-                            </Card>
 
                             <Card title={t('settings_section_rag')} icon={Search} description={t('settings_rag_desc')}>
                                 <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl mb-6">
@@ -653,6 +727,32 @@ export const SettingsView: React.FC = () => {
                                         </Field>
                                     </div>
                                 )}
+                            </Card>
+                        </div>
+                    )}
+
+                    {/* GROUP 3: INTELLIGENCE */}
+                    {activeGroup === 'intelligence' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <Card title={t('settings_section_chat')} icon={MessageSquare} description={t('settings_chat_optional_fallback')}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Field label={t('settings_api_key')}>
+                                        <input
+                                            type="password"
+                                            value={settings.chatApiKey}
+                                            onChange={e => handleChange('chatApiKey', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                        />
+                                    </Field>
+                                    <Field label={t('settings_model')}>
+                                        <input
+                                            type="text"
+                                            value={settings.chatModel}
+                                            onChange={e => handleChange('chatModel', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
+                                        />
+                                    </Field>
+                                </div>
                             </Card>
 
                             <Card title={t('settings_section_prompts')} icon={FileText}>
@@ -693,7 +793,7 @@ export const SettingsView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* GROUP 3: AUTOMATION */}
+                    {/* GROUP 4: AUTOMATION */}
                     {activeGroup === 'automation' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <Card title={t('settings_section_automation')} icon={Zap} description={t('settings_automation_auto_desc')}>
@@ -763,7 +863,7 @@ export const SettingsView: React.FC = () => {
                         </div>
                     )}
 
-                    {/* GROUP 4: SYSTEM */}
+                    {/* GROUP 5: SYSTEM */}
                     {activeGroup === 'system' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <BackupCard />
