@@ -121,7 +121,7 @@ export const Normalizer = {
             favoriteCount: legacy.favorite_count || 0,
             retweetCount: legacy.retweet_count || 0,
             replyCount: legacy.reply_count || 0,
-            viewCount: this.parseViewCount(tweetNode.views?.count),
+            viewCount: this.parseViewCount(tweetNode.views?.count || tweetNode.views?.viewCount),
             media: media,
             conversationId: legacy.conversation_id_str,
             replyToId: legacy.in_reply_to_status_id_str,

@@ -139,7 +139,13 @@ export class DomExtractor {
         // 5. 媒体提取
         const media = this.extractMediaFromDOM(articleElement);
 
-        // 6. 确定最终的 authorId（优先使用数字 ID）
+        // 6. 互动数据提取 (加上 DOM 解析)
+        const replyCount = this.parseDOMCount(articleElement, '[data-testid="reply"]', ["reply", "replies", "回复"]);
+        const retweetCount = this.parseDOMCount(articleElement, '[data-testid="retweet"]', ["retweet", "retweets", "转发"]);
+        const favoriteCount = this.parseDOMCount(articleElement, '[data-testid="like"]', ["like", "likes", "喜欢"]);
+        const viewCount = this.parseDOMCount(articleElement, 'a[href*="/analytics"], [data-testid="app-search-tweet-stats-analytics"]', ["view", "views", "浏览"]);
+
+        // 7. 确定最终的 authorId（优先使用数字 ID）
         const finalAuthorId = numericAuthorId || authorHandle;
 
         return {
@@ -157,14 +163,55 @@ export class DomExtractor {
             isBookmarked: false,
             isArchived: false,
             tags: [],
-            favoriteCount: 0, // DOM 无法精确获取
-            retweetCount: 0,
-            replyCount: 0,
-            viewCount: 0,
+            favoriteCount: favoriteCount || 0,
+            retweetCount: retweetCount || 0,
+            replyCount: replyCount || 0,
+            viewCount: viewCount || 0,
             media: media,
             aiStatus: ProcessStatus.Pending,
             imageProcessStatus: ProcessStatus.Pending
         } as Tweet;
+    }
+
+    private static parseDOMCount(articleElement: Element, selector: string, keywords: string[]): number | undefined {
+        const el = articleElement.querySelector(selector);
+        if (!el) return undefined;
+
+        const text = el.textContent?.trim() || "";
+        const label = el.getAttribute('aria-label') || "";
+
+        // 1. 优先尝试从 aria-label 提取 (通常更准确且包含完整数字)
+        let targetText = "";
+        if (label) {
+            for (const kw of keywords) {
+                if (label.toLowerCase().includes(kw.toLowerCase())) {
+                    const regex = new RegExp(`(\\d[\\d,.]*)\\s*([KM万]?)\\s*${kw}`, 'i');
+                    const m = label.match(regex);
+                    if (m) { targetText = m[1] + (m[2] || ""); break; }
+                }
+            }
+        }
+
+        // 2. 如果 label 没拿到，尝试从可视文本提取
+        if (!targetText) {
+            const m = text.match(/(\d[\d,.]*)\s*([KM万]?)/i);
+            if (m) targetText = m[1] + (m[2] || "");
+        }
+
+        if (!targetText) return undefined;
+
+        // 3. 单位转换
+        const cleanText = targetText.replace(/,/g, '');
+        const match = cleanText.match(/(\d[\d.]*)\s*([KM万]?)/i);
+        if (!match) return undefined;
+
+        let val = parseFloat(match[1]);
+        const unit = (match[2] || "").toUpperCase();
+        if (unit === 'K') val *= 1000;
+        else if (unit === 'M') val *= 1000000;
+        else if (unit === '万') val *= 10000;
+
+        return Math.floor(val);
     }
 
 

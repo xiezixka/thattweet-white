@@ -40,25 +40,21 @@ export const TweetRepository = {
             const existingTweet = await db.tweets.get(tweet.id);
 
             if (existingTweet) {
-                // 已存在的推文：只更新基础元数据，保留 AI 结果和用户标记
+                // 已存在的推文：更新互动数据，保留 AI 结果和用户标记
+                // 采用 Math.max 确保计数只会增长 (或者至少不会被 0 覆盖)
                 await db.tweets.update(tweet.id, {
-                    // 更新互动数据（可能有新数据）
-                    favoriteCount: tweet.favoriteCount || existingTweet.favoriteCount,
-                    retweetCount: tweet.retweetCount || existingTweet.retweetCount,
-                    replyCount: tweet.replyCount || existingTweet.replyCount,
-                    viewCount: tweet.viewCount || existingTweet.viewCount,
+                    favoriteCount: Math.max(tweet.favoriteCount || 0, existingTweet.favoriteCount || 0),
+                    retweetCount: Math.max(tweet.retweetCount || 0, existingTweet.retweetCount || 0),
+                    replyCount: Math.max(tweet.replyCount || 0, existingTweet.replyCount || 0),
+                    viewCount: Math.max(tweet.viewCount || 0, existingTweet.viewCount || 0),
+
                     // 更新头像（智能合并）
                     authorAvatarUrl: user.avatar || existingUser?.avatar || existingTweet.authorAvatarUrl || tweet.authorAvatarUrl,
-                    // 媒体可能有更完整的数据
+
+                    // 媒体可能有更完整的数据 (比如从封面图更新到了视频源)
                     media: (tweet.media?.length > (existingTweet.media?.length || 0)) ? tweet.media : existingTweet.media,
-                    // 保留所有 AI 相关数据（不覆盖）
-                    // aiStatus, aiScore, aiSummary, aiReason, aiTags, aiCategory, aiProcessedAt - 全部保留
-                    // 保留所有图像处理数据（不覆盖）
-                    // imageProcessStatus, ocrText, visionDescription, imageProcessedAt - 全部保留
-                    // 保留用户标记（不覆盖）
-                    // isBookmarked, isArchived, tags, note - 全部保留
                 });
-                console.log(`[ThatTweet] Tweet ${tweet.id} updated (preserved AI data)`);
+                console.log(`[ThatTweet] Tweet ${tweet.id} stats updated`);
             } else {
                 // 新推文：完整写入
                 await db.tweets.put({
