@@ -14,7 +14,18 @@ export const MediaLightbox: React.FC = () => {
     const scrollRef = useRef<HTMLDivElement>(null);
     const lastWheelTime = useRef<number>(0);
     const [copied, setCopied] = React.useState(false);
+    const [provider, setProvider] = React.useState<string>('SiliconFlow');
     const { t } = useTranslation();
+
+    useEffect(() => {
+        chrome.storage.local.get(['aiSettings'], (res) => {
+            if (res.aiSettings?.visionProvider === 'openrouter') {
+                setProvider('OpenRouter');
+            } else {
+                setProvider('SiliconFlow');
+            }
+        });
+    }, []);
 
     const handleCopyOcr = (text: string) => {
         navigator.clipboard.writeText(text);
@@ -219,7 +230,7 @@ export const MediaLightbox: React.FC = () => {
                         <div className="flex items-center justify-between opacity-20 select-none">
                             <div className="text-[9px] font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-brand" />
-                                Model: SiliconFlow VLM
+                                Model: {provider} VLM
                             </div>
                             <div className="text-[9px] font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2">
                                 <Check size={10} />

@@ -177,202 +177,224 @@ export class VisionService {
         apiKey: string,
         settings: AISettings
     ): Promise<Record<string, { overall: string; details: Array<{ ocr: string; description: string }> }> | 'BUSY'> {
-
-        const mappingInfo = tweets.map(t => {
-            const indices = mapping.map((m, i) => m.tweetId === t.id ? i : -1).filter(idx => idx !== -1);
-            return `- Tweet ID [${t.id}]: 包含图片索引 ${JSON.stringify(indices)}`;
-        }).join('\n');
-
-        const prompt = (settings.promptVision || DEFAULT_AI_SETTINGS.promptVision)
-            .replace(/{ai_style_focus}/g, settings.aiStyleFocus || '')
-            .replace(/{tweet_mapping}/g, mappingInfo);
-
-
-        const model = settings.visionModel || (settings.visionProvider === 'siliconflow' ? 'Qwen/Qwen2-VL-7B-Instruct' : 'google/gemini-pro-1.5-exp');
-
-        let baseUrl = 'https://api.siliconflow.cn/v1';
-        const headers: Record<string, string> = {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        };
-
-        if (settings.visionProvider === 'openrouter') {
-            baseUrl = 'https://openrouter.ai/api/v1';
-            headers['HTTP-Referer'] = 'https://github.com/RechardLLee/thattweet-vite';
-            headers['X-Title'] = 'ThatTweet (Advanced Vision)';
-        }
-
-        const url = `${baseUrl}/chat/completions`;
-
-        console.log(`[VisionService] Calling VLM API:`, { url, model, images: imageBase64List.length });
-
-        // 构建符合规范的消息数组
-        const messages = [
-            {
-                role: 'system',
-                content: '你是一个专业的推文图像分析助手。你必须严格按 JSON 格式返回结果，不包含任何解释或 Markdown 标记。'
-            },
-            {
-                role: 'user',
-                content: [
-                    { type: 'text', text: prompt },
-                    ...imageBase64List.map(base64 => ({
-                        type: 'image_url',
-                        image_url: { url: base64, detail: 'auto' }
-                    }))
-                ]
-            }
-        ];
-
         try {
-            const body: any = {
-                model,
-                messages,
-                stream: false,
-                temperature: 0.7,
-                max_tokens: 4096
+
+            const mappingInfo = tweets.map(t => {
+                const indices = mapping.map((m, i) => m.tweetId === t.id ? i : -1).filter(idx => idx !== -1);
+                return `- Tweet ID [${t.id}]: 包含图片索引 ${JSON.stringify(indices)}`;
+            }).join('\n');
+
+            const prompt = (settings.promptVision || DEFAULT_AI_SETTINGS.promptVision)
+                .replace(/{ai_style_focus}/g, settings.aiStyleFocus || '')
+                .replace(/{tweet_mapping}/g, mappingInfo);
+
+
+            const model = settings.visionModel || (settings.visionProvider === 'siliconflow' ? 'Qwen/Qwen2-VL-7B-Instruct' : 'google/gemini-pro-1.5-exp');
+
+            let baseUrl = 'https://api.siliconflow.cn/v1';
+            const headers: Record<string, string> = {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
             };
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(body)
-            });
-
-            if (response.status === 429 || response.status === 503) return 'BUSY';
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error(`[VisionService] API Error ${response.status}:`, errorBody);
-                throw new Error(`API error: ${response.status} - ${errorBody}`);
+            if (settings.visionProvider === 'openrouter') {
+                baseUrl = 'https://openrouter.ai/api/v1';
+                headers['HTTP-Referer'] = 'https://github.com/RechardLLee/thattweet-vite';
+                headers['X-Title'] = 'ThatTweet (Advanced Vision)';
             }
 
-            const data = await response.json();
-            const message = data.choices?.[0]?.message;
-            const rawContent = message?.content || message?.reasoning_content;
+            const url = `${baseUrl}/chat/completions`;
 
-            if (!rawContent) {
-                console.error('[VisionService] VLM Response missing content:', data);
-                throw new Error('Empty response from VLM');
+            console.log(`[VisionService] Calling VLM API:`, { url, model, images: imageBase64List.length });
+
+            // 构建符合规范的消息数组
+            // 对于 OpenRouter，有些模型对 System Message 支持不佳，我们将指令直接放入 User Message
+            const messages: any[] = [];
+
+            const systemInstruction = '你是一个专业的推文图像分析助手。你必须严格按 JSON 格式返回结果，不包含任何解释或 Markdown 标记。';
+
+            if (settings.visionProvider === 'siliconflow') {
+                messages.push({ role: 'system', content: systemInstruction });
+                messages.push({
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: prompt },
+                        ...imageBase64List.map(base64 => ({
+                            type: 'image_url',
+                            image_url: { url: base64, detail: 'auto' }
+                        }))
+                    ]
+                });
+            } else {
+                // OpenRouter: 合并 Prompt
+                messages.push({
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: `${systemInstruction}\n\n${prompt}` },
+                        ...imageBase64List.map(base64 => ({
+                            type: 'image_url',
+                            image_url: { url: base64 } // OpenRouter 有些模型不喜欢 detail: auto
+                        }))
+                    ]
+                });
             }
 
-            // 尝试解析 JSON (更加鲁棒的提取方式)
-            let jsonStr = '';
             try {
-                const firstBrace = rawContent.indexOf('{');
-                const lastBrace = rawContent.lastIndexOf('}');
-                if (firstBrace === -1 || lastBrace === -1) throw new Error('No JSON object found');
+                const body: any = {
+                    model,
+                    messages,
+                    stream: false,
+                    temperature: 0.7,
+                    max_tokens: 4096
+                };
 
-                jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
-
-                // 1. 基础清理：移除常见的 JSON 污染（如 Markdown 代码块标记在内部被误切）
-                // 已经在 substring 处理过了，主要是处理内部内容
-
-                // 2. 移除尾随逗号 (Trailing Commas)
-                let cleanedJson = jsonStr.replace(/,\s*([\]}])/g, '$1');
-
-                // 3. 移除单行/多行注释 (有些模型喜欢在 JSON 里写注释)
-                cleanedJson = cleanedJson.replace(/\/\/.*$/gm, '');
-                cleanedJson = cleanedJson.replace(/\/\*[\s\S]*?\*\//g, '');
-
-                // 4. 修复控制字符 (Bad control character)
-                // 模型在 OCR 提取时常在字符串中直接输出真实换行符或制表符，这在 JSON 字符串中是非法的
-                // 我们通过正则锁定所有引号内的内容，并将这些物理控制字符转换为转义形式
-                cleanedJson = cleanedJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, content) => {
-                    return `"${content
-                        .replace(/\n/g, '\\n')
-                        .replace(/\r/g, '\\r')
-                        .replace(/\t/g, '\\t')
-                        .replace(/[\x00-\x1F]/g, '')}"`;
+                console.log(`[VisionService] Fetching from ${url}...`);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(body)
                 });
+                console.log(`[VisionService] Response received. Status: ${response.status}`);
 
-                // 5. 修复引号内未转义的双引号
-                // 寻找在引号内但未转义的引号（不包括该字段开头和结尾的引号）
-                cleanedJson = cleanedJson.replace(/(?<=: \s*")(.+?)(?="\s*[,}\]])/gs, (match, content) => {
-                    return content.replace(/(?<!\\)"/g, '\\"');
-                });
-
-                let parsed = JSON.parse(cleanedJson);
-
-                // 6. 逻辑纠错：处理模型直接返回 "tweet_id" 作为键名的情况
-                if (parsed.tweet_id && tweets.length === 1) {
-                    const actualId = tweets[0].id;
-                    parsed = { [actualId]: parsed.tweet_id };
+                if (response.status === 429 || response.status === 503) return 'BUSY';
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    console.error(`[VisionService] API Error ${response.status}:`, errorBody);
+                    throw new Error(`API error: ${response.status} - ${errorBody}`);
                 }
 
-                return parsed;
-            } catch (e: any) {
-                console.warn('[VisionService] Failed to parse JSON. Error:', e.message);
+                const data = await response.json();
+                const message = data.choices?.[0]?.message;
+                const rawContent = message?.content || message?.reasoning_content;
 
-                // 打印错误附近的上下文，方便准确定位
-                if (e.message.includes('position')) {
-                    const posMatch = e.message.match(/position (\d+)/);
-                    if (posMatch) {
-                        const pos = parseInt(posMatch[1], 10);
-                        const start = Math.max(0, pos - 50);
-                        const end = Math.min(jsonStr.length, pos + 50);
-                        console.warn('[VisionService] Error near position ' + pos + ':\n' +
-                            jsonStr.substring(start, pos) + ' >>>' + jsonStr[pos] + '<<< ' + jsonStr.substring(pos + 1, end));
-                    }
+                console.log(`[VisionService] Raw VLM Response Content:`, rawContent);
+
+                if (!rawContent) {
+                    console.error('[VisionService] VLM Response missing content:', data);
+                    throw new Error('Empty response from VLM');
                 }
 
-                console.log('[VisionService] Raw content for debugging:', rawContent);
-
-                // 最后的挣扎：更加鲁棒的正则恢复 + 终极截断兜底
+                // 尝试解析 JSON (更加鲁棒的提取方式)
+                let jsonStr = '';
                 try {
-                    console.log('[VisionService] Attempting improved emergency regex recovery...');
-                    const recovered: any = {};
-                    const hasGenericKey = rawContent.includes('"tweet_id"');
+                    const firstBrace = rawContent.indexOf('{');
+                    const lastBrace = rawContent.lastIndexOf('}');
+                    if (firstBrace === -1 || lastBrace === -1) throw new Error('No JSON object found');
 
-                    tweets.forEach(t => {
-                        const key = (hasGenericKey && tweets.length === 1) ? 'tweet_id' : t.id;
+                    jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
 
-                        // 尝试抓取 overall
-                        const overallMatch = rawContent.match(new RegExp(`"${key}"\\s*:\\s*{\\s*"overall"\\s*:\\s*"([^"]+)"`, 'i'));
+                    // 1. 基础清理：移除常见的 JSON 污染（如 Markdown 代码块标记在内部被误切）
+                    // 已经在 substring 处理过了，主要是处理内部内容
 
-                        if (overallMatch) {
-                            const details: any[] = [];
-                            // 简单的正则抓取 OCR 和 Description 对
-                            const detailRegex = /\{\s*"ocr"\s*:\s*"([^"]+)"\s*,\s*"description"\s*:\s*"([^"]+)"\s*\}/gi;
-                            let m;
-                            while ((m = detailRegex.exec(rawContent)) !== null) {
-                                details.push({
-                                    ocr: m[1].replace(/\\n/g, '\n'),
-                                    description: m[2].replace(/\\n/g, '\n')
-                                });
-                            }
-                            recovered[t.id] = {
-                                overall: overallMatch[1].replace(/\\n/g, '\n'),
-                                details: details.length > 0 ? details : []
-                            };
-                        } else {
-                            // 最终兜底：如果连正则都抓不到，直接截断原文作为描述
-                            console.warn(`[VisionService] No regex match for ${t.id}, using raw content truncation.`);
-                            recovered[t.id] = {
-                                overall: rawContent.substring(0, 500).replace(/["{}]/g, '') + '... (解析失败，保留原文片段)',
-                                details: []
-                            };
-                        }
+                    // 2. 移除尾随逗号 (Trailing Commas)
+                    let cleanedJson = jsonStr.replace(/,\s*([\]}])/g, '$1');
+
+                    // 3. 移除单行/多行注释 (有些模型喜欢在 JSON 里写注释)
+                    cleanedJson = cleanedJson.replace(/\/\/.*$/gm, '');
+                    cleanedJson = cleanedJson.replace(/\/\*[\s\S]*?\*\//g, '');
+
+                    // 4. 修复控制字符 (Bad control character)
+                    // 模型在 OCR 提取时常在字符串中直接输出真实换行符或制表符，这在 JSON 字符串中是非法的
+                    // 我们通过正则锁定所有引号内的内容，并将这些物理控制字符转换为转义形式
+                    cleanedJson = cleanedJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, content) => {
+                        return `"${content
+                            .replace(/\n/g, '\\n')
+                            .replace(/\r/g, '\\r')
+                            .replace(/\t/g, '\\t')
+                            .replace(/[\x00-\x1F]/g, '')}"`;
                     });
 
-                    if (Object.keys(recovered).length > 0) return recovered;
-                } catch (recoveryError) {
-                    console.error('[VisionService] Recovery failed:', recoveryError);
+                    // 5. 修复引号内未转义的双引号
+                    // 寻找在引号内但未转义的引号（不包括该字段开头和结尾的引号）
+                    cleanedJson = cleanedJson.replace(/(?<=: \s*")(.+?)(?="\s*[,}\]])/gs, (match, content) => {
+                        return content.replace(/(?<!\\)"/g, '\\"');
+                    });
+
+                    let parsed = JSON.parse(cleanedJson);
+
+                    // 6. 逻辑纠错：处理模型直接返回 "tweet_id" 作为键名的情况
+                    if (parsed.tweet_id && tweets.length === 1) {
+                        const actualId = tweets[0].id;
+                        parsed = { [actualId]: parsed.tweet_id };
+                    }
+
+                    return parsed;
+                } catch (e: any) {
+                    console.warn('[VisionService] Failed to parse JSON. Error:', e.message);
+
+                    // 打印错误附近的上下文，方便准确定位
+                    if (e.message.includes('position')) {
+                        const posMatch = e.message.match(/position (\d+)/);
+                        if (posMatch) {
+                            const pos = parseInt(posMatch[1], 10);
+                            const start = Math.max(0, pos - 50);
+                            const end = Math.min(jsonStr.length, pos + 50);
+                            console.warn('[VisionService] Error near position ' + pos + ':\n' +
+                                jsonStr.substring(start, pos) + ' >>>' + jsonStr[pos] + '<<< ' + jsonStr.substring(pos + 1, end));
+                        }
+                    }
+
+                    console.log('[VisionService] Raw content for debugging:', rawContent);
+
+                    // 最后的挣扎：更加鲁棒的正则恢复 + 终极截断兜底
+                    try {
+                        console.log('[VisionService] Attempting improved emergency regex recovery...');
+                        const recovered: any = {};
+                        const hasGenericKey = rawContent.includes('"tweet_id"');
+
+                        tweets.forEach(t => {
+                            const key = (hasGenericKey && tweets.length === 1) ? 'tweet_id' : t.id;
+
+                            // 尝试抓取 overall
+                            const overallMatch = rawContent.match(new RegExp(`"${key}"\\s*:\\s*{\\s*"overall"\\s*:\\s*"([^"]+)"`, 'i'));
+
+                            if (overallMatch) {
+                                const details: any[] = [];
+                                // 简单的正则抓取 OCR 和 Description 对
+                                const detailRegex = /\{\s*"ocr"\s*:\s*"([^"]+)"\s*,\s*"description"\s*:\s*"([^"]+)"\s*\}/gi;
+                                let m;
+                                while ((m = detailRegex.exec(rawContent)) !== null) {
+                                    details.push({
+                                        ocr: m[1].replace(/\\n/g, '\n'),
+                                        description: m[2].replace(/\\n/g, '\n')
+                                    });
+                                }
+                                recovered[t.id] = {
+                                    overall: overallMatch[1].replace(/\\n/g, '\n'),
+                                    details: details.length > 0 ? details : []
+                                };
+                            } else {
+                                // 最终兜底：如果连正则都抓不到，直接截断原文作为描述
+                                console.warn(`[VisionService] No regex match for ${t.id}, using raw content truncation.`);
+                                recovered[t.id] = {
+                                    overall: rawContent.substring(0, 500).replace(/["{}]/g, '') + '... (解析失败，保留原文片段)',
+                                    details: []
+                                };
+                            }
+                        });
+
+                        if (Object.keys(recovered).length > 0) return recovered;
+                    } catch (recoveryError) {
+                        console.error('[VisionService] Recovery failed:', recoveryError);
+                    }
+
+                    // 如果走到这里依然没有数据
+                    const fallback: any = {};
+                    tweets.forEach(t => {
+                        fallback[t.id] = {
+                            overall: "视觉分析解析彻底失败。原始响应：" + (rawContent ? rawContent.substring(0, 200) : '无响应'),
+                            details: []
+                        };
+                    });
+                    return fallback;
                 }
-
-                // 如果走到这里依然没有数据（理论上不可能，因为有最终兜底），返回一个结构化的错误展示
-                const fallback: any = {};
-                tweets.forEach(t => {
-                    fallback[t.id] = {
-                        overall: "视觉分析解析彻底失败。原始响应：" + rawContent.substring(0, 200),
-                        details: []
-                    };
-                });
-                return fallback;
+            } catch (innerErr) {
+                console.error('[VisionService] VLM Call error:', innerErr);
+                throw innerErr;
             }
-
-        } catch (err) {
-            console.error('[VisionService] VLM Call error:', err);
-            throw err;
+        } catch (fatalErr: any) {
+            console.error('[VisionService] Fatal error in callVLM:', fatalErr);
+            throw fatalErr;
         }
     }
 
