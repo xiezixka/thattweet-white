@@ -239,8 +239,14 @@ class OpenAIAdapter implements AIProviderAdapter {
         }).join('\n\n');
 
         let prompt = config.prompt
-            .replace('{count}', String(tweets.length))
-            .replace('{context}', context);
+            .replace('{count}', String(tweets.length));
+
+        // 🛡️ 关键修复：确保原文一定被传入分析
+        if (prompt.includes('{context}')) {
+            prompt = prompt.replace('{context}', context);
+        } else {
+            prompt += `\n\n[ANALYSIS MATERIAL - TOP ${tweets.length} TWEETS]\n${context}`;
+        }
 
         // 🛡️ 强制增强防护：如果用户设置中的 Prompt 不包含新指令，强制追加
         if (!prompt.includes('sentiment') || !prompt.includes('semantic')) {

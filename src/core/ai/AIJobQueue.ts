@@ -3,6 +3,7 @@ import { TweetRepository } from '../storage/TweetRepository';
 import { TweetAnalyzer } from './analyzer';
 import { AISettings, DEFAULT_AI_SETTINGS, getSafeAISettings } from '../../shared/types/settings';
 import { ProcessStatus } from '../../shared/types/tweet';
+import { useSettingsStore } from '../../shared/store/useSettingsStore';
 
 export class AIJobQueue {
     private static isProcessing = false;
@@ -114,10 +115,9 @@ export class AIJobQueue {
     }
 
     private static async getSettings(): Promise<AISettings> {
-        return new Promise((resolve) => {
-            chrome.storage.local.get(['aiSettings'], (res) => {
-                resolve(getSafeAISettings(res.aiSettings));
-            });
-        });
+        // Use the global Zustand store which is the source of truth for the app runtime
+        // This works in both dev (localhost) and extension environments (if store is initialized)
+        const state = useSettingsStore.getState();
+        return state.settings;
     }
 }

@@ -282,7 +282,7 @@ export const AnalyticsView: React.FC = () => {
         if (analyzing || !author) return;
         setAnalyzing(true);
         try {
-            const topTweets = author.tweets.slice(0, 15);
+            const topTweets = author.tweets.slice(0, 20);
             const profile = await TweetAnalyzer.analyzeAuthorProfile(topTweets, settings);
             const userId = author.tweets[0]?.authorId;
             if (userId) {
@@ -788,27 +788,55 @@ export const AnalyticsView: React.FC = () => {
                         </div>
                     ) : (
                         currentChat.map((msg, i) => (
-                            <div key={i} className={cn("group flex gap-6 relative", msg.role === 'user' ? "flex-row-reverse" : "flex-row")}>
-                                <div className={cn("w-8 h-8 rounded-lg shrink-0 flex items-center justify-center overflow-hidden border border-white/5",
-                                    msg.role === 'user' ? "bg-white text-black text-[10px] font-black uppercase" : "bg-zinc-900")}>
-                                    {msg.role === 'user' ? 'YOU' : (
-                                        <img src={current?.avatar || ''} className="w-full h-full object-cover opacity-80" alt="AI" />
-                                    )}
+                            <div key={i} className={cn("relative group", msg.role === 'user' ? "flex flex-row-reverse" : "flex flex-row")}>
+                                {/* Delete Action Layer */}
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-2 z-0">
+                                    <button
+                                        onClick={() => handleDeleteMessage(i)}
+                                        className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                        title="Delete"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
-                                <div className={cn("flex-1 text-sm leading-[1.8] font-medium space-y-2",
-                                    msg.role === 'user' ? "text-right text-white" : "text-left text-zinc-300")}>
-                                    {msg.role === 'assistant' ? <MarkdownRenderer content={msg.content} /> : msg.content}
-                                </div>
-                                <button
-                                    onClick={() => handleDeleteMessage(i)}
+
+                                {/* Message Content Layer */}
+                                <motion.div
                                     className={cn(
-                                        "absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-zinc-600 hover:text-red-500 rounded-lg hover:bg-red-500/10",
-                                        msg.role === 'user' ? "-left-8" : "-right-8"
+                                        "relative z-10 flex gap-6 w-full bg-zinc-950", // Use solid bg to cover the button
+                                        msg.role === 'user' ? "flex-row-reverse" : "flex-row"
                                     )}
-                                    title="删除此条"
+                                    drag="x"
+                                    dragConstraints={{ left: -60, right: 0 }}
+                                    dragElastic={0.1}
+                                    dragMomentum={false}
+                                    onDragEnd={(_, info) => {
+                                        // Optional: Auto-reset if not dragged enough, logic can be handled by constraints mostly
+                                    }}
                                 >
-                                    <Trash2 size={12} />
-                                </button>
+                                    <div className={cn("w-8 h-8 rounded-lg shrink-0 flex items-center justify-center overflow-hidden border border-white/5",
+                                        msg.role === 'user' ? "bg-white text-black text-[10px] font-black uppercase" : "bg-zinc-900")}>
+                                        {msg.role === 'user' ? 'YOU' : (
+                                            <img src={current?.avatar || ''} className="w-full h-full object-cover opacity-80" alt="AI" />
+                                        )}
+                                    </div>
+                                    <div className={cn("flex-1 text-sm leading-[1.8] font-medium space-y-2 pointer-events-auto", // Ensure text selection still works if needed
+                                        msg.role === 'user' ? "text-right text-white" : "text-left text-zinc-300")}>
+                                        {msg.role === 'assistant' ? (
+                                            msg.content ? (
+                                                <MarkdownRenderer content={msg.content} />
+                                            ) : (
+                                                <div className="flex items-center gap-1 h-6">
+                                                    <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                                    <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                                    <div className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" />
+                                                </div>
+                                            )
+                                        ) : (
+                                            msg.content
+                                        )}
+                                    </div>
+                                </motion.div>
                             </div>
                         ))
                     )}

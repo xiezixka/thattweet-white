@@ -5,6 +5,7 @@ import { TweetCard } from '../../shared/components/TweetCard';
 import { Loader2, Search, Filter, HelpCircle, X } from 'lucide-react';
 import { cn } from '../../shared/utils/cn';
 import { parseSearchQuery, filterTweetsByQuery, SEARCH_SYNTAX_HELP } from '../../shared/utils/searchParser';
+import { AIJobQueue } from '../../core/ai/AIJobQueue';
 
 const FilterItem: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
     <button
@@ -104,6 +105,16 @@ export const FeedView: React.FC = () => {
 
         observer.observe(containerRef.current);
         return () => observer.disconnect();
+    }, []);
+
+    // 🧠 核心：自动触发 AI 分析队列
+    // 每 5 秒尝试处理一次积压的推文批次
+    React.useEffect(() => {
+        const intervalId = setInterval(() => {
+            AIJobQueue.processNextBatch().catch(console.error);
+        }, 5000);
+
+        return () => clearInterval(intervalId);
     }, []);
 
     return (

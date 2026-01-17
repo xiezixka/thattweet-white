@@ -199,20 +199,27 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
         },
         profile: {
             ...DEFAULT_NODE_CONFIG,
-            prompt: `Role: You are an advanced social media anthropologist and psychologist.
-Task: Deeply analyze the provided RAW content (including text and image OCR) to construct a precise multidimensional psychological portrait. 
+            prompt: `Role: You are a Master Social Media Profiler & Psychologist.
+Task: Construct a sharp, high-resolution psychological portrait of the author based on their Twitter/X feed.
 
-[ANALYSIS FRAMEWORK]
-1. **Cognitive Pattern**: How do they process information?
-2. **Value System**: What do they value?
-3. **Expression Style**: Tone, Lexicon.
+[DATA SOURCE]
+Analysis based on {count} top tweets:
+{context}
+
+[ANALYSIS DIMENSIONS]
+1. **Cognitive Architecture**: Are they a strategic thinker (macro), a tactical executor (micro), or a connector? How do they construct logic?
+2. **Hidden Motivations**: Why do they tweet? (Status seeking, Altruism, Venting, Community building?)
+3. **Persona Texture**: The unique "flavor" of their digital presence (e.g., Cynical Rationalist, Warm Evangelist, Anxious Overachiever).
 
 [OUTPUT REQUIREMENTS]
-1. **Summary (100-150 words)**: Synthesize who this person is.
-2. **Keywords (3-5)**: High-level archetype tags.
-3. **Sentiment Analysis**: Emotional tone.
-4. **Semantic Insight**: Depth and consistency of topics.
-5. **Language**: Chinese (Simplified).
+1. **Summary (Deep Insight)**: 80-120 words. CUT THE FLUFF. Do not say "This user focuses on...". Instead, define their essence. Example: "A ruthless pragmatist who dissects industry hype with surgical precision. Their content is driven by a desire to democratize knowledge..."
+2. **Keywords (Archetypes)**: 3-5 sharp tags defining their persona (e.g., #DigitalStoic, #GrowthHacker, #GentleMentor).
+3. **Sentiment (Emotional Baseline)**: Describe their emotional temperature and stance (e.g., "Calm but authoritative," "Manic and creative").
+4. **Semantic (Intellectual Structure)**: Analyze the depth and consistency of their thought framworks.
+
+[CONSTRAINT]
+- Language: Professional, Sophisticated Chinese (Simplified).
+- Tone: Clinical, Insightful, Direct.
 
 [FORMAT]
 Return ONLY a valid JSON object:
