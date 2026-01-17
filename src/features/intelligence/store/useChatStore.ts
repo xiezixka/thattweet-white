@@ -40,6 +40,7 @@ interface ChatState {
     createSession: () => string;
     switchSession: (sessionId: string) => void;
     deleteSession: (sessionId: string) => void;
+    generateTitle: (sessionId: string, query: string) => Promise<void>;
     setStatusMessage: (msg: string | null) => void;
     setSearchMode: (mode: SearchMode) => void;
 
@@ -76,23 +77,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
             let currentId = res.current_session_id;
 
             if (sessions.length === 0) {
-                const newId = crypto.randomUUID();
-                const initialSession: ChatSession = {
-                    id: newId,
-                    title: 'New Chat',
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                    messages: []
-                };
-                sessions = [initialSession];
-                currentId = newId;
+                currentId = null;
+            } else {
+                currentId = currentId || sessions[0].id;
             }
 
-            const currentSession = sessions.find((s: ChatSession) => s.id === (currentId || sessions[0].id)) || sessions[0];
+            const currentSession = sessions.find((s: ChatSession) => s.id === currentId) || null;
 
             set({
                 sessions,
-                currentSessionId: currentSession.id,
+                currentSessionId: currentId,
                 currentSession,
                 isInitialized: true
             });
@@ -104,22 +98,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
             let currentId = savedCurrentId;
 
             if (sessions.length === 0) {
-                const newId = 'local-1';
-                const initialSession: ChatSession = {
-                    id: newId,
-                    title: 'New Chat',
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                    messages: []
-                };
-                sessions = [initialSession];
-                currentId = newId;
+                currentId = null;
+            } else {
+                currentId = currentId || sessions[0].id;
             }
 
-            const currentSession = sessions.find((s: ChatSession) => s.id === (currentId || sessions[0].id)) || sessions[0];
+            const currentSession = sessions.find((s: ChatSession) => s.id === currentId) || null;
             set({
                 sessions,
-                currentSessionId: currentSession.id,
+                currentSessionId: currentId,
                 currentSession,
                 isInitialized: true
             });
@@ -199,6 +186,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     sendMessage: async (content, citations = []) => {
+        let currentSessionId = get().currentSessionId;
+
+        // 如果当前没有会话，先创建一个
+        if (!currentSessionId) {
+            currentSessionId = get().createSession();
+        }
+
+        // 首次消息自动生成标题
+        if (get().currentSession?.messages.length === 0) {
+            get().generateTitle(currentSessionId, content);
+        }
+
         set({ isGenerating: true });
         get().setStatusMessage('分析搜索意图...');
 
@@ -220,14 +219,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
             if (content.trim().length > 0 || citations.length > 0) {
                 if (content.trim().length > 0) {
+                    // 1.5 进阶：AI 关键词提取 (Query Analysis)
+                    let aiKeywords: string[] | undefined;
+                    try {
+                        get().setStatusMessage('正在提取搜索关键线索...');
+                        const analysisResult = await llmService.generateJSON('queryAnalysis', { query: content });
+                        if (Array.isArray(analysisResult)) {
+                            aiKeywords = analysisResult;
+                        } else if (analysisResult && Array.isArray(analysisResult.keywords)) {
+                            aiKeywords = analysisResult.keywords;
+                        }
+
+                        if (aiKeywords && aiKeywords.length > 0) {
+                            get().setStatusMessage(`搜索关键词: ${aiKeywords.join(', ')}`);
+                        }
+                    } catch (e) {
+                        console.warn('[ChatStore] Query analysis failed, falling back to basic split:', e);
+                    }
+
                     // 根据模式显示不同状态
                     const statusText = mode === 'rag' ? '正在进行语义向量检索...' :
                         mode === 'structured' ? '正在进行精确关键词检索...' :
                             '正在进行智能混合检索...';
                     get().setStatusMessage(statusText);
 
-                    // 调用 ragService，直接传递模式
-                    const searchResults = await ragService.search(content, 12, mode);
+                    // 调用 ragService，可选传递 AI 提取的关键词
+                    const searchResults = await ragService.search(content, 12, mode, aiKeywords);
                     console.log(`[ChatStore] Search results found: ${searchResults.length}`);
 
                     if (searchResults.length > 0) {
@@ -319,6 +336,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
     },
 
+    generateTitle: async (sessionId, query) => {
+        try {
+            const title = await llmService.generateNodeText('titleGeneration', { query });
+            if (title && title.trim()) {
+                const cleanTitle = title.replace(/["'”]/g, '').trim();
+                set(state => {
+                    const sessions = state.sessions.map(s =>
+                        s.id === sessionId ? { ...s, title: cleanTitle } : s
+                    );
+                    const currentSession = state.currentSessionId === sessionId
+                        ? { ...state.currentSession!, title: cleanTitle }
+                        : state.currentSession;
+                    return { sessions, currentSession };
+                });
+                get().saveSessions();
+            }
+        } catch (e) {
+            console.warn('[ChatStore] Failed to generate title:', e);
+        }
+    },
+
     // Internal Helper
     _appendMessageToCurrent: (msg: ChatMessage) => {
         set(state => {
@@ -328,10 +366,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages: [...state.currentSession.messages, msg],
                 updatedAt: Date.now()
             };
-            // 更新标题（如果是第一条消息）
-            if (updatedSession.messages.length === 2 && updatedSession.messages[0].role === 'user') {
-                updatedSession.title = updatedSession.messages[0].content.slice(0, 20);
-            }
 
             // 同时更新 sessions 列表里的对应项
             const updatedSessions = state.sessions.map(s => s.id === updatedSession.id ? updatedSession : s);

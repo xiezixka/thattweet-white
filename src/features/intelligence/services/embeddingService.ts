@@ -163,6 +163,30 @@ async function getSettings(): Promise<AISettings> {
 }
 
 /**
+ * 智能获取 API Key
+ */
+function getApiKey(settings: AISettings): string {
+    let apiKey = settings.ragApiKey;
+    if (!apiKey) {
+        const embeddingUrl = settings.embeddingUrl || 'https://api.siliconflow.cn/v1/embeddings';
+
+        // 尝试匹配地址相近的 Provider
+        let matchedProvider = settings.providers.find(p =>
+            p.baseUrl && embeddingUrl.includes(new URL(p.baseUrl).hostname)
+        );
+
+        // 如果没匹配到，用默认的
+        if (!matchedProvider) {
+            matchedProvider = settings.providers.find(p => p.id === settings.defaultProviderId);
+        }
+
+        apiKey = matchedProvider?.apiKey || '';
+        console.log(`[EmbeddingService] Using ${matchedProvider ? matchedProvider.name : 'fallback'} API key`);
+    }
+    return apiKey;
+}
+
+/**
  * 调用 Embedding API
  */
 async function callEmbeddingAPI(
@@ -252,27 +276,7 @@ export const embeddingService = {
         if (!settings.ragEnabled) throw new Error('RAG is not enabled');
 
         // 智能获取 API Key
-        let apiKey = settings.ragApiKey;
-        if (!apiKey) {
-            const embeddingUrl = settings.embeddingUrl || 'https://api.siliconflow.cn/v1/embeddings';
-
-            // 尝试匹配地址相近的 Provider
-            let matchedProvider = settings.providers.find(p =>
-                p.baseUrl && embeddingUrl.includes(new URL(p.baseUrl).hostname)
-            );
-
-            // 如果没匹配到，用默认的
-            if (!matchedProvider) {
-                matchedProvider = settings.providers.find(p => p.id === settings.defaultProviderId);
-            }
-
-            apiKey = matchedProvider?.apiKey || '';
-            console.log(`[EmbeddingService] Using ${matchedProvider ? matchedProvider.name : 'fallback'} API key`);
-        }
-
-        if (!apiKey) {
-            throw new Error('No API Key found. Please configure SiliconFlow or another provider.');
-        }
+        const apiKey = getApiKey(settings);
 
         const apiUrl = settings.embeddingUrl || 'https://api.siliconflow.cn/v1/embeddings';
         const model = settings.embeddingModel || 'BAAI/bge-m3';
@@ -432,12 +436,12 @@ export const embeddingService = {
             return [];
         }
 
-        const apiKey = settings.ragApiKey;
+        const apiKey = getApiKey(settings);
         const apiUrl = settings.embeddingUrl || 'https://api.siliconflow.cn/v1/embeddings';
         const model = settings.embeddingModel || 'BAAI/bge-m3';
 
         if (!apiKey) {
-            console.warn('[EmbeddingService] RAG API Key not configured');
+            console.warn('[EmbeddingService] RAG API Key not configured and no fallback found');
             return [];
         }
 

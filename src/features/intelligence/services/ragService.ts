@@ -44,8 +44,8 @@ export const ragService = {
     /**
      * 精确关键词搜索 (原有逻辑)
      */
-    async structuredSearch(query: string, limit: number = 15): Promise<SearchResult[]> {
-        const criteria = this.analyzeQuery(query);
+    async structuredSearch(query: string, limit: number = 15, aiKeywords?: string[]): Promise<SearchResult[]> {
+        const criteria = aiKeywords && aiKeywords.length > 0 ? { keywords: aiKeywords } : this.analyzeQuery(query);
         if (criteria.keywords.length === 0) return [];
 
         // 性能考虑，取最近 2000 条
@@ -122,13 +122,15 @@ export const ragService = {
     /**
      * 向量语义搜索 + Rerank
      */
-    async semanticSearch(query: string, limit: number = 10): Promise<SearchResult[]> {
+    async semanticSearch(query: string, limit: number = 10, aiKeywords?: string[]): Promise<SearchResult[]> {
         // Step 1: 向量检索 Top-50
-        const vectorResults = await embeddingService.vectorSearch(query, 50);
+        // 如果有 AI 提取的关键词，将关键词也合并到查询中，增强语义检索的准确性
+        const searchQuery = aiKeywords && aiKeywords.length > 0 ? `${query} ${aiKeywords.join(' ')}` : query;
+        const vectorResults = await embeddingService.vectorSearch(searchQuery, 50);
 
         if (vectorResults.length === 0) {
             console.log('[RAGService] No vector results, falling back to structured search');
-            return this.structuredSearch(query, limit);
+            return this.structuredSearch(query, limit, aiKeywords);
         }
 
         // Step 2: 获取对应的推文
@@ -190,11 +192,11 @@ export const ragService = {
     /**
      * 混合搜索 (自动融合精确和语义)
      */
-    async hybridSearch(query: string, limit: number = 12): Promise<SearchResult[]> {
+    async hybridSearch(query: string, limit: number = 12, aiKeywords?: string[]): Promise<SearchResult[]> {
         // 并行执行两种搜索
         const [structuredResults, semanticResults] = await Promise.all([
-            this.structuredSearch(query, limit),
-            this.semanticSearch(query, limit)
+            this.structuredSearch(query, limit, aiKeywords),
+            this.semanticSearch(query, limit, aiKeywords)
         ]);
 
         // 合并结果，去重
@@ -231,19 +233,19 @@ export const ragService = {
     /**
      * 统一搜索入口
      */
-    async search(query: string, limit: number = 15, mode: 'auto' | 'structured' | 'rag' = 'auto'): Promise<SearchResult[]> {
-        console.log(`[RAGService] Searching with mode: ${mode}, query: "${query.slice(0, 50)}..."`);
+    async search(query: string, limit: number = 15, mode: 'auto' | 'structured' | 'rag' = 'auto', aiKeywords?: string[]): Promise<SearchResult[]> {
+        console.log(`[RAGService] Searching with mode: ${mode}, query: "${query.slice(0, 50)}...", keywords: ${aiKeywords?.join(',')}`);
 
         switch (mode) {
             case 'structured':
-                return this.structuredSearch(query, limit);
+                return this.structuredSearch(query, limit, aiKeywords);
 
             case 'rag':
-                return this.semanticSearch(query, limit);
+                return this.semanticSearch(query, limit, aiKeywords);
 
             case 'auto':
             default:
-                return this.hybridSearch(query, limit);
+                return this.hybridSearch(query, limit, aiKeywords);
         }
     }
 };

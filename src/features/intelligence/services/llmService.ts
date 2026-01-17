@@ -140,5 +140,75 @@ ${contextSection || "【注意：当前检索结果为空，请告知用户后�
                 }
             }
         }
+    },
+
+    /**
+     * 执行特定工作流节点并返回原始文本
+     */
+    async generateNodeText(nodeKey: keyof AISettings['workflowNodes'], variables: Record<string, string>): Promise<string> {
+        const settings = await this.getSettings();
+        const node = (settings.workflowNodes as any)[nodeKey];
+
+        if (!node) {
+            console.warn(`[llmService] Node ${nodeKey} not found`);
+            return "";
+        }
+
+        const providerId = node.providerId || settings.defaultProviderId;
+        const provider = settings.providers.find(p => p.id === providerId);
+
+        if (!provider || !provider.apiKey) {
+            throw new Error(`Node ${nodeKey}: Provider or API Key not configured`);
+        }
+
+        const apiKey = provider.apiKey;
+        const baseUrl = provider.baseUrl.replace(/\/$/, '');
+        const model = node.model;
+        if (!model) throw new Error(`Node ${nodeKey}: Model not selected`);
+
+        let prompt = node.prompt || '';
+        // 替换变量 {query}, {context} 等
+        Object.entries(variables).forEach(([key, value]) => {
+            prompt = prompt.replace(new RegExp(`{${key}}`, 'g'), value);
+        });
+
+        const url = `${baseUrl}/chat/completions`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.3
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API Error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || "";
+    },
+
+    /**
+     * 执行特定节点并返回 JSON
+     */
+    async generateJSON(nodeKey: keyof AISettings['workflowNodes'], variables: Record<string, string>): Promise<any> {
+        const content = await this.generateNodeText(nodeKey, variables);
+        if (!content) return null;
+
+        try {
+            // 有些模型可能在 JSON 外包裹了 markdown 代码块
+            const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
+            return JSON.parse(jsonStr);
+        } catch (e) {
+            console.error('[llmService] JSON Parse Error:', content);
+            throw new Error('Failed to parse AI response as JSON');
+        }
     }
 };

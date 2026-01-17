@@ -48,7 +48,7 @@ export const PROVIDER_PRESETS: Record<string, AIProviderConfig> = {
         name: 'OpenRouter',
         icon: 'https://openrouter.ai/favicon.ico',
         defaultBaseUrl: 'https://openrouter.ai/api/v1',
-        models: ['google/gemini-2.0-flash-exp:free', 'mistralai/mistral-7b-instruct:free'],
+        models: ['xiaomi/mimo-v2-flash:free', 'google/gemini-2.0-flash-exp:free', 'mistralai/mistral-7b-instruct:free'],
         isVisionSupported: true
     },
     custom: {
@@ -105,6 +105,8 @@ export interface AISettings {
         // -- Interaction --
         chat: WorkflowNodeConfig;    // 沉思对话
         salon: WorkflowNodeConfig;   // 深度沙龙 (Expert)
+        queryAnalysis: WorkflowNodeConfig; // RAG 关键词提取
+        titleGeneration: WorkflowNodeConfig; // 对话标题生成
     };
 
     // === 3. Automation & System Core ===
@@ -267,7 +269,34 @@ Return ONLY a valid JSON object:
 }`
         },
         chat: { ...DEFAULT_NODE_CONFIG },
-        salon: { ...DEFAULT_NODE_CONFIG }
+        salon: { ...DEFAULT_NODE_CONFIG },
+        queryAnalysis: {
+            ...DEFAULT_NODE_CONFIG,
+            model: 'xiaomi/mimo-v2-flash:free',
+            prompt: `你是一个专业的搜索专家。请分析用户的提问，并从中提取出 3-5 个最核心的搜索关键词。
+
+**要求：**
+1. 关键词必须简练，能代表问题的核心。
+2. 如果包含中文，请确保关键词符合中文社交媒体（推文）的表达习惯。
+3. 如果问题包含特定的人物、项目、技术或时间，请务必作为核心词。
+4. 返回格式必须为严格的 JSON 数组。
+
+**示例：**
+用户提问："最近关于 DeepSeek 的成本分析有哪些？"
+返回：["DeepSeek", "成本分析", "算力", "推理成本"]
+
+用户提问："{query}"
+返回：`
+        },
+        titleGeneration: {
+            ...DEFAULT_NODE_CONFIG,
+            model: 'xiaomi/mimo-v2-flash:free',
+            prompt: `请根据用户的输入内容，生成一个简短、精准且有吸引力的对话标题（不超过 15 个字）。
+直接返回标题文本，不要包含引号或任何额外解释。
+
+用户内容："{query}"
+标题：`
+        }
     },
 
     autoAnalyze: true,

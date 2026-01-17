@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Loader2, ChevronDown, Check, Sparkles, PlusCircle, Plus, FilePlus, PanelRightOpen, PanelRightClose, SquarePen, Mic, Play, Tag, ExternalLink } from 'lucide-react';
+import { Send, User, Bot, Loader2, ChevronDown, Check, Sparkles, PlusCircle, Plus, FilePlus, PanelRightOpen, PanelRightClose, SquarePen, Mic, Play, Tag, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useChatStore } from '../../store/useChatStore';
 import { useIntelligenceStore } from '../../store/useIntelligenceStore';
 import { cn } from '../../../../shared/utils/cn';
+import { ChatMessage } from './ChatMessage';
 import { TweetCard } from '../../../../shared/components/TweetCard';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../../../shared/types/settings';
 import { Tweet } from '../../../../shared/types/tweet';
@@ -203,10 +204,10 @@ export const ChatArea: React.FC = () => {
                     <div className="relative" ref={dropdownRef}>
                         <button
                             onClick={() => setShowModelDropdown(!showModelDropdown)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold text-zinc-400 group"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold text-zinc-400 group max-w-[200px]"
                         >
-                            <span>{aiSettings.workflowNodes?.chat?.model || aiSettings.chatModel || aiSettings.model || "Select Model"}</span>
-                            <ChevronDown size={14} className={cn("transition-transform", showModelDropdown && "rotate-180")} />
+                            <span className="truncate">{aiSettings.workflowNodes?.chat?.model || "Select Model"}</span>
+                            <ChevronDown size={14} className={cn("transition-transform shrink-0", showModelDropdown && "rotate-180")} />
                         </button>
 
                         {showModelDropdown && (
@@ -220,7 +221,7 @@ export const ChatArea: React.FC = () => {
                                                 className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
                                             >
                                                 <span className="truncate">{m}</span>
-                                                {(aiSettings.workflowNodes?.chat?.model || aiSettings.chatModel || aiSettings.model) === m && <Check size={14} className="text-brand shrink-0" />}
+                                                {aiSettings.workflowNodes?.chat?.model === m && <Check size={14} className="text-brand shrink-0" />}
                                             </button>
                                         ))
                                     ) : (
@@ -312,220 +313,16 @@ export const ChatArea: React.FC = () => {
                         <h3 className="text-lg font-bold text-white uppercase tracking-widest">{t('nav_intelligence')}</h3>
                     </div>
                 ) : (
-                    <div className="max-w-3xl mx-auto w-full py-8 space-y-10">
+                    <div className="max-w-5xl mx-auto w-full py-8 space-y-10 px-6">
                         {currentSession.messages.map((msg) => (
-                            <div key={msg.id} className={cn(
-                                "group flex w-full",
-                                msg.role === 'user' ? "justify-end" : "justify-start"
-                            )}>
-                                <div className={cn(
-                                    "flex flex-col space-y-2 min-w-0 max-w-[85%]",
-                                    msg.role === 'user' ? "items-end" : "items-start"
-                                )}>
-                                    <div className="relative w-full">
-                                        <div className={cn(
-                                            "prose prose-invert prose-brand max-w-none text-[15px] leading-relaxed",
-                                            msg.role === 'user'
-                                                ? "bg-zinc-800/50 border border-white/5 rounded-2xl px-4 py-3 text-zinc-200"
-                                                : "bg-transparent assistant-bubble"
-                                        )}>
-                                            {msg.role === 'assistant' && !msg.content ? (
-                                                <div className="flex flex-col gap-3 py-2">
-                                                    <div className="flex items-center gap-3 text-zinc-400">
-                                                        <div className="flex gap-1">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.3s]" />
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.15s]" />
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" />
-                                                        </div>
-                                                        <span className="text-sm font-medium tracking-tight bg-gradient-to-r from-zinc-300 to-zinc-500 bg-clip-text text-transparent">
-                                                            {statusMessage || t('int_thinking')}
-                                                        </span>
-                                                    </div>
-
-                                                    {isGenerating && (
-                                                        <div className="flex flex-col gap-1 px-4 py-3 bg-white/[0.02] border border-white/5 rounded-xl animate-in fade-in slide-in-from-top-2 duration-500">
-                                                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
-                                                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                                                                Search Path
-                                                            </div>
-                                                            <div className="text-xs text-zinc-400 flex items-center gap-2">
-                                                                <Check size={10} className="text-emerald-500" />
-                                                                正在分析 "{inputValue || currentSession?.messages[currentSession.messages.length - 1]?.content.slice(0, 20)}..."
-                                                            </div>
-                                                            {statusMessage?.includes('检索') && (
-                                                                <div className="text-xs text-zinc-400 flex items-center gap-2 animate-in fade-in duration-300">
-                                                                    <div className="w-2 h-2 rounded-full border border-zinc-600 border-t-zinc-300 animate-spin" />
-                                                                    查找匹配的推文和语境...
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                    {msg.content}
-                                                </ReactMarkdown>
-                                            )}
-                                            {msg.isStreaming && msg.content && (
-                                                <span className="inline-block w-1.5 h-4 ml-1 bg-brand animate-pulse align-middle" />
-                                            )}
-                                        </div>
-
-                                        {/* AI Actions */}
-                                        {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
-                                            <div className="mt-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => insertToNote('text', msg.content)}
-                                                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-[10px] text-zinc-500 hover:text-zinc-300 border border-transparent hover:border-white/10"
-                                                >
-                                                    <FilePlus size={12} />
-                                                    {t('int_add_to_note')}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Citations (Updated Visuals) */}
-                                    {msg.citations && msg.citations.length > 0 && !msg.isStreaming && (
-                                        <div className="space-y-3 mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                            {msg.role === 'assistant' && (
-                                                <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest flex items-center gap-2">
-                                                    <div className="h-px bg-white/5 flex-1" />
-                                                    {t('int_sources')}
-                                                    <div className="h-px bg-white/5 flex-1" />
-                                                </div>
-                                            )}
-                                            <div className={cn(
-                                                "grid gap-3",
-                                                msg.role === 'user' ? "flex flex-wrap" : "grid-cols-1 md:grid-cols-2"
-                                            )}>
-                                                {msg.citations.map((tweet) => {
-                                                    const author = (tweet.author as any) || {};
-                                                    const hasMedia = tweet.media && tweet.media.length > 0;
-                                                    const firstMedia = hasMedia ? tweet.media[0] : null;
-
-                                                    // Media handling
-                                                    const previewUrl = firstMedia?.previewUrl || (firstMedia?.type === 'image' ? firstMedia.url : '');
-                                                    let thumbnailUrl = previewUrl;
-                                                    if (thumbnailUrl && thumbnailUrl.includes('pbs.twimg.com') && !thumbnailUrl.includes('?')) {
-                                                        thumbnailUrl += '?format=jpg&name=small';
-                                                    }
-
-                                                    // Relevance Score
-                                                    const relevance = (tweet as any).relevanceScore || 0;
-
-                                                    if (msg.role === 'user') {
-                                                        return (
-                                                            <div key={tweet.id} className="flex items-center gap-1.5 bg-white/5 border border-white/5 rounded-full px-2.5 py-1 text-zinc-400 text-[10px]">
-                                                                <div className="w-3.5 h-3.5 rounded-full overflow-hidden shrink-0 border border-white/10">
-                                                                    {author.avatar || tweet.authorAvatarUrl ? <img src={author.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" /> : <User size={10} />}
-                                                                </div>
-                                                                <span className="truncate max-w-[120px]">@{author.handle || tweet.authorName || 'User'}</span>
-                                                            </div>
-                                                        );
-                                                    }
-
-                                                    return (
-                                                        <div
-                                                            key={tweet.id}
-                                                            onClick={(e) => {
-                                                                // Prevent card click if clicking buttons
-                                                                window.open(tweet.tweetUrl, '_blank');
-                                                            }}
-                                                            className="group relative flex flex-col p-3 bg-zinc-900/40 hover:bg-zinc-800/60 rounded-xl border border-white/5 hover:border-white/10 transition-all cursor-pointer overflow-hidden"
-                                                        >
-                                                            {/* Header */}
-                                                            <div className="flex items-center gap-2 mb-2 relative z-10">
-                                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-zinc-800 shrink-0 border border-white/10">
-                                                                    {author.avatar || tweet.authorAvatarUrl ? (
-                                                                        <img src={author.avatar || tweet.authorAvatarUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                                                    ) : (
-                                                                        <div className="w-full h-full flex items-center justify-center text-zinc-500 font-bold text-[8px] bg-zinc-800">
-                                                                            {(author.name || tweet.authorName || 'U')[0]}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex flex-col min-w-0 flex-1 leading-none">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span className="text-[11px] font-bold text-zinc-200 truncate max-w-[100px]">
-                                                                            {author.name || tweet.authorName || 'Unknown'}
-                                                                        </span>
-                                                                        <span className="text-[10px] text-zinc-500 truncate">
-                                                                            @{author.handle || 'unknown'}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                                {tweet.savedAt && (
-                                                                    <div className="text-[9px] text-zinc-600 font-mono">
-                                                                        {new Date(tweet.savedAt).toLocaleDateString()}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            {/* Body */}
-                                                            <div className={cn(
-                                                                "text-[11px] text-zinc-400 leading-relaxed mb-2 break-words relative z-10",
-                                                                hasMedia ? "line-clamp-3" : "line-clamp-10"
-                                                            )}>
-                                                                {tweet.text}
-                                                            </div>
-
-                                                            {/* Media */}
-                                                            {hasMedia && thumbnailUrl && (
-                                                                <div className="aspect-video w-full rounded-lg bg-black/50 overflow-hidden relative mb-2 border border-white/5 z-10 grid place-items-center">
-                                                                    <img src={thumbnailUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" referrerPolicy="no-referrer" />
-                                                                    {firstMedia?.type === 'video' && (
-                                                                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                                                            <div className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center border border-white/20">
-                                                                                <Play size={10} fill="white" className="ml-0.5 text-white" />
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )}
-
-                                                            {/* Footer */}
-                                                            <div className="flex items-center justify-between mt-auto pt-1 relative z-10">
-                                                                <div className="flex items-center gap-1.5 overflow-hidden">
-                                                                    {tweet.tags && tweet.tags.slice(0, 2).map((tag, i) => (
-                                                                        <span key={i} className="px-1.5 py-0.5 rounded bg-brand/5 text-brand text-[9px] border border-brand/10 truncate max-w-[60px]">
-                                                                            #{tag}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                                <div className="flex items-center gap-3 shrink-0 ml-auto">
-                                                                    {tweet.aiScore !== undefined && tweet.aiScore > 0 && (
-                                                                        <span className="text-[9px] font-bold italic text-zinc-500">
-                                                                            Ask {tweet.aiScore}
-                                                                        </span>
-                                                                    )}
-                                                                    {relevance > 0 && (
-                                                                        <span className="text-[9px] font-mono text-emerald-500/80">
-                                                                            {relevance}%
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Action Button */}
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    insertToNote('tweet', tweet);
-                                                                }}
-                                                                className="absolute top-2 right-2 p-1.5 bg-brand text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-110 active:scale-95 z-20"
-                                                                title={t('int_add_to_note')}
-                                                            >
-                                                                <Plus size={12} />
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            <ChatMessage
+                                key={msg.id}
+                                msg={msg}
+                                isGenerating={isGenerating}
+                                statusMessage={statusMessage}
+                                insertToNote={insertToNote}
+                                t={t}
+                            />
                         ))}
                         {isGenerating && statusMessage && (!currentSession?.messages.length || currentSession.messages[currentSession.messages.length - 1].role !== 'assistant') && (
                             <div className="flex items-center gap-2 py-1 text-zinc-500 italic animate-pulse text-[13px] font-medium">
@@ -535,11 +332,12 @@ export const ChatArea: React.FC = () => {
                         )}
                         <div ref={messagesEndRef} className="h-10" />
                     </div>
-                )}
-            </div>
+                )
+                }
+            </div >
 
             {/* Input Area - ChatGPT Premium Style */}
-            <div className="w-full max-w-3xl mx-auto px-4 pb-8 pt-2">
+            < div className="w-full max-w-5xl mx-auto px-6 pb-8 pt-2" >
                 <div
                     onDrop={handleDrop}
                     onDragOver={(e) => e.preventDefault()}
@@ -617,46 +415,48 @@ export const ChatArea: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
             {/* Floating Selection Tooltip */}
-            {selectionInfo && (
-                <div
-                    style={{
-                        position: 'fixed',
-                        left: `${selectionInfo.x}px`,
-                        top: `${selectionInfo.y}px`,
-                        transform: 'translate(-50%, -100%)',
-                    }}
-                    className="z-[1000] flex items-center gap-1 p-1 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl animate-in fade-in zoom-in duration-200"
-                >
-                    <button
-                        onClick={() => {
-                            insertToNote('text', selectionInfo.text);
-                            setSelectionInfo(null);
+            {
+                selectionInfo && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            left: `${selectionInfo.x}px`,
+                            top: `${selectionInfo.y}px`,
+                            transform: 'translate(-50%, -100%)',
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/5 text-zinc-200 text-xs font-semibold rounded-lg transition-colors"
+                        className="z-[1000] flex items-center gap-1 p-1 bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl animate-in fade-in zoom-in duration-200"
                     >
-                        <Sparkles size={14} className="text-brand" />
-                        插入笔记
-                    </button>
-                    <div className="w-px h-4 bg-white/10" />
-                    <button
-                        onClick={() => {
-                            navigator.clipboard.writeText(selectionInfo.text);
-                            setSelectionInfo(null);
-                        }}
-                        className="px-3 py-1.5 hover:bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg transition-colors"
-                    >
-                        复制
-                    </button>
-                    <button
-                        onClick={() => setSelectionInfo(null)}
-                        className="p-1.5 hover:bg-white/5 text-zinc-500 rounded-lg transition-colors"
-                    >
-                        <Plus size={14} className="rotate-45" />
-                    </button>
-                </div>
-            )}
-        </div>
+                        <button
+                            onClick={() => {
+                                insertToNote('text', selectionInfo.text);
+                                setSelectionInfo(null);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-white/5 text-zinc-200 text-xs font-semibold rounded-lg transition-colors"
+                        >
+                            <Sparkles size={14} className="text-brand" />
+                            插入笔记
+                        </button>
+                        <div className="w-px h-4 bg-white/10" />
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText(selectionInfo.text);
+                                setSelectionInfo(null);
+                            }}
+                            className="px-3 py-1.5 hover:bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg transition-colors"
+                        >
+                            复制
+                        </button>
+                        <button
+                            onClick={() => setSelectionInfo(null)}
+                            className="p-1.5 hover:bg-white/5 text-zinc-500 rounded-lg transition-colors"
+                        >
+                            <Plus size={14} className="rotate-45" />
+                        </button>
+                    </div>
+                )
+            }
+        </div >
     );
 };

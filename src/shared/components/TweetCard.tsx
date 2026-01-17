@@ -14,7 +14,7 @@ function cn(...inputs: ClassValue[]) {
 interface TweetCardProps {
     tweet: Tweet;
     author: UserCache;
-    mode?: 'masonry' | 'compact' | 'reference';
+    mode?: 'masonry' | 'compact' | 'reference' | 'citation';
     onAuthorClick?: (author: UserCache) => void;
     onTagClick?: (tag: string) => void;
 }
@@ -42,6 +42,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
     const { t } = useTranslation();
     const { openLightbox } = useUIStore();
     const isMasonry = mode === 'masonry';
+    const isCitation = mode === 'citation';
 
     const handleDelete = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -73,8 +74,10 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
             onClick={() => window.open(tweet.tweetUrl, '_blank')}
             className={cn(
                 "group relative glass-card rounded-xl overflow-hidden flex flex-col transition-all cursor-pointer hover:shadow-lg hover:border-white/10",
-                "p-3 gap-2 border-b border-white/5",
-                "break-inside-avoid w-full box-border mb-4",
+                "p-3 gap-2",
+                !isCitation && "border-b border-white/5 mb-4",
+                isCitation ? "w-[300px] h-[380px] shrink-0 border border-white/5" : "w-full",
+                "break-inside-avoid box-border",
                 "select-none",
                 // 高级数据看板动效：渐显 + 缩放 + 向上滑入
                 "animate-in fade-in zoom-in-[0.98] slide-in-from-bottom-2 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -97,7 +100,10 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                     }}
                     className="flex items-center gap-2.5 hover:opacity-80 transition-opacity cursor-pointer"
                 >
-                    <div className="w-10 h-10 rounded-full border border-white/10 bg-zinc-800 shrink-0 overflow-hidden">
+                    <div className={cn(
+                        "rounded-full border border-white/10 bg-zinc-800 shrink-0 overflow-hidden",
+                        isCitation ? "w-8 h-8" : "w-10 h-10"
+                    )}>
                         {avatarUrl && !imgFail ? (
                             <img
                                 src={avatarUrl}
@@ -109,16 +115,22 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center bg-brand/10 text-brand">
-                                <User size={20} />
+                                <User size={isCitation ? 14 : 20} />
                             </div>
                         )}
                     </div>
                     <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-[16px] leading-tight text-zinc-100 truncate max-w-[140px]">
+                        <span className={cn(
+                            "font-bold leading-tight text-zinc-100 truncate",
+                            isCitation ? "text-[13px] max-w-[120px]" : "text-[16px] max-w-[140px]"
+                        )}>
                             {author?.name || 'Unknown'}
                         </span>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[15px] text-zinc-500 leading-tight">
+                        <div className="flex items-center gap-1.5">
+                            <span className={cn(
+                                "text-zinc-500 leading-tight",
+                                isCitation ? "text-[12px]" : "text-[15px]"
+                            )}>
                                 @{author?.handle || 'unknown'}
                             </span>
                             {tweet.aiCategory && (
@@ -158,9 +170,10 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                 </div>
             )}
 
-            {tweet.aiSummary && (
+            {tweet.aiSummary && (!isCitation || isExpanded) && (
                 <div className={cn(
-                    "text-zinc-200 text-[15px] leading-[1.4] p-2.5 rounded-xl border italic mb-1",
+                    "text-zinc-200 leading-[1.4] p-2.5 rounded-xl border italic mb-1",
+                    isCitation ? "text-[13px]" : "text-[15px]",
                     tweet.aiScore && tweet.aiScore >= 90 ? "bg-rose-400/5 border-rose-400/10" : "bg-white/[0.03] border-white/5"
                 )}>
                     <div className="flex items-start gap-2">
@@ -181,11 +194,19 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
             )}
 
             {/* Content Area */}
-            <div className="relative">
+            <div
+                className={cn("relative", isCitation && "flex-1 overflow-y-auto no-scrollbar")}
+                onClick={(e) => {
+                    if (isCitation) {
+                        e.stopPropagation();
+                        setIsExpanded(!isExpanded);
+                    }
+                }}
+            >
                 <div className={cn(
                     "text-zinc-300 break-words transition-all duration-300",
-                    "text-[16px] leading-[1.5]",
-                    !isExpanded && isMasonry && "line-clamp-5",
+                    isCitation ? "text-[13px] leading-[1.5]" : "text-[16px] leading-[1.5]",
+                    !isExpanded && (isMasonry || isCitation) && (isCitation ? "line-clamp-3" : "line-clamp-5"),
                     "select-text"
                 )}>
                     {tweet.text || "(No Text Content)"}
@@ -322,18 +343,20 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                     >
                         <Tag size={13} fill={tweet.isBookmarked ? "currentColor" : "none"} />
                     </button>
-                    <button
-                        onClick={handleDelete}
-                        className={cn(
-                            "p-1.5 rounded-lg transition-all",
-                            deleteConfirm
-                                ? "bg-rose-500/20 text-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500/50"
-                                : "hover:bg-rose-500/10 text-zinc-600 hover:text-rose-500"
-                        )}
-                        title="Delete Tweet"
-                    >
-                        <Trash2 size={13} className={cn(deleteConfirm && "animate-pulse")} />
-                    </button>
+                    {!isCitation && (
+                        <button
+                            onClick={handleDelete}
+                            className={cn(
+                                "p-1.5 rounded-lg transition-all",
+                                deleteConfirm
+                                    ? "bg-rose-500/20 text-rose-500 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500/50"
+                                    : "hover:bg-rose-500/10 text-zinc-600 hover:text-rose-500"
+                            )}
+                            title="Delete Tweet"
+                        >
+                            <Trash2 size={13} className={cn(deleteConfirm && "animate-pulse")} />
+                        </button>
+                    )}
                     <div className="text-[10px] font-medium opacity-50 italic">
                         {tweet.createdAt ? new Date(tweet.createdAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' }) : '00/00'}
                     </div>
