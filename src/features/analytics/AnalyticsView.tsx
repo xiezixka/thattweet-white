@@ -18,7 +18,8 @@ import {
     GripVertical,
     Share2,
     BarChart,
-    ChevronDown
+    ChevronDown,
+    Trash2
 } from 'lucide-react';
 import { useSettingsStore, SettingsState } from '@shared/store/useSettingsStore';
 import { TweetAnalyzer } from '../../core/ai/analyzer';
@@ -333,6 +334,29 @@ export const AnalyticsView: React.FC = () => {
                 return { ...prev, [handle]: history };
             });
         } finally { setSendingChat(false); }
+    };
+
+    const handleClearChat = () => {
+        if (!current) return;
+        if (window.confirm('确定要清空与该作者的所有对话记录吗？')) {
+            setChatHistory(prev => {
+                const newHistory = { ...prev };
+                delete newHistory[current.handle];
+                return newHistory;
+            });
+        }
+    };
+
+    const handleDeleteMessage = (index: number) => {
+        if (!current) return;
+        setChatHistory(prev => {
+            const history = [...(prev[current.handle] || [])];
+            history.splice(index, 1);
+            return {
+                ...prev,
+                [current.handle]: history
+            };
+        });
     };
 
     if (loading) return (
@@ -735,6 +759,15 @@ export const AnalyticsView: React.FC = () => {
                     <h3 className="text-xs font-black text-white uppercase tracking-[0.4em] flex items-center gap-3">
                         <Sparkles size={16} /> 思想沙龙
                     </h3>
+                    {currentChat.length > 0 && (
+                        <button
+                            onClick={handleClearChat}
+                            className="text-zinc-600 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-500/10"
+                            title="清空对话"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    )}
                 </div>
 
                 <div
@@ -755,7 +788,7 @@ export const AnalyticsView: React.FC = () => {
                         </div>
                     ) : (
                         currentChat.map((msg, i) => (
-                            <div key={i} className={cn("flex gap-6", msg.role === 'user' ? "flex-row-reverse" : "flex-row")}>
+                            <div key={i} className={cn("group flex gap-6 relative", msg.role === 'user' ? "flex-row-reverse" : "flex-row")}>
                                 <div className={cn("w-8 h-8 rounded-lg shrink-0 flex items-center justify-center overflow-hidden border border-white/5",
                                     msg.role === 'user' ? "bg-white text-black text-[10px] font-black uppercase" : "bg-zinc-900")}>
                                     {msg.role === 'user' ? 'YOU' : (
@@ -766,6 +799,16 @@ export const AnalyticsView: React.FC = () => {
                                     msg.role === 'user' ? "text-right text-white" : "text-left text-zinc-300")}>
                                     {msg.role === 'assistant' ? <MarkdownRenderer content={msg.content} /> : msg.content}
                                 </div>
+                                <button
+                                    onClick={() => handleDeleteMessage(i)}
+                                    className={cn(
+                                        "absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-zinc-600 hover:text-red-500 rounded-lg hover:bg-red-500/10",
+                                        msg.role === 'user' ? "-left-8" : "-right-8"
+                                    )}
+                                    title="删除此条"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
                             </div>
                         ))
                     )}
