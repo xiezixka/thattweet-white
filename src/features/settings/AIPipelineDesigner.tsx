@@ -173,6 +173,7 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                 key={meta.key}
                 className={cn(
                     "group relative bg-zinc-950/50 border rounded-3xl p-5 transition-all duration-500",
+                    "focus-within:z-50", // 👈 确保内部下拉菜单展示时置顶
                     isEnabled
                         ? "border-white/10 hover:border-white/20 hover:bg-white/[0.02] shadow-2xl shadow-black"
                         : "border-white/5 opacity-40 grayscale"

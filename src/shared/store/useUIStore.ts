@@ -7,6 +7,7 @@ export type ViewType = 'feed' | 'intelligence' | 'gallery' | 'analytics' | 'stat
 interface LightboxState {
     media: MediaItem[];
     analysis?: Array<{ ocr?: string; description?: string }>;
+    fallbackDescription?: string; // 当 analysis 为空时的回退描述
     index: number;
     isOpen: boolean;
     mode?: 'default' | 'clean';
@@ -26,6 +27,7 @@ interface UIState {
         media: MediaItem[],
         index: number,
         analysis?: Array<{ ocr?: string; description?: string }>,
+        fallbackDescription?: string,
         mode?: 'default' | 'clean'
     ) => void;
     closeLightbox: () => void;
@@ -48,8 +50,8 @@ export const useUIStore = create<UIState>()(
                 index: 0,
                 isOpen: false,
             },
-            openLightbox: (media, index, analysis, mode = 'default') => set({
-                lightbox: { media, index, analysis, isOpen: true, mode }
+            openLightbox: (media, index, analysis, fallbackDescription, mode = 'default') => set({
+                lightbox: { media, index, analysis, fallbackDescription, isOpen: true, mode }
             }),
             closeLightbox: () => set((state) => ({
                 lightbox: { ...state.lightbox, isOpen: false }

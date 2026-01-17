@@ -88,7 +88,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         transition={{ duration: 0.3, ease: 'easeOut' }}
                         className={['intelligence', 'settings'].includes(activeView)
                             ? "flex-1 overflow-hidden flex flex-col w-full h-full"
-                            : "flex-1 overflow-y-auto no-scrollbar"}
+                            : "flex-1 overflow-y-auto overflow-x-hidden"}
                     >
                         {children}
                     </motion.div>

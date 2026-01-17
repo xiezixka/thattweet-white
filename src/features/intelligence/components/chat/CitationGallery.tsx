@@ -210,7 +210,7 @@ export const CitationGallery: React.FC<CitationGalleryProps> = ({ citations, isO
                                     <div
                                         key={`${tweet.id}-${item.originalIndex}`}
                                         className="group relative aspect-square rounded-lg overflow-hidden cursor-zoom-in bg-black/20"
-                                        onClick={() => openLightbox(allMediaForLightbox, globalIndex, allAnalysisForLightbox)}
+                                        onClick={() => openLightbox(allMediaForLightbox, globalIndex, allAnalysisForLightbox, undefined)}
                                     >
                                         <img
                                             src={normalizeTwitterImage(media.type === 'video' && media.previewUrl ? media.previewUrl : media.url, 'media')}

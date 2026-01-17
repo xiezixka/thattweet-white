@@ -145,5 +145,22 @@ export const TweetRepository = {
                 await db.tweets.bulkPut(data.tweets);
             }
         });
+    },
+
+    /**
+     * 清空所有数据 (推文和用户)
+     * @returns 删除的记录数
+     */
+    async clearAllData(): Promise<{ tweets: number; users: number }> {
+        const tweetCount = await db.tweets.count();
+        const userCount = await db.users.count();
+
+        await db.transaction('rw', [db.tweets, db.users], async () => {
+            await db.tweets.clear();
+            await db.users.clear();
+        });
+
+        console.log(`[TweetRepository] Cleared ${tweetCount} tweets and ${userCount} users`);
+        return { tweets: tweetCount, users: userCount };
     }
 };

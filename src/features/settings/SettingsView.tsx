@@ -17,6 +17,7 @@ import supportImg from '../../assets/img/支持一下.png';
 import { embeddingSyncManager } from '../intelligence/services/embeddingSyncManager';
 import { SyncProgress } from '../intelligence/services/embeddingService';
 import logoPng from '../../assets/img/icon.png';
+import { VisionService } from '../../core/vision/visionService';
 
 type SettingsGroup = 'neural' | 'memory' | 'system';
 
@@ -100,6 +101,47 @@ export const SettingsView: React.FC = () => {
             setEmbedStats(stats);
         }
     };
+
+    const [isResettingImages, setIsResettingImages] = useState(false);
+
+    const handleResetImageAnalysis = async () => {
+        if (!confirm('确定要重新分析所有图片吗？这将使用 VLM API 配额。')) return;
+
+        setIsResettingImages(true);
+        try {
+            const count = await VisionService.resetAllImageAnalysis();
+            setStatus(`已重置 ${count} 条推文的图片分析`);
+            setTimeout(() => setStatus(''), 3000);
+        } catch (error) {
+            console.error('Reset failed:', error);
+            setStatus('ERROR');
+        } finally {
+            setIsResettingImages(false);
+        }
+    };
+
+    const [isClearingData, setIsClearingData] = useState(false);
+
+    const handleClearAllData = async () => {
+        if (!confirm('⚠️ 危险操作！\n\n确定要清空所有推文和用户数据吗？\n此操作不可恢复！建议先导出备份。')) return;
+        if (!confirm('再次确认：所有数据将被永久删除，确定继续吗？')) return;
+
+        setIsClearingData(true);
+        try {
+            const result = await TweetRepository.clearAllData();
+            setStatus(`已清空 ${result.tweets} 条推文和 ${result.users} 个用户`);
+            setTimeout(() => {
+                setStatus('');
+                window.location.reload(); // 刷新页面以更新 UI
+            }, 2000);
+        } catch (error) {
+            console.error('Clear failed:', error);
+            setStatus('ERROR');
+        } finally {
+            setIsClearingData(false);
+        }
+    };
+
     useEffect(() => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.get(['aiSettings'], (result) => {
@@ -372,6 +414,30 @@ export const SettingsView: React.FC = () => {
                                             <span className="font-mono text-xs text-white w-8 text-right">{settings.maxImagesPerTweet ?? 4}</span>
                                         </div>
                                     </Field>
+
+                                    {/* Reset Image Analysis Button */}
+                                    <div className="pt-4 border-t border-white/5">
+                                        <button
+                                            onClick={handleResetImageAnalysis}
+                                            disabled={isResettingImages}
+                                            className={cn(
+                                                "w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border",
+                                                isResettingImages
+                                                    ? "bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed"
+                                                    : "bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20"
+                                            )}
+                                        >
+                                            {isResettingImages ? (
+                                                <Loader2 size={12} className="animate-spin" />
+                                            ) : (
+                                                <Eye size={12} />
+                                            )}
+                                            {isResettingImages ? '重置中...' : '重新分析所有图片'}
+                                        </button>
+                                        <p className="text-[9px] text-zinc-600 mt-2 text-center">
+                                            清空现有分析结果，使用新模型/配置重新处理所有图片
+                                        </p>
+                                    </div>
                                 </Card>
                             </div>
 
@@ -428,7 +494,7 @@ export const SettingsView: React.FC = () => {
                                 </Card>
 
                                 {/* The Pipeline */}
-                                <div className="border border-white/5 rounded-3xl overflow-hidden bg-[#080808]">
+                                <div className="border border-white/5 rounded-3xl bg-[#080808]">
                                     <div className="p-6 border-b border-white/5 bg-white/[0.01]">
                                         <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
                                             <BrainCircuit size={14} /> {t('pipeline_arch')}
@@ -642,6 +708,42 @@ export const SettingsView: React.FC = () => {
                                         className="bg-transparent border border-dashed border-white/10 px-3 py-1.5 rounded text-xs font-bold text-white focus:border-white/40 focus:outline-none uppercase w-24 placeholder:text-zinc-700"
                                     />
                                 </div>
+                            </Card>
+
+                            {/* Danger Zone */}
+                            <Card className="border-red-500/20 bg-red-500/[0.02]">
+                                <SectionHeader title="危险操作" icon={AlertCircle} />
+                                <div className="flex items-center justify-between p-4 bg-red-500/5 border border-red-500/10 rounded-xl">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 rounded-lg bg-red-500/10 text-red-500">
+                                            <Database size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white uppercase tracking-widest">清空所有数据</p>
+                                            <p className="text-xs text-zinc-500 font-mono mt-0.5">永久删除所有推文和用户记录</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleClearAllData}
+                                        disabled={isClearingData}
+                                        className={cn(
+                                            "px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all border",
+                                            isClearingData
+                                                ? "bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed"
+                                                : "bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40"
+                                        )}
+                                    >
+                                        {isClearingData ? (
+                                            <Loader2 size={14} className="animate-spin" />
+                                        ) : (
+                                            <X size={14} />
+                                        )}
+                                        {isClearingData ? '清空中...' : '清空全部'}
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-red-500/40 mt-3 text-center">
+                                    ⚠️ 此操作不可恢复，建议先执行备份
+                                </p>
                             </Card>
                         </div>
                     )}

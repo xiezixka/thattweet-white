@@ -264,7 +264,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                                     className="flex-none w-full aspect-video snap-center relative overflow-hidden flex items-center justify-center cursor-zoom-in bg-white/[0.02]"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        openLightbox(mediaItems, idx, tweet.mediaAnalysis);
+                                        openLightbox(mediaItems, idx, tweet.mediaAnalysis, tweet.visionDescription);
                                     }}
                                 >
                                     <picture className="w-full h-full">

@@ -96,6 +96,7 @@ export interface Tweet {
   mediaAnalysis?: Array<{      // 每一张图片的单独分析 (按索引对应)
     ocr?: string;
     description?: string;
+    categories?: string[];       // 🆕 图片分类 (支持多分类)
   }>;
   imageProcessStatus: ProcessStatus; // 图像处理状态
   imageProcessedAt?: number;   // 图像处理完成时间

@@ -33,12 +33,14 @@ export class AIJobQueue {
             const pendingTweets = await TweetRepository.getPendingAITweets();
             const toProcess = pendingTweets.filter(t => {
                 if (t.isArchived) return false;
+                if (t.aiStatus !== ProcessStatus.Pending) return false; // 严格检查
 
                 // 如果启用了图片分析且推文有图，必须等图片处理完；
                 const isVisionActive = settings.workflowNodes.perception.enabled;
                 if (isVisionActive) {
                     const hasImages = t.media?.some(m => m.type === 'image');
-                    if (hasImages && t.imageProcessStatus === ProcessStatus.Pending) {
+                    // 如果图片还没处理完（处于 Pending 或 Processing），则跳过
+                    if (hasImages && (t.imageProcessStatus === ProcessStatus.Pending || t.imageProcessStatus === ProcessStatus.Processing)) {
                         return false;
                     }
                 }
@@ -48,6 +50,11 @@ export class AIJobQueue {
             // 队列积压逻辑：必须满一整批才处理，节省 API 限额
             if (toProcess.length < settings.batchSize) {
                 return;
+            }
+
+            // 🚀 核心修复：立即标记为 Processing，防止重复进入队列
+            for (const t of toProcess) {
+                await db.tweets.update(t.id, { aiStatus: ProcessStatus.Processing });
             }
 
             console.log(`[ThatTweet] AI Queue starting batch process for ${toProcess.length} tweets.`);

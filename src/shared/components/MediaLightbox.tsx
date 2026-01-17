@@ -10,7 +10,7 @@ import { useTranslation } from '../hooks/useTranslation';
  */
 export const MediaLightbox: React.FC = () => {
     const { lightbox, closeLightbox, setLightboxIndex } = useUIStore();
-    const { isOpen, media, index, analysis } = lightbox;
+    const { isOpen, media, index, analysis, fallbackDescription } = lightbox;
     const [copied, setCopied] = React.useState(false);
     const [provider, setProvider] = React.useState<string>('SiliconFlow');
     const { t } = useTranslation();
@@ -46,10 +46,30 @@ export const MediaLightbox: React.FC = () => {
         }
     }, [isOpen, index, media.length, closeLightbox, setLightboxIndex]);
 
+    // 鼠标滚轮导航
+    const handleWheel = useCallback((e: WheelEvent) => {
+        if (!isOpen) return;
+        e.preventDefault();
+
+        if (e.deltaY > 0 && index < media.length - 1) {
+            // 向下滚动 = 下一张
+            setLightboxIndex(index + 1);
+            setCopied(false);
+        } else if (e.deltaY < 0 && index > 0) {
+            // 向上滚动 = 上一张
+            setLightboxIndex(index - 1);
+            setCopied(false);
+        }
+    }, [isOpen, index, media.length, setLightboxIndex]);
+
     useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleKeyDown]);
+        window.addEventListener('wheel', handleWheel, { passive: false });
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('wheel', handleWheel);
+        };
+    }, [handleKeyDown, handleWheel]);
 
     const goToPrev = () => {
         if (index > 0) {
@@ -83,33 +103,35 @@ export const MediaLightbox: React.FC = () => {
                 <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
 
-            {/* Navigation Arrows */}
-            {media.length > 1 && (
-                <>
-                    {index > 0 && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); goToPrev(); }}
-                            className="absolute left-6 top-1/2 -translate-y-1/2 z-[10001] p-4 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all active:scale-95"
-                        >
-                            <ChevronLeft size={28} />
-                        </button>
-                    )}
-                    {index < media.length - 1 && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); goToNext(); }}
-                            className="absolute right-6 top-1/2 -translate-y-1/2 z-[10001] p-4 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all active:scale-95"
-                        >
-                            <ChevronRight size={28} />
-                        </button>
-                    )}
-                </>
-            )}
-
             {/* Main Content Container */}
             <div className="relative w-full h-full flex flex-col md:flex-row overflow-hidden">
 
                 {/* Image Display Area - Click outside image to close */}
-                <div className="flex-1 h-full flex items-center justify-center p-8 md:p-16" onClick={closeLightbox}>
+                <div className="flex-1 h-full flex items-center justify-center p-8 md:p-16 relative" onClick={closeLightbox}>
+
+                    {/* Navigation Arrows - Inside image container */}
+                    {media.length > 1 && (
+                        <>
+                            {index > 0 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); goToPrev(); }}
+                                    className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 p-3 md:p-4 text-zinc-400 hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl transition-all active:scale-95"
+                                >
+                                    <ChevronLeft size={24} />
+                                </button>
+                            )}
+                            {index < media.length - 1 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); goToNext(); }}
+                                    className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 p-3 md:p-4 text-zinc-400 hover:text-white bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl transition-all active:scale-95"
+                                >
+                                    <ChevronRight size={24} />
+                                </button>
+                            )}
+                        </>
+                    )}
+
+                    {/* Image Container */}
                     <div className="relative max-w-full max-h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
                         {/* Soft Glow Backdrop */}
                         <div className="absolute -inset-16 bg-brand/5 blur-[120px] rounded-full opacity-30 pointer-events-none" />
@@ -144,6 +166,13 @@ export const MediaLightbox: React.FC = () => {
                             />
                         )}
                     </div>
+
+                    {/* Page Indicator - Inside image container at bottom */}
+                    {media.length > 1 && (
+                        <div className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 z-20 px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-xs font-bold text-white tracking-widest leading-none">
+                            {index + 1} <span className="text-white/30 mx-1">/</span> {media.length}
+                        </div>
+                    )}
                 </div>
 
                 {/* Sidebar (Desktop Only) - Hide in clean mode */}
@@ -199,12 +228,29 @@ export const MediaLightbox: React.FC = () => {
                                         </section>
                                     )}
                                 </div>
+                            ) : fallbackDescription ? (
+                                // Fallback: 详细分析为空，但有整体描述
+                                <div key={`fallback-${index}`} className="space-y-6 animate-in fade-in duration-500">
+                                    <section>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="text-[11px] font-bold text-amber-400/70 uppercase tracking-[0.1em]">Overall Vision</div>
+                                            <div className="px-2 py-0.5 rounded bg-amber-400/10 border border-amber-400/20 text-[9px] font-bold text-amber-400 uppercase">Fallback</div>
+                                        </div>
+                                        <p className="text-zinc-100 text-[17px] leading-relaxed font-medium tracking-tight">
+                                            {fallbackDescription}
+                                        </p>
+                                        <p className="mt-4 text-[11px] text-zinc-500 italic">
+                                            ⚠️ 详细图片分析解析失败，显示整体描述
+                                        </p>
+                                    </section>
+                                </div>
                             ) : (
-                                <div className="h-full flex flex-col items-center justify-center opacity-20 text-center space-y-4">
+                                <div className="h-full flex flex-col items-center justify-center opacity-30 text-center space-y-4">
                                     <div className="w-12 h-12 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
-                                        <Loader2 size={20} className="animate-spin duration-[3s]" />
+                                        <Sparkles size={20} className="text-zinc-500" />
                                     </div>
-                                    <div className="text-[11px] font-bold uppercase tracking-widest text-white/40">Analyzing media...</div>
+                                    <div className="text-[11px] font-bold uppercase tracking-widest text-white/40">No analysis available</div>
+                                    <p className="text-[10px] text-zinc-600 max-w-[200px]">VLM 未处理或处理失败</p>
                                 </div>
                             )}
                         </div>
@@ -228,17 +274,25 @@ export const MediaLightbox: React.FC = () => {
                 {/* Mobile Adaptive Drawer - Hide in clean mode */}
                 {lightbox.mode !== 'clean' && (
                     <div className="md:hidden p-6 absolute bottom-0 left-0 right-0 z-30">
-                        {currentAnalysis && (
+                        {(currentAnalysis?.description || currentAnalysis?.ocr || fallbackDescription) && (
                             <div className="p-6 bg-zinc-950/90 backdrop-blur-2xl border border-white/10 rounded-[32px] max-h-[40vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 duration-500">
                                 <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-6" />
                                 <div className="space-y-6">
-                                    {currentAnalysis.description && (
+                                    {currentAnalysis?.description ? (
                                         <div>
                                             <div className="text-[10px] font-bold text-brand uppercase tracking-widest mb-2">Vision</div>
                                             <p className="text-zinc-100 text-sm leading-relaxed">{currentAnalysis.description}</p>
                                         </div>
+                                    ) : fallbackDescription && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Overall</div>
+                                                <div className="px-1.5 py-0.5 rounded bg-amber-400/10 text-[8px] font-bold text-amber-400 uppercase">Fallback</div>
+                                            </div>
+                                            <p className="text-zinc-100 text-sm leading-relaxed">{fallbackDescription}</p>
+                                        </div>
                                     )}
-                                    {currentAnalysis.ocr && (
+                                    {currentAnalysis?.ocr && (
                                         <div className="pt-6 border-t border-white/5">
                                             <div className="flex items-center justify-between mb-2">
                                                 <div className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">OCR</div>
@@ -253,13 +307,6 @@ export const MediaLightbox: React.FC = () => {
                     </div>
                 )}
             </div>
-
-            {/* Bottom Page Indicator */}
-            {media.length > 1 && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[10001] px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-xs font-bold text-white tracking-widest leading-none">
-                    {index + 1} <span className="text-white/30 mx-1">/</span> {media.length}
-                </div>
-            )}
 
         </div>,
         document.body

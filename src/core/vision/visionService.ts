@@ -1,6 +1,7 @@
 import { db } from '../storage/db';
 import { Tweet, ProcessStatus, MediaItem } from '../../shared/types/tweet';
 import { AISettings, DEFAULT_AI_SETTINGS, getSafeAISettings } from '../../shared/types/settings';
+import { parseCategories } from '../../shared/constants/imageCategories';
 
 /**
  * 视觉与 OCR 核心服务 (SiliconFlow Multi-modal 驱动)
@@ -50,9 +51,16 @@ export class VisionService {
         try {
             // 一次处理一批
             const batchSize = settings.visionBatchSize || 3;
-            const tweetsToProcess = eligibleTweets.slice(0, batchSize);
+            const tweetsToProcess = eligibleTweets
+                .filter(t => t.imageProcessStatus === ProcessStatus.Pending)
+                .slice(0, batchSize);
 
             if (tweetsToProcess.length > 0) {
+                // 🚀 核心修复：立即标记状态，防止重复入队或 race condition
+                for (const t of tweetsToProcess) {
+                    await db.tweets.update(t.id, { imageProcessStatus: ProcessStatus.Processing });
+                }
+
                 await this.processBatch(tweetsToProcess, apiKey, settings);
             }
         } finally {
@@ -330,6 +338,65 @@ export class VisionService {
 
                     jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
 
+                    // 🆕 检测多个独立 JSON 对象的情况 (VLM 返回了多个 {...} {...} 而不是 { "id1": {...}, "id2": {...} })
+                    // 特征：在 } 后面紧跟着 { 或换行后 {
+                    const multiObjectPattern = /\}\s*\n?\s*\{/g;
+                    if (multiObjectPattern.test(jsonStr)) {
+                        console.log('[VisionService] Detected multiple separate JSON objects, attempting to merge...');
+
+                        // 分割多个对象并解析
+                        const objects: any[] = [];
+                        let depth = 0;
+                        let start = 0;
+
+                        for (let i = 0; i < jsonStr.length; i++) {
+                            if (jsonStr[i] === '{') {
+                                if (depth === 0) start = i;
+                                depth++;
+                            } else if (jsonStr[i] === '}') {
+                                depth--;
+                                if (depth === 0) {
+                                    const objStr = jsonStr.substring(start, i + 1);
+                                    try {
+                                        const obj = JSON.parse(objStr);
+                                        objects.push(obj);
+                                    } catch (e) {
+                                        console.warn('[VisionService] Failed to parse individual object:', objStr.substring(0, 100));
+                                    }
+                                }
+                            }
+                        }
+
+                        if (objects.length > 0) {
+                            console.log(`[VisionService] Successfully parsed ${objects.length} separate objects`);
+
+                            // 合并为统一格式 - 用 推文ID 或顺序索引作为 key
+                            const merged: any = {};
+                            objects.forEach((obj, idx) => {
+                                // 尝试提取推文 ID (可能在 "推文ID" 字段里)
+                                let tweetId = obj['推文ID'] || obj['tweet_id'] || obj['id'];
+
+                                // 清理 ID 格式（移除方括号和引号）
+                                if (typeof tweetId === 'string') {
+                                    tweetId = tweetId.replace(/[\[\]"]/g, '').trim();
+                                }
+
+                                // 如果没有 ID，用传入的实际推文 ID
+                                if (!tweetId && idx < tweets.length) {
+                                    tweetId = tweets[idx].id;
+                                }
+
+                                if (tweetId) {
+                                    merged[tweetId] = obj;
+                                }
+                            });
+
+                            // 替换 jsonStr 为合并后的 JSON
+                            jsonStr = JSON.stringify(merged);
+                            console.log('[VisionService] Merged objects:', Object.keys(merged));
+                        }
+                    }
+
                     // 0. 反转义：某些模型会多余地转义引号 (\" -> ")
                     // 检测特征：如果 JSON 里包含 \" 但不包含正常的 " (除了开头和结尾)
                     if (jsonStr.includes('\\"') && !jsonStr.slice(1, -1).includes('"')) {
@@ -368,11 +435,16 @@ export class VisionService {
                     // 只处理引号内的内容，因为 JSON 结构本身可以有换行符
                     cleanedJson = cleanedJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, content) => {
                         // 替换字符串值内的真实换行符为转义形式
-                        const cleaned = content
+                        let cleaned = content
                             .replace(/\n/g, '\\n')
                             .replace(/\r/g, '\\r')
                             .replace(/\t/g, '\\t')
                             .replace(/[\x00-\x1F]/g, ''); // 移除其他控制字符
+
+                        // 🆕 修复无效转义序列 (如 \g, \H 等) - 把 \x 变成 x（移除反斜杠）
+                        // 有效转义: \n, \r, \t, \\, \", \/, \b, \f, \uXXXX
+                        cleaned = cleaned.replace(/\\([^nrtbf\\"\/u])/g, '$1');
+
                         return `"${cleaned}"`;
                     });
 
@@ -458,10 +530,10 @@ export class VisionService {
                             }
                         }
 
-                        // 辅助函数：标准化单个分析结果为 {ocr, description} 格式
-                        const normalizeDetail = (item: any): { ocr: string; description: string } => {
+                        // 辅助函数：标准化单个分析结果为 {ocr, description, categories} 格式
+                        const normalizeDetail = (item: any): { ocr: string; description: string; categories: string[] } => {
                             if (typeof item === 'string') {
-                                return { ocr: '', description: item };
+                                return { ocr: '', description: item, categories: ['other'] };
                             }
 
                             const desc = item.depth_insight
@@ -480,6 +552,9 @@ export class VisionService {
 
                             const typeInfo = item.type || item['类型'] || '';
 
+                            // 🆕 提取分类
+                            const categories = parseCategories(typeInfo);
+
                             // 组合描述：类型 + 描述 + 亮点
                             let fullDesc = desc;
                             if (typeInfo) fullDesc = `[${typeInfo}] ${fullDesc}`;
@@ -487,7 +562,8 @@ export class VisionService {
 
                             return {
                                 ocr: typeof ocr === 'string' ? ocr : '',
-                                description: fullDesc
+                                description: fullDesc,
+                                categories
                             };
                         };
 
@@ -503,6 +579,27 @@ export class VisionService {
                             normalized[tweetId] = {
                                 overall: data.overall,
                                 details: [normalizeDetail(data.details)]
+                            };
+                        } else if (Array.isArray(data.images)) {
+                            // 🆕 新格式：images 数组
+                            // 按 index 排序并标准化
+                            const sortedImages = [...data.images].sort((a, b) => (a.index || 0) - (b.index || 0));
+                            const details = sortedImages.map(normalizeDetail);
+                            const firstDesc = details[0]?.description || '';
+
+                            normalized[tweetId] = {
+                                overall: firstDesc,
+                                details
+                            };
+                        } else if (data['图片索引0'] || data['图片索引1'] || Object.keys(data).some(k => k.startsWith('图片索引'))) {
+                            // 🆕 处理旧格式的 "图片索引0", "图片索引1" 等
+                            const imageKeys = Object.keys(data).filter(k => k.startsWith('图片索引')).sort();
+                            const details = imageKeys.map(k => normalizeDetail(data[k]));
+                            const firstDesc = details[0]?.description || '';
+
+                            normalized[tweetId] = {
+                                overall: firstDesc,
+                                details
                             };
                         } else {
                             // 转换为标准格式 - 支持多种字段名（英文和中文）
@@ -568,10 +665,12 @@ export class VisionService {
 
                                     const desc = descMatch?.[1]?.replace(/\\n/g, '\n') || '';
                                     const typeInfo = typeMatch?.[1] || '';
+                                    const categories = parseCategories(typeInfo);
 
                                     return {
                                         ocr: ocrMatch?.[1]?.replace(/\\n/g, '\n') || '',
-                                        description: typeInfo ? `[${typeInfo}] ${desc}` : desc
+                                        description: typeInfo ? `[${typeInfo}] ${desc}` : desc,
+                                        categories
                                     };
                                 });
 
@@ -592,12 +691,14 @@ export class VisionService {
 
                                         const desc = descMatch?.[1]?.replace(/\\n/g, '\n') || '';
                                         const typeInfo = typeMatch?.[1] || '';
+                                        const categories = parseCategories(typeInfo);
 
                                         recovered[tweets[index].id] = {
                                             overall: typeInfo ? `[${typeInfo}] ${desc}` : desc,
                                             details: [{
                                                 ocr: ocrMatch?.[1]?.replace(/\\n/g, '\n') || '',
-                                                description: desc
+                                                description: desc,
+                                                categories
                                             }]
                                         };
                                     }
@@ -613,11 +714,18 @@ export class VisionService {
                         console.error('[VisionService] Recovery failed:', recoveryError);
                     }
 
-                    // 如果走到这里依然没有数据
+                    // 🆕 尝试使用 textAnalysis 模型修复
+                    console.log('[VisionService] All parsing attempts failed. Trying repair with text model...');
+                    const repaired = await this.repairWithTextModel(rawContent, tweets, imageBase64List.length, settings);
+                    if (repaired && Object.keys(repaired).length > 0) {
+                        return repaired;
+                    }
+
+                    // 如果修复也失败了，返回 fallback
                     const fallback: any = {};
                     tweets.forEach(t => {
                         fallback[t.id] = {
-                            overall: "视觉分析解析彻底失败。原始响应：" + (rawContent ? rawContent.substring(0, 200) : '无响应'),
+                            overall: "视觉分析解析失败。原始响应：" + (rawContent ? rawContent.substring(0, 200) : '无响应'),
                             details: []
                         };
                     });
@@ -730,6 +838,142 @@ export class VisionService {
     }
 
     /**
+     * 🆕 使用 textAnalysis 模型修复 VLM 解析失败的响应
+     * 当 VLM 返回的内容格式不对时，调用文本模型帮助提取结构化数据
+     */
+    private static async repairWithTextModel(
+        rawContent: string,
+        tweets: Tweet[],
+        imageCount: number,
+        settings: AISettings
+    ): Promise<Record<string, { overall: string; details: Array<{ ocr: string; description: string; categories: string[] }> }> | null> {
+        try {
+            const node = settings.workflowNodes.textAnalysis;
+            const providerId = node.providerId || settings.defaultProviderId;
+            const provider = settings.providers.find(p => p.id === providerId);
+
+            if (!provider || !provider.apiKey || !node.model) {
+                console.log('[VisionService] Text model not configured, skipping repair');
+                return null;
+            }
+
+            console.log('[VisionService] 🔧 Attempting to repair VLM response with text model...');
+
+            const tweetInfo = tweets.map(t => `- Tweet ID: ${t.id} (预期有图片)`).join('\n');
+
+            const repairPrompt = `你是一个 JSON 数据修复专家。下面是一个 VLM 视觉模型的原始输出，但格式有问题无法直接解析。
+请帮我从中提取有用信息，并转换为标准的 JSON 格式。
+
+## 原始 VLM 输出:
+\`\`\`
+${rawContent.substring(0, 3000)}
+\`\`\`
+
+## 需要提取的推文:
+${tweetInfo}
+
+## 要求的输出格式:
+返回一个 JSON 对象，键是推文 ID，值包含:
+- overall: 图片的整体描述（字符串）
+- details: 数组，每个元素是 { ocr: "提取的文字", description: "图片描述", categories: ["类型"] }
+
+categories 可选值: code, architecture, ui_design, chart, portrait, illustration, cosplay, product, screenshot, meme, photo, other
+
+只返回 JSON，不要任何解释或 markdown 标记。如果无法提取有效信息，返回空对象 {}。`;
+
+            const baseUrl = provider.baseUrl.trim().replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${provider.apiKey.trim()}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: node.model,
+                    messages: [
+                        { role: 'system', content: '你是一个 JSON 数据修复专家。只返回有效的 JSON，不要任何解释。' },
+                        { role: 'user', content: repairPrompt }
+                    ],
+                    temperature: 0.3,
+                    max_tokens: 2048
+                })
+            });
+
+            if (!response.ok) {
+                console.warn('[VisionService] Text model repair failed:', response.status);
+                return null;
+            }
+
+            const data = await response.json();
+            const repairContent = data.choices?.[0]?.message?.content?.trim();
+
+            if (!repairContent) {
+                console.warn('[VisionService] Empty repair response');
+                return null;
+            }
+
+            console.log('[VisionService] Repair model response:', repairContent.substring(0, 500));
+
+            // 解析修复后的 JSON
+            try {
+                const firstBrace = repairContent.indexOf('{');
+                const lastBrace = repairContent.lastIndexOf('}');
+
+                if (firstBrace === -1 || lastBrace === -1) {
+                    console.warn('[VisionService] No JSON found in repair response');
+                    return null;
+                }
+
+                const jsonStr = repairContent.substring(firstBrace, lastBrace + 1);
+                const parsed = JSON.parse(jsonStr);
+
+                if (Object.keys(parsed).length === 0) {
+                    console.warn('[VisionService] Repair returned empty object');
+                    return null;
+                }
+
+                // 标准化结果
+                const normalized: Record<string, { overall: string; details: Array<{ ocr: string; description: string; categories: string[] }> }> = {};
+
+                for (const [tweetId, value] of Object.entries(parsed)) {
+                    const data = value as any;
+
+                    // 确保有正确的结构
+                    if (data.overall !== undefined || data.details) {
+                        normalized[tweetId] = {
+                            overall: data.overall || '',
+                            details: Array.isArray(data.details) ? data.details.map((d: any) => ({
+                                ocr: d.ocr || '',
+                                description: d.description || '',
+                                categories: Array.isArray(d.categories) ? d.categories : parseCategories(d.categories || '')
+                            })) : []
+                        };
+                    } else if (typeof data === 'string') {
+                        // 如果值是纯字符串，作为 overall
+                        normalized[tweetId] = {
+                            overall: data,
+                            details: [{ ocr: '', description: data, categories: ['other'] }]
+                        };
+                    }
+                }
+
+                if (Object.keys(normalized).length > 0) {
+                    console.log('%c[VisionService] ✅ Repair successful!', 'color: #4CAF50', normalized);
+                    return normalized;
+                }
+
+                return null;
+            } catch (parseErr) {
+                console.warn('[VisionService] Failed to parse repaired JSON:', parseErr);
+                return null;
+            }
+        } catch (err) {
+            console.error('[VisionService] Repair with text model failed:', err);
+            return null;
+        }
+    }
+
+    /**
      * 获取 SiliconFlow 可用的模型列表
      * 可用于调试和模型选择
      */
@@ -785,5 +1029,43 @@ export class VisionService {
 
         const models = await this.fetchAvailableModels(provider.apiKey, provider.provider === 'openrouter' ? 'openrouter' : 'siliconflow');
         console.table(models);
+    }
+
+    /**
+     * 重置所有图片分析状态，以便重新处理
+     * Reset all image analysis status to trigger reprocessing
+     * @returns 重置的推文数量
+     */
+    static async resetAllImageAnalysis(): Promise<number> {
+        console.log('[VisionService] Resetting all image analysis status...');
+
+        // 获取所有已完成分析的推文
+        const completedTweets = await db.tweets
+            .where('imageProcessStatus')
+            .anyOf([ProcessStatus.Completed, ProcessStatus.Failed, ProcessStatus.Skipped])
+            .filter(t => t.media?.some(m => m.type === 'image'))
+            .toArray();
+
+        if (completedTweets.length === 0) {
+            console.log('[VisionService] No tweets to reset');
+            return 0;
+        }
+
+        // 批量更新状态为 Pending
+        const resetPromises = completedTweets.map(t =>
+            db.tweets.update(t.id, {
+                imageProcessStatus: ProcessStatus.Pending,
+                // 清空旧的分析数据，以便写入新格式（带 categories）
+                mediaAnalysis: undefined,
+                visionDescription: undefined,
+                ocrText: undefined,
+                imageProcessedAt: undefined
+            })
+        );
+
+        await Promise.all(resetPromises);
+
+        console.log(`[VisionService] Reset ${completedTweets.length} tweets for reprocessing`);
+        return completedTweets.length;
     }
 }

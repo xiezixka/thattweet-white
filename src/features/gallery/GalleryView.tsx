@@ -2,11 +2,31 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTweets } from '../../shared/hooks/useTweets';
 import { useUIStore } from '../../shared/store/useUIStore';
 import { normalizeTwitterImage } from '../../shared/utils/image';
-import { Search, SlidersHorizontal, X, Image as ImageIcon, Loader2, User, Hash, ChevronDown } from 'lucide-react';
+import {
+    Search, SlidersHorizontal, X, Image as ImageIcon, Loader2, User, Hash, ChevronDown,
+    Layers, Code, Network, Layout, BarChart3, Palette, Sparkles, Package, Monitor, Smile, Camera, MoreHorizontal
+} from 'lucide-react';
 import { cn } from '../../shared/utils/cn';
 import { UserCache } from '../../shared/types/tweet';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { GalleryGridItem } from './components/GalleryGridItem';
+import { CATEGORY_META, ImageCategory, getAllCategories } from '../../shared/constants/imageCategories';
+
+// Icon mapping for categories
+const CATEGORY_ICONS: Record<ImageCategory, React.ReactNode> = {
+    code: <Code size={14} />,
+    architecture: <Network size={14} />,
+    ui_design: <Layout size={14} />,
+    chart: <BarChart3 size={14} />,
+    portrait: <User size={14} />,
+    illustration: <Palette size={14} />,
+    cosplay: <Sparkles size={14} />,
+    product: <Package size={14} />,
+    screenshot: <Monitor size={14} />,
+    meme: <Smile size={14} />,
+    photo: <Camera size={14} />,
+    other: <MoreHorizontal size={14} />
+};
 
 export const GalleryView: React.FC = () => {
     const { tweets, loading } = useTweets();
@@ -16,6 +36,7 @@ export const GalleryView: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
+    const [selectedCategories, setSelectedCategories] = useState<Set<ImageCategory>>(new Set());
     const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     const [authorSearch, setAuthorSearch] = useState('');
     const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -38,10 +59,11 @@ export const GalleryView: React.FC = () => {
         return tweets.filter(t => t.media && t.media.length > 0);
     }, [tweets]);
 
-    // 2. 提取筛选选项 (作者和标签) - 基于所有媒体推文，带数量统计
+    // 2. 提取筛选选项 (作者、标签、类型) - 基于所有媒体推文，带数量统计
     const filters = useMemo(() => {
         const authorCounts = new Map<string, { data: UserCache; count: number }>();
         const tagCounts = new Map<string, number>();
+        const categoryCounts = new Map<ImageCategory, number>();
 
         mediaTweets.forEach(t => {
             // 统计作者
@@ -58,9 +80,19 @@ export const GalleryView: React.FC = () => {
                     authorCounts.set(id, { data: { ...authorData, id }, count: t.media.length });
                 }
             }
+
             // 统计标签
             t.tags?.forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + t.media.length));
             t.aiTags?.forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + t.media.length));
+
+            // 🆕 统计图片类型
+            t.mediaAnalysis?.forEach(analysis => {
+                const cats = analysis.categories || ['other'];
+                cats.forEach(cat => {
+                    const catKey = cat as ImageCategory;
+                    categoryCounts.set(catKey, (categoryCounts.get(catKey) || 0) + 1);
+                });
+            });
         });
 
         // 按数量排序
@@ -69,8 +101,11 @@ export const GalleryView: React.FC = () => {
         const tagList = Array.from(tagCounts.entries())
             .map(([tag, count]) => ({ tag, count }))
             .sort((a, b) => b.count - a.count);
+        const categoryList = Array.from(categoryCounts.entries())
+            .map(([category, count]) => ({ category, count }))
+            .sort((a, b) => b.count - a.count);
 
-        return { authors: authorList, tags: tagList };
+        return { authors: authorList, tags: tagList, categories: categoryList };
     }, [mediaTweets]);
 
     // Filter authors for search in panel
@@ -83,7 +118,7 @@ export const GalleryView: React.FC = () => {
         );
     }, [filters.authors, authorSearch]);
 
-    // 3. 执行过滤
+    // 3. 执行过滤 (按 Tweet 级别)
     const filteredTweets = useMemo(() => {
         return mediaTweets.filter(t => {
             // 搜索过滤
@@ -106,21 +141,42 @@ export const GalleryView: React.FC = () => {
                 if (!allTags.includes(selectedTag)) return false;
             }
 
+            // 🆕 类型过滤 - 只要任意一张图片匹配任意选中的类型
+            if (selectedCategories.size > 0) {
+                const hasMatchingCategory = t.mediaAnalysis?.some(analysis => {
+                    const cats = analysis.categories || ['other'];
+                    return cats.some(cat => selectedCategories.has(cat as ImageCategory));
+                });
+                if (!hasMatchingCategory) return false;
+            }
+
             return true;
         });
-    }, [mediaTweets, searchQuery, selectedAuthor, selectedTag]);
+    }, [mediaTweets, searchQuery, selectedAuthor, selectedTag, selectedCategories]);
 
-    // 4. Flatten data for global lightbox navigation
+    // 4. Flatten data for global lightbox navigation (with category filter applied per-media)
     const flatGalleryItems = useMemo(() => {
         return filteredTweets.flatMap(t =>
-            (t.media || []).map((media, originalIndex) => ({
-                media,
-                originalIndex,
-                tweet: t,
-                analysis: t.mediaAnalysis?.[originalIndex]
-            }))
-        );
-    }, [filteredTweets]);
+            (t.media || []).map((media, originalIndex) => {
+                const analysis = t.mediaAnalysis?.[originalIndex];
+                const categories = analysis?.categories || ['other'];
+
+                // 如果选中了类型筛选，只展示匹配的图片
+                if (selectedCategories.size > 0) {
+                    const matches = categories.some(cat => selectedCategories.has(cat as ImageCategory));
+                    if (!matches) return null;
+                }
+
+                return {
+                    media,
+                    originalIndex,
+                    tweet: t,
+                    analysis: analysis || {},
+                    categories
+                };
+            }).filter(Boolean)
+        ) as Array<{ media: any; originalIndex: number; tweet: any; analysis: any; categories: string[] }>;
+    }, [filteredTweets, selectedCategories]);
 
     const allMediaForLightbox = useMemo(() => flatGalleryItems.map(i => i.media), [flatGalleryItems]);
     const allAnalysisForLightbox = useMemo(() => flatGalleryItems.map(i => i.analysis || {}), [flatGalleryItems]);
@@ -147,12 +203,25 @@ export const GalleryView: React.FC = () => {
         filters.authors.find(a => a.data.id === selectedAuthor)?.data
         , [filters.authors, selectedAuthor]);
 
-    const activeFilterCount = (selectedAuthor ? 1 : 0) + (selectedTag ? 1 : 0);
+    const activeFilterCount = (selectedAuthor ? 1 : 0) + (selectedTag ? 1 : 0) + selectedCategories.size;
 
     const clearAllFilters = () => {
         setSelectedAuthor(null);
         setSelectedTag(null);
+        setSelectedCategories(new Set());
         setSearchQuery('');
+    };
+
+    const toggleCategory = (cat: ImageCategory) => {
+        setSelectedCategories(prev => {
+            const next = new Set(prev);
+            if (next.has(cat)) {
+                next.delete(cat);
+            } else {
+                next.add(cat);
+            }
+            return next;
+        });
     };
 
     return (
@@ -215,7 +284,7 @@ export const GalleryView: React.FC = () => {
 
                             {/* Filter Panel Dropdown */}
                             {isFilterPanelOpen && (
-                                <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-zinc-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                                <div className="absolute right-0 top-full mt-2 w-80 sm:w-[420px] bg-zinc-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
                                     {/* Panel Header */}
                                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                                         <span className="text-sm font-bold text-white">筛选条件</span>
@@ -227,6 +296,42 @@ export const GalleryView: React.FC = () => {
                                                 清除全部
                                             </button>
                                         )}
+                                    </div>
+
+                                    {/* 🆕 Category Section */}
+                                    <div className="p-4 border-b border-white/5">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Layers size={14} className="text-zinc-500" />
+                                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">图片类型</span>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2">
+                                            {filters.categories.map(({ category, count }) => {
+                                                const meta = CATEGORY_META[category];
+                                                const isSelected = selectedCategories.has(category);
+                                                return (
+                                                    <button
+                                                        key={category}
+                                                        onClick={() => toggleCategory(category)}
+                                                        className={cn(
+                                                            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all select-none border",
+                                                            isSelected
+                                                                ? `bg-white/10 border-white/20 text-white`
+                                                                : "bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600"
+                                                        )}
+                                                    >
+                                                        <span className={cn(isSelected ? meta.color : 'text-zinc-500')}>
+                                                            {CATEGORY_ICONS[category]}
+                                                        </span>
+                                                        <span>{meta.label}</span>
+                                                        <span className="text-zinc-600">({count})</span>
+                                                    </button>
+                                                );
+                                            })}
+                                            {filters.categories.length === 0 && (
+                                                <span className="text-xs text-zinc-600">暂无分类数据（需要重新分析图片）</span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Authors Section */}
@@ -319,9 +424,28 @@ export const GalleryView: React.FC = () => {
                 </div>
 
                 {/* Active Filters Chips */}
-                {(selectedAuthor || selectedTag) && (
+                {(selectedAuthor || selectedTag || selectedCategories.size > 0) && (
                     <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-white/5">
                         <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mr-1">已选:</span>
+
+                        {/* Category Chips */}
+                        {Array.from(selectedCategories).map(cat => {
+                            const meta = CATEGORY_META[cat];
+                            return (
+                                <button
+                                    key={cat}
+                                    onClick={() => toggleCategory(cat)}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium group hover:bg-white/10 transition-colors border border-white/10",
+                                        meta.color
+                                    )}
+                                >
+                                    {CATEGORY_ICONS[cat]}
+                                    <span>{meta.label}</span>
+                                    <X size={12} className="opacity-50 group-hover:opacity-100" />
+                                </button>
+                            );
+                        })}
 
                         {selectedAuthorData && (
                             <button
@@ -386,7 +510,7 @@ export const GalleryView: React.FC = () => {
                                     media={media}
                                     tweet={tweet}
                                     index={index}
-                                    onClick={() => openLightbox(allMediaForLightbox, index, allAnalysisForLightbox, 'clean')}
+                                    onClick={() => openLightbox(allMediaForLightbox, index, allAnalysisForLightbox, undefined, 'clean')}
                                 />
                             );
                         })}
