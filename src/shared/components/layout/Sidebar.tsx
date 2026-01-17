@@ -18,9 +18,11 @@ function cn(...inputs: ClassValue[]) {
 
 interface SidebarProps {
     forceExpand?: boolean;
+    isPinned?: boolean;
+    onTogglePin?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false, isPinned = false, onTogglePin }) => {
     const { activeView, setActiveView } = useUIStore();
     const { t } = useTranslation();
 
@@ -32,20 +34,39 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false }) => {
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];
 
+    const shouldExpand = forceExpand || isPinned;
+
     return (
         <aside
             className={cn(
                 "h-screen flex flex-col relative transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] bg-zinc-900/95 backdrop-blur-xl border-r border-white/10 select-none shrink-0 overflow-hidden shadow-[20px_0_50px_rgba(0,0,0,0.5)]",
-                forceExpand ? "w-[200px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-full"
+                shouldExpand ? "w-[200px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-full"
             )}
         >
-            {/* Header: Logo Only */}
-            <div className="h-20 flex items-center px-6 shrink-0 border-b border-white/[0.05]">
+            {/* Header: Logo (Click to Pin) */}
+            <div
+                className={cn(
+                    "h-20 flex items-center px-6 shrink-0 border-b transition-all cursor-pointer group",
+                    isPinned
+                        ? "border-brand/20 bg-brand/5"
+                        : "border-white/[0.05] hover:bg-white/[0.02]"
+                )}
+                onClick={onTogglePin}
+                title={isPinned ? "点击取消固定 / Click to unpin" : "点击固定侧边栏 / Click to pin"}
+            >
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-xl">
+                    <div className={cn(
+                        "w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-xl transition-all",
+                        isPinned && "ring-2 ring-brand/50"
+                    )}>
                         <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
                     </div>
-                    <span className="font-bold text-base tracking-tight text-white">ThatTweet</span>
+                    <span className={cn(
+                        "font-bold text-base tracking-tight transition-colors",
+                        isPinned ? "text-brand" : "text-white group-hover:text-brand/80"
+                    )}>
+                        ThatTweet
+                    </span>
                 </div>
             </div>
 
@@ -89,13 +110,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false }) => {
                     );
                 })}
             </nav>
-
-            {/* Bottom Section */}
-            <div className="p-5 mt-auto border-t border-white/[0.05]">
-                <div className="text-[11px] text-zinc-500 font-medium tracking-tight">
-                    Hover edge to reveal
-                </div>
-            </div>
         </aside>
     );
 };

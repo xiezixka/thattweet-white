@@ -309,29 +309,64 @@ export const StatsView: React.FC = () => {
                             <Users size={14} /> {t('stats_top_authors')}
                         </h3>
                         <div className="space-y-1.5">
-                            {authorStats.slice(0, 5).map(author => (
-                                <button
-                                    key={author.handle}
-                                    onClick={() => toggleAuthor(author.handle)}
-                                    className={cn(
-                                        "w-full flex items-center gap-2 p-2 rounded-lg transition-all text-left",
-                                        selectedAuthors.includes(author.handle)
-                                            ? "bg-brand/20 border border-brand/30"
-                                            : "hover:bg-white/5"
-                                    )}
-                                >
-                                    <div className="w-6 h-6 rounded-full bg-zinc-700 overflow-hidden shrink-0">
-                                        {author.avatar && (
-                                            <img src={author.avatar} alt="" className="w-full h-full object-cover" />
+                            {authorStats.slice(0, 5).map((author, index) => {
+                                // 前三名的奖牌颜色
+                                const rankColors = [
+                                    'bg-amber-500 text-amber-900', // 🥇 金
+                                    'bg-zinc-300 text-zinc-700',   // 🥈 银
+                                    'bg-amber-700 text-amber-100'  // 🥉 铜
+                                ];
+                                const isTopThree = index < 3;
+
+                                return (
+                                    <button
+                                        key={author.handle}
+                                        onClick={() => toggleAuthor(author.handle)}
+                                        className={cn(
+                                            "w-full flex items-center gap-2 p-2 rounded-lg transition-all text-left",
+                                            selectedAuthors.includes(author.handle)
+                                                ? "bg-brand/20 border border-brand/30"
+                                                : "hover:bg-white/5"
                                         )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-medium text-zinc-300 truncate">{author.name}</p>
-                                        <p className="text-[10px] text-zinc-500">@{author.handle}</p>
-                                    </div>
-                                    <span className="text-xs text-zinc-500">{author.count}</span>
-                                </button>
-                            ))}
+                                    >
+                                        {/* 排名徽章 */}
+                                        <div className={cn(
+                                            "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                                            isTopThree ? rankColors[index] : "bg-zinc-700 text-zinc-400"
+                                        )}>
+                                            {index + 1}
+                                        </div>
+
+                                        <div className={cn(
+                                            "w-6 h-6 rounded-full bg-zinc-700 overflow-hidden shrink-0",
+                                            isTopThree && index === 0 && "ring-2 ring-amber-500/50",
+                                            isTopThree && index === 1 && "ring-2 ring-zinc-300/50",
+                                            isTopThree && index === 2 && "ring-2 ring-amber-700/50"
+                                        )}>
+                                            {author.avatar && (
+                                                <img src={author.avatar} alt="" className="w-full h-full object-cover" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={cn(
+                                                "text-xs font-medium truncate",
+                                                index === 0 ? "text-amber-400" :
+                                                    index === 1 ? "text-zinc-200" :
+                                                        index === 2 ? "text-amber-600" :
+                                                            "text-zinc-300"
+                                            )}>{author.name}</p>
+                                            <p className="text-[10px] text-zinc-500">@{author.handle}</p>
+                                        </div>
+                                        <span className={cn(
+                                            "text-xs font-bold",
+                                            index === 0 ? "text-amber-400" :
+                                                index === 1 ? "text-zinc-300" :
+                                                    index === 2 ? "text-amber-600" :
+                                                        "text-zinc-500"
+                                        )}>{author.count}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 

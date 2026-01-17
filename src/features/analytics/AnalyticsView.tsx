@@ -387,36 +387,62 @@ export const AnalyticsView: React.FC = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-1">
-                    {filteredAuthors.map((author, index) => (
-                        <button
-                            key={author.handle}
-                            onClick={() => setSelectedHandle(author.handle)}
-                            className={cn(
-                                "w-full flex items-center gap-4 p-4 rounded-2xl transition-all group relative border border-transparent",
-                                selectedHandle === author.handle ? "bg-white/[0.08] border-white/5 shadow-2xl" : "hover:bg-white/[0.03]"
-                            )}
-                        >
-                            <span className={cn("w-6 text-sm font-black italic tabular-nums shrink-0 transition-colors",
-                                index < 3 ? "text-brand" : "text-zinc-700 group-hover:text-zinc-500",
-                                selectedHandle === author.handle && "text-white"
-                            )}>{String(index + 1).padStart(2, '0')}</span>
+                    {filteredAuthors.map((author, index) => {
+                        // 计算原始排名（在未过滤列表中的位置）
+                        const originalRank = authors.findIndex(a => a.handle === author.handle);
+                        const isTopThree = originalRank < 3;
 
-                            <div className="relative shrink-0">
-                                <div className={cn("w-11 h-11 rounded-xl overflow-hidden border transition-all duration-500",
-                                    selectedHandle === author.handle ? "border-brand scale-105" : "border-white/10 group-hover:border-white/30")}>
-                                    <img src={author.avatar} className="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all" />
-                                </div>
-                            </div>
+                        // 前三名的奖牌颜色
+                        const rankColors = [
+                            { badge: 'bg-amber-500 text-amber-900', ring: 'ring-amber-500/50', text: 'text-amber-400' }, // 🥇 金
+                            { badge: 'bg-zinc-300 text-zinc-700', ring: 'ring-zinc-300/50', text: 'text-zinc-200' },   // 🥈 银
+                            { badge: 'bg-amber-700 text-amber-100', ring: 'ring-amber-700/50', text: 'text-amber-600' }  // 🥉 铜
+                        ];
 
-                            <div className="flex-1 min-w-0 text-left">
-                                <div className="text-[var(--font-fluid-base)] font-bold text-zinc-300 group-hover:text-white truncate transition-colors">{author.name}</div>
-                                <div className="flex items-center gap-3 mt-1.5 opacity-60">
-                                    <div className="flex items-center gap-1 text-[10px] font-bold text-zinc-400"><TrendingUp size={10} /> {(author.totalLikes / 1000).toFixed(1)}K</div>
-                                    <div className="flex items-center gap-1 text-[10px] font-bold text-brand"><Zap size={10} /> {author.totalHvi}</div>
+                        return (
+                            <button
+                                key={author.handle}
+                                onClick={() => setSelectedHandle(author.handle)}
+                                className={cn(
+                                    "w-full flex items-center gap-4 p-4 rounded-2xl transition-all group relative border border-transparent",
+                                    selectedHandle === author.handle ? "bg-white/[0.08] border-white/5 shadow-2xl" : "hover:bg-white/[0.03]"
+                                )}
+                            >
+                                {/* 排名徽章 */}
+                                <div className={cn(
+                                    "w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black italic shrink-0 transition-colors",
+                                    isTopThree ? rankColors[originalRank].badge : "bg-zinc-800 text-zinc-600 group-hover:text-zinc-400",
+                                    selectedHandle === author.handle && !isTopThree && "bg-brand/20 text-brand"
+                                )}>
+                                    {originalRank + 1}
                                 </div>
-                            </div>
-                        </button>
-                    ))}
+
+                                <div className="relative shrink-0">
+                                    <div className={cn(
+                                        "w-11 h-11 rounded-xl overflow-hidden border transition-all duration-500",
+                                        selectedHandle === author.handle ? "border-brand scale-105" : "border-white/10 group-hover:border-white/30",
+                                        isTopThree && `ring-2 ${rankColors[originalRank].ring}`
+                                    )}>
+                                        <img src={author.avatar} className="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all" />
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 min-w-0 text-left">
+                                    <div className={cn(
+                                        "text-[var(--font-fluid-base)] font-bold truncate transition-colors",
+                                        isTopThree ? rankColors[originalRank].text : "text-zinc-300 group-hover:text-white"
+                                    )}>{author.name}</div>
+                                    <div className="flex items-center gap-3 mt-1.5 opacity-60">
+                                        <div className="flex items-center gap-1 text-[10px] font-bold text-zinc-400"><TrendingUp size={10} /> {(author.totalLikes / 1000).toFixed(1)}K</div>
+                                        <div className={cn(
+                                            "flex items-center gap-1 text-[10px] font-bold",
+                                            isTopThree ? rankColors[originalRank].text : "text-brand"
+                                        )}><Zap size={10} /> {author.totalHvi}</div>
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })}
                 </div>
             </aside>
 

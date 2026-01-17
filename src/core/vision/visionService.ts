@@ -684,19 +684,38 @@ export class VisionService {
 
     /**
      * 强制立即处理单个推文的视觉分析
+     * 注意：这个方法不检查 enabled 状态，只要配置了 provider 和 model 就可以运行
+     * 用于收藏时触发视觉分析
      */
     static async forceProcessTweet(tweetId: string) {
         const settings = await this.getSettings();
         const node = settings.workflowNodes.perception;
-        if (!node.enabled) return;
+
+        // 不检查 enabled，只要配置了就可以运行
 
         const tweet = await db.tweets.get(tweetId);
         if (!tweet) return;
 
-        // Resolve Config
+        // 检查推文是否有图片
+        const hasImages = tweet.media?.some(m => m.type === 'image');
+        if (!hasImages) {
+            console.log(`[VisionService] Tweet ${tweetId} has no images, skipping vision analysis`);
+            return;
+        }
+
+        // Resolve Config - 必须有 provider 和 apiKey
         const providerId = node.providerId || settings.defaultProviderId;
         const provider = settings.providers.find(p => p.id === providerId);
-        if (!provider || !provider.apiKey) return;
+        if (!provider || !provider.apiKey) {
+            console.log(`[VisionService] No valid provider configured for perception, skipping`);
+            return;
+        }
+
+        // 检查是否配置了模型
+        if (!node.model) {
+            console.log(`[VisionService] No model configured for perception, skipping`);
+            return;
+        }
 
         console.log(`[VisionService] Forcing immediate perception analysis for ${tweetId}`);
         await this.processBatch([tweet], provider.apiKey, settings);
