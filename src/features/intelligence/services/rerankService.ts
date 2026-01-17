@@ -50,12 +50,30 @@ export const rerankService = {
             return documents.slice(0, topK).map((_, i) => ({ index: i, score: 1 - i * 0.01 }));
         }
 
-        const apiKey = settings.ragApiKey;
+        // 智能获取 API Key
+        let apiKey = settings.ragApiKey;
+        if (!apiKey) {
+            const rerankerUrl = settings.rerankerUrl || 'https://api.siliconflow.cn/v1/rerank';
+
+            // 尝试匹配地址相近的 Provider
+            let matchedProvider = settings.providers.find(p =>
+                p.baseUrl && rerankerUrl.includes(new URL(p.baseUrl).hostname)
+            );
+
+            // 如果没匹配到，用默认的
+            if (!matchedProvider) {
+                matchedProvider = settings.providers.find(p => p.id === settings.defaultProviderId);
+            }
+
+            apiKey = matchedProvider?.apiKey || '';
+            console.log(`[RerankService] Using ${matchedProvider ? matchedProvider.name : 'fallback'} API key`);
+        }
+
         const apiUrl = settings.rerankerUrl || 'https://api.siliconflow.cn/v1/rerank';
         const model = settings.rerankerModel || 'BAAI/bge-reranker-v2-m3';
 
         if (!apiKey) {
-            console.warn('[RerankService] RAG API Key not configured, falling back to original order');
+            console.warn('[RerankService] No API Key found, falling back to original order');
             return documents.slice(0, topK).map((_, i) => ({ index: i, score: 1 - i * 0.01 }));
         }
 

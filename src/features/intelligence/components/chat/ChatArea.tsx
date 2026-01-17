@@ -244,7 +244,7 @@ export const ChatArea: React.FC = () => {
                             )}
                         >
                             <Sparkles size={14} className={cn(searchMode === 'auto' && "animate-pulse")} />
-                            <span className="capitalize">{searchMode}</span>
+                            <span>{t(`int_mode_${searchMode === 'rag' ? 'semantic' : searchMode}`)}</span>
                             <ChevronDown size={14} className={cn("transition-transform", showSearchModeDropdown && "rotate-180")} />
                         </button>
 
@@ -257,7 +257,7 @@ export const ChatArea: React.FC = () => {
                                     <Sparkles size={16} className="text-yellow-500" />
                                     <div className="flex flex-col items-start">
                                         <span className="font-bold">{t('int_mode_auto')}</span>
-                                        <span className="text-[10px] text-zinc-500">智能切换 精确/语义</span>
+                                        <span className="text-[10px] text-zinc-500">{t('int_mode_auto_desc')}</span>
                                     </div>
                                     {searchMode === 'auto' && <Check size={14} className="ml-auto text-brand" />}
                                 </button>
@@ -268,7 +268,7 @@ export const ChatArea: React.FC = () => {
                                     <PlusCircle size={16} className="text-emerald-500" />
                                     <div className="flex flex-col items-start">
                                         <span className="font-bold">{t('int_mode_precise')}</span>
-                                        <span className="text-[10px] text-zinc-500">仅限作者、分数等精确匹配</span>
+                                        <span className="text-[10px] text-zinc-500">{t('int_mode_precise_desc')}</span>
                                     </div>
                                     {searchMode === 'structured' && <Check size={14} className="ml-auto text-brand" />}
                                 </button>
@@ -279,7 +279,7 @@ export const ChatArea: React.FC = () => {
                                     <Bot size={16} className="text-blue-500" />
                                     <div className="flex flex-col items-start">
                                         <span className="font-bold">{t('int_mode_semantic')}</span>
-                                        <span className="text-[10px] text-zinc-500">基于向量的语义相似度搜索</span>
+                                        <span className="text-[10px] text-zinc-500">{t('int_mode_semantic_desc')}</span>
                                     </div>
                                     {searchMode === 'rag' && <Check size={14} className="ml-auto text-brand" />}
                                 </button>

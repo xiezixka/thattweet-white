@@ -104,6 +104,24 @@
   "int_no_models": {
     "message": "未加载模型，请前往“实验室”配置 API Key。"
   },
+  "int_mode_auto": {
+    "message": "智能模式"
+  },
+  "int_mode_auto_desc": {
+    "message": "智能切换 精确/语义"
+  },
+  "int_mode_precise": {
+    "message": "精确模式"
+  },
+  "int_mode_precise_desc": {
+    "message": "仅限作者、分数等精确匹配"
+  },
+  "int_mode_semantic": {
+    "message": "语义模式"
+  },
+  "int_mode_semantic_desc": {
+    "message": "基于向量的语义相似度搜索"
+  },
   "int_note_title": {
     "message": "阅读笔记"
   },

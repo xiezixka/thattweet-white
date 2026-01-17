@@ -218,19 +218,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
             let contextCitations: Tweet[] = [];
             let lastSearchMethod: ChatMessage['searchMethod'] = 'none';
 
-            if (content.length > 1 || citations.length > 0) {
-                if (content.length > 1) {
+            if (content.trim().length > 0 || citations.length > 0) {
+                if (content.trim().length > 0) {
                     // 根据模式显示不同状态
-                    if (mode === 'rag') {
-                        get().setStatusMessage('正在进行语义向量检索...');
-                    } else if (mode === 'structured') {
-                        get().setStatusMessage('正在进行精确关键词检索...');
-                    } else {
-                        get().setStatusMessage('正在进行智能混合检索...');
-                    }
+                    const statusText = mode === 'rag' ? '正在进行语义向量检索...' :
+                        mode === 'structured' ? '正在进行精确关键词检索...' :
+                            '正在进行智能混合检索...';
+                    get().setStatusMessage(statusText);
 
                     // 调用 ragService，直接传递模式
                     const searchResults = await ragService.search(content, 12, mode);
+                    console.log(`[ChatStore] Search results found: ${searchResults.length}`);
+
+                    if (searchResults.length > 0) {
+                        get().setStatusMessage(`找到 ${searchResults.length} 条相关推文，正在分析内容...`);
+                    } else {
+                        get().setStatusMessage('未在推文库中找到直接相关内容，将尝试基于通用知识回答...');
+                    }
 
                     contextCitations = searchResults.map(r => {
                         const t = r.tweet as any;

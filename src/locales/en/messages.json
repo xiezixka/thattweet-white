@@ -101,6 +101,24 @@
   "int_note_title": {
     "message": "Intelligence Note"
   },
+  "int_mode_auto": {
+    "message": "Auto Mode"
+  },
+  "int_mode_auto_desc": {
+    "message": "Smart switching Precise/Semantic"
+  },
+  "int_mode_precise": {
+    "message": "Precise Mode"
+  },
+  "int_mode_precise_desc": {
+    "message": "Author, Score, etc. exact match only"
+  },
+  "int_mode_semantic": {
+    "message": "Semantic Mode"
+  },
+  "int_mode_semantic_desc": {
+    "message": "Vector-based semantic similarity search"
+  },
   "settings_save": {
     "message": "Save"
   },

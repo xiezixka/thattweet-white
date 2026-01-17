@@ -24,12 +24,21 @@ export interface SearchCriteria {
 
 export const ragService = {
     /**
-     * 将自然语言分词
+     * 将自然语言分词 (增强对中文的支持)
      */
     analyzeQuery(query: string): SearchCriteria {
-        return {
-            keywords: query.trim().toLowerCase().split(/\s+/).filter(w => w.length >= 1)
-        };
+        const text = query.trim().toLowerCase();
+
+        // 1. 基础分词 (按空格)
+        const words = text.split(/\s+/).filter(w => w.length >= 1);
+
+        // 2. 针对中文的增强：如果包含中文字符，将每个中文字符也作为关键词 (简单的一元分词)
+        const chineseChars = text.match(/[\u4e00-\u9fa5]/g) || [];
+
+        // 3. 去重合并
+        const keywords = Array.from(new Set([...words, ...chineseChars]));
+
+        return { keywords };
     },
 
     /**
