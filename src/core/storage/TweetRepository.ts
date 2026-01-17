@@ -162,12 +162,15 @@ export const TweetRepository = {
         const tweetCount = await db.tweets.count();
         const userCount = await db.users.count();
 
-        await db.transaction('rw', [db.tweets, db.users], async () => {
+        await db.transaction('rw', [db.tweets, db.users, db.graphEdges, db.tagMappings], async () => {
             await db.tweets.clear();
             await db.users.clear();
+            await db.graphEdges.clear();
+            await db.tagMappings.clear();
         });
 
-        console.log(`[TweetRepository] Cleared ${tweetCount} tweets and ${userCount} users`);
+        console.log(`[TweetRepository] Cleared all data: ${tweetCount} tweets, ${userCount} users, and all graph data.`);
         return { tweets: tweetCount, users: userCount };
     }
+
 };
