@@ -1,40 +1,125 @@
-export type AIProvider = 'siliconflow' | 'deepseek' | 'openai' | 'anthropic' | 'custom';
+export type AIProvider = 'siliconflow' | 'deepseek' | 'openai' | 'anthropic' | 'openrouter' | 'custom';
+
+// 基础服务商配置模版 (Static Template)
+export interface AIProviderConfig {
+    id: AIProvider;
+    name: string;
+    icon: string; // lucide icon name or image url
+    defaultBaseUrl: string;
+    models: string[]; // 预设模型列表
+    isVisionSupported: boolean;
+}
+
+export const PROVIDER_PRESETS: Record<string, AIProviderConfig> = {
+    deepseek: {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        icon: 'https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/deepseek-color.png',
+        defaultBaseUrl: 'https://api.deepseek.com',
+        models: ['deepseek-chat', 'deepseek-coder'],
+        isVisionSupported: false
+    },
+    openai: {
+        id: 'openai',
+        name: 'OpenAI',
+        icon: 'https://openai.com/favicon.ico',
+        defaultBaseUrl: 'https://api.openai.com/v1',
+        models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+        isVisionSupported: true
+    },
+    anthropic: {
+        id: 'anthropic',
+        name: 'Anthropic',
+        icon: 'https://anthropic.com/favicon.ico',
+        defaultBaseUrl: 'https://api.anthropic.com/v1',
+        models: ['claude-3-5-sonnet-20240620', 'claude-3-opus-20240229'],
+        isVisionSupported: true
+    },
+    siliconflow: {
+        id: 'siliconflow',
+        name: 'SiliconFlow',
+        icon: 'https://siliconflow.cn/favicon.ico',
+        defaultBaseUrl: 'https://api.siliconflow.cn/v1',
+        models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V3'],
+        isVisionSupported: true
+    },
+    openrouter: {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        icon: 'https://openrouter.ai/favicon.ico',
+        defaultBaseUrl: 'https://openrouter.ai/api/v1',
+        models: ['google/gemini-2.0-flash-exp:free', 'mistralai/mistral-7b-instruct:free'],
+        isVisionSupported: true
+    },
+    custom: {
+        id: 'custom',
+        name: 'Custom',
+        icon: '',
+        defaultBaseUrl: '',
+        models: [],
+        isVisionSupported: true
+    }
+};
+
+// 用户配置的服务商实例 (简化版: 只存 URL + Key)
+export interface AIServiceProvider {
+    id: string; // UUID
+    provider: AIProvider;
+    name: string; // 用户自定义名称 "我的 DeepSeek"
+    baseUrl: string;
+    apiKey: string;
+
+    // 连通性状态
+    status: 'idle' | 'checking' | 'connected' | 'error';
+    latency?: number; // ms
+    lastChecked?: number; // timestamp
+    errorMsg?: string;
+
+    // 动态获取的模型列表 (缓存)
+    cachedModels?: string[];
+    modelsCachedAt?: number;
+}
+
+// 工作流节点配置 (每个节点选择 Provider + Model + Prompt)
+export interface WorkflowNodeConfig {
+    providerId: string; // 指向 AIServiceProvider.id, 空字符串表示使用全局默认
+    model: string; // 选中的模型名
+    prompt?: string; // 节点特定的系统指令
+    enabled?: boolean; // 是否启用此节点
+}
 
 export interface AISettings {
-    // 1. API Configuration (General)
-    apiKey: string;
-    baseUrl: string;
-    model: string;
+    // === 1. 服务商库 (Provider Pool) ===
+    providers: AIServiceProvider[];
+    defaultProviderId: string; // 全局默认服务商
 
-    // 2. Image Recognition (Multi-modal)
-    visionProvider: 'siliconflow' | 'openrouter';
-    imageKeys: string;
-    siliconFlowApiKeys: string[]; // 持久化的多 Key 列表
-    visionApiKeyOpenRouter: string;
-    ocrEnabled: boolean;
-    visionEnabled: boolean;
-    visionModel: string;
-    ocrModel: string;
-    visionEnabledAt: number;     // 时间戳：只处理此时间之后的推文
-    maxImagesPerTweet: number;
-    visionBatchSize: number;     // 单次 API 调用处理的推文数量
+    // === 2. 工作流节点配置 (Workflow Nodes) ===
+    workflowNodes: {
+        // -- Input & Perception --
+        perception: WorkflowNodeConfig; // 感知层 (视觉 + OCR 文字提取)
 
-    // 3. AI Chat (Contemplation)
-    chatApiKey: string;
-    chatBaseUrl: string;
-    chatModel: string;
+        // -- Processing & Analysis --
+        textAnalysis: WorkflowNodeConfig; // 语义分析 / 质量定级
+        profile: WorkflowNodeConfig; // 用户画像分析
 
-    // 3.1 Profile AI (Independent)
-    profileApiKey: string;
-    profileBaseUrl: string;
-    profileModel: string;
+        // -- Interaction --
+        chat: WorkflowNodeConfig;    // 沉思对话
+        salon: WorkflowNodeConfig;   // 深度沙龙 (Expert)
+    };
 
-    // 3.2 Expert Chat AI (Independent)
-    expertApiKey: string;
-    expertBaseUrl: string;
-    expertModel: string;
+    // === 3. Automation & System Core ===
+    autoAnalyze: boolean;
+    batchSize: number;
+    rateLimitMs: number;
+    categories: string[];
+    aiStyleFocus: string;
 
-    // 4. RAG (Embeddings & Retrieval)
+    // === 4. Backup ===
+    autoBackupEnabled: boolean;
+    backupFolderId?: string;
+    backupFolderName?: string;
+
+    // === 5. RAG (Embeddings & Retrieval) ===
     ragEnabled: boolean;
     ragApiKey: string;
     embeddingModel: string;
@@ -42,77 +127,33 @@ export interface AISettings {
     rerankerModel: string;
     rerankerUrl: string;
 
-    // 5. Automation & Tags
-    autoAnalyze: boolean;
-    batchSize: number;
-    rateLimitMs: number;
-    categories: string[];
-
-    // 6. Backup
-    autoBackupEnabled: boolean;
-    backupFolderId?: string;
-    backupFolderName?: string;
-
-    // 7. Custom Prompts
-    promptAnalysis: string;
-    promptSummary: string;
-    promptVision: string;
-    promptProfile: string;
-
-    // 8. Personal Preference
-    aiStyleFocus: string;
+    // === Legacy & Internal (Minimized) ===
+    visionEnabledAt: number;
+    maxImagesPerTweet: number;
+    visionBatchSize: number;
 }
 
+// Backward Compatibility: AIInstance is an alias for AIServiceProvider
+export type AIInstance = AIServiceProvider;
+
+// Default Workflow Node Config
+const DEFAULT_NODE_CONFIG: WorkflowNodeConfig = {
+    providerId: '', // Empty means follow global default
+    model: '',
+    enabled: true
+};
+
 export const DEFAULT_AI_SETTINGS: AISettings = {
-    apiKey: '',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'xiaomi/mimo-v2-flash:free',
+    // === 1. 服务商库 Defaults ===
+    providers: [],
+    defaultProviderId: '',
 
-    visionProvider: 'siliconflow',
-    imageKeys: '',
-    siliconFlowApiKeys: [],
-    visionApiKeyOpenRouter: '',
-    ocrEnabled: false,
-    visionEnabled: false,
-    visionModel: 'vendor/google/siglip-so400b-patch14-384',
-    ocrModel: 'vendor/google/siglip-so400b-patch14-384',
-    visionEnabledAt: 0,
-    maxImagesPerTweet: 4,
-    visionBatchSize: 3,
-
-    chatApiKey: '',
-    chatBaseUrl: 'https://openrouter.ai/api/v1',
-    chatModel: 'xiaomi/mimo-v2-flash:free',
-
-    profileApiKey: '',
-    profileBaseUrl: 'https://openrouter.ai/api/v1',
-    profileModel: 'mistralai/mistral-7b-instruct:free',
-
-    // New: Expert Chat AI (Dedicated)
-    expertApiKey: '',
-    expertBaseUrl: 'https://openrouter.ai/api/v1',
-    expertModel: 'xiaomi/mimo-v2-flash:free',
-
-    ragEnabled: false,
-    ragApiKey: '',
-    embeddingModel: 'BAAI/bge-m3',
-    embeddingUrl: 'https://api.siliconflow.cn/v1/embeddings',
-    rerankerModel: 'BAAI/bge-reranker-v2-m3',
-    rerankerUrl: 'https://api.siliconflow.cn/v1/rerank',
-
-    autoAnalyze: true,
-    batchSize: 25,
-    rateLimitMs: 1000,
-    categories: ['技术', '资讯', '观点', '教程', '工具', '灵感', '娱乐', '其他'],
-
-    autoBackupEnabled: false,
-
-    aiStyleFocus: '技术干货、深度见解、实操教程、行业趋势',
-
-    promptVision: `请化身为一名“多维视觉侦察专家 (Visual Intelligence Expert)”。你的任务是接收一组推文关联图片，并根据用户的“核心偏好”提取具有极高情报价值的信息。
-
-[用户核心偏好]
-{ai_style_focus}
+    // === 2. 工作流节点配置 Defaults ===
+    workflowNodes: {
+        perception: {
+            ...DEFAULT_NODE_CONFIG,
+            enabled: false,
+            prompt: `请化身为一名“多维视觉侦察专家 (Visual Intelligence Expert)”。你的任务是接收一组推文关联图片，并根据用户的核心偏好提取具有极高情报价值的信息。
 
 ### 执行指令：
 1. **分类研判**：在观察每张图前，先快速判断其类型（如：技术架构图、代码截图、数据看板、设计 UI、实景照片、文档扫描等）。
@@ -125,27 +166,16 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 3. **高精度 OCR**：准确提取图中所有文本，保留自然的排版逻辑。
 4. **多图集成 (Overall)**：若推文有多图，请识别其逻辑联系（对比、步骤、细节放大等），给出高度集成的洞察总结。
 
-### 映射关系：
-{tweet_mapping}
-
 ### 约束条件 (极其重要)：
 - 必须严格以标准 JSON 格式返回。
-- ！！关键：JSON 的键名必须是上述映射关系中提供的具体【Tweet ID】，禁止直接使用 "tweet_id" 作为键名！！
-- ！！注意：如果 OCR 或描述中包含双引号，请务必使用 \\\" 进行转义，确保 JSON 可解析！！
+- ！！关键：JSON 的键名必须是具体【Tweet ID】，禁止直接使用 "tweet_id" 作为键名！！
+- ！！注意：如果包含双引号，请务必使用 \\\" 进行转义，确保 JSON 可解析！！
 - 内容必须使用中文。
-- 描述应当包含“深度洞察”而非仅仅是“画面陈述”。
-
-### 正确的输出示例：
-{
-  "1234567890123456789": {
-     "overall": "针对该推文所有图片的深度洞察总结",
-     "details": [
-        { "ocr": "文字内容", "description": "深度价值描述" }
-     ]
-  }
-}`,
-
-    promptAnalysis: `请作为一名深耕互联网多年的“信息策展人”，对以下推文进行质量定级。
+- 描述应当包含“深度洞察”而非仅仅是“画面陈述”。`
+        },
+        textAnalysis: {
+            ...DEFAULT_NODE_CONFIG,
+            prompt: `请作为一名深耕互联网多年的“信息策展人”，对以下推文进行质量定级。
 
 [用户关注偏好]
 用户当前最关注：{ai_style_focus}
@@ -165,42 +195,75 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 分类选项：技术、资讯、观点、教程、工具、灵感、娱乐、其他
 
 严格按照以下 JSON 格式返回，不要添加任何其他内容：
-{"id": "{tweet_id}", "score": 数字, "category": "分类", "reason": "基于定级规范和个人偏好的评价理由"}
-
-推文内容：
-{tweet_text}
-作者：@{author}`,
-
-    promptSummary: `为以下推文及关联图片分析数据（OCR文字/视觉描述）生成一个简洁且信息丰富的摘要（50字以内）。
-如果包含图片分析数据，请将其核心信息（如图片传达的关键图表结论或重要文字）融入摘要中，确保摘要涵盖推文的完整意图。
-
-推文内容：
-{tweet_text}
-作者：@{author}
-
-只返回摘要内容，不要添加任何说明。`,
-
-    promptProfile: `Role: You are an advanced social media anthropologist and psychologist.
-Task: Deeply analyze the following {count} high-impact tweets to construct a precise multidimensional psychological portrait of the author.
-
-[RAW DATA - TOP TWEETS]
-{context}
+{"id": "{tweet_id}", "score": 数字, "category": "分类", "reason": "评价理由"}`
+        },
+        profile: {
+            ...DEFAULT_NODE_CONFIG,
+            prompt: `Role: You are an advanced social media anthropologist and psychologist.
+Task: Deeply analyze the provided RAW content (including text and image OCR) to construct a precise multidimensional psychological portrait. 
 
 [ANALYSIS FRAMEWORK]
-Please decode the author based on details:
-1. **Cognitive Pattern**: How do they process information? (e.g., Analytical, Intuitive, Empirical, Emotional)
-2. **Value System**: What do they value? (e.g., Innovation, Tradition, aesthetics, efficiency, social justice)
-3. **Expression Style**: Tone (Witty, Academic, Cynical, Warm), Lexicon (Professional jargon, Slang, Poetry).
+1. **Cognitive Pattern**: How do they process information?
+2. **Value System**: What do they value?
+3. **Expression Style**: Tone, Lexicon.
 
 [OUTPUT REQUIREMENTS]
-1. **Summary (100-150 words)**: Don't just list topics. Synthesize a coherent narrative about WHO this person is. Describe their digital persona vividly. Use analogies if helpful.
-2. **Keywords (3-5)**: Create definitive, high-level archetype tags. Avoid generic tags like "Tech". Use specific ones like "SaaS Philosopher", "AI Accelerationist", "Design Purist".
-3. **Language**: Output MUST be in Chinese (Simplified).
+1. **Summary (100-150 words)**: Synthesize who this person is.
+2. **Keywords (3-5)**: High-level archetype tags.
+3. **Sentiment Analysis**: Emotional tone.
+4. **Semantic Insight**: Depth and consistency of topics.
+5. **Language**: Chinese (Simplified).
 
 [FORMAT]
 Return ONLY a valid JSON object:
 {
   "summary": "...",
-  "keywords": ["tag1", "tag2", "tag3"]
+  "keywords": ["tag1", "tag2", "tag3"],
+  "sentiment": "...",
+  "semantic": "..."
 }`
+        },
+        chat: { ...DEFAULT_NODE_CONFIG },
+        salon: { ...DEFAULT_NODE_CONFIG }
+    },
+
+    autoAnalyze: true,
+    batchSize: 25,
+    rateLimitMs: 1000,
+    categories: ['技术', '资讯', '观点', '教程', '工具', '灵感', '娱乐', '其他'],
+    aiStyleFocus: '技术干货、深度见解、实操教程、行业趋势',
+
+    ragEnabled: false,
+    ragApiKey: '',
+    embeddingModel: 'BAAI/bge-m3',
+    embeddingUrl: 'https://api.siliconflow.cn/v1/embeddings',
+    rerankerModel: 'BAAI/bge-reranker-v2-m3',
+    rerankerUrl: 'https://api.siliconflow.cn/v1/rerank',
+
+    autoBackupEnabled: false,
+    visionEnabledAt: 0,
+    maxImagesPerTweet: 4,
+    visionBatchSize: 3
 };
+
+/**
+ * 确保配置对象结构完整 (Safe Merge)
+ */
+export function getSafeAISettings(loaded: any): AISettings {
+    if (!loaded) return DEFAULT_AI_SETTINGS;
+
+    const settings = { ...DEFAULT_AI_SETTINGS, ...loaded };
+
+    // 深层合并工作流节点
+    settings.workflowNodes = {
+        ...DEFAULT_AI_SETTINGS.workflowNodes,
+        ...(loaded.workflowNodes || {})
+    };
+
+    // 确保 providers 是数组
+    if (!Array.isArray(settings.providers)) {
+        settings.providers = [];
+    }
+
+    return settings as AISettings;
+}

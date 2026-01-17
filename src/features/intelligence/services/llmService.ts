@@ -1,4 +1,4 @@
-import { AISettings, DEFAULT_AI_SETTINGS } from '../../../shared/types/settings';
+import { AISettings, DEFAULT_AI_SETTINGS, getSafeAISettings } from '../../../shared/types/settings';
 import { Tweet } from '../../../shared/types/tweet';
 import { ChatMessage } from '../store/useChatStore';
 
@@ -7,7 +7,7 @@ export const llmService = {
         return new Promise((resolve) => {
             // @ts-ignore
             chrome.storage.local.get(['aiSettings'], (res) => {
-                resolve(res.aiSettings || DEFAULT_AI_SETTINGS);
+                resolve(getSafeAISettings(res.aiSettings));
             });
         });
     },
@@ -54,19 +54,26 @@ ${contextSection || "【注意：当前检索结果为空，请告知用户后�
      */
     async *chatStream(messages: ChatMessage[], contextTweets: Tweet[]): AsyncGenerator<string, void, unknown> {
         const settings = await this.getSettings();
+        const node = settings.workflowNodes.chat;
 
-        // 优先使用 Chat 专用配置，否则回退到全局 API 配置
-        const apiKey = settings.chatApiKey || settings.apiKey;
-        const baseUrl = settings.chatBaseUrl || settings.baseUrl;
-        const model = settings.chatModel || settings.model;
+        // Resolve Config
+        const providerId = node.providerId || settings.defaultProviderId;
+        const provider = settings.providers.find(p => p.id === providerId);
 
-        console.log('[llmService] Settings:', {
+        if (!provider || !provider.apiKey) {
+            throw new Error('Chat provider or API Key not configured');
+        }
+
+        const apiKey = provider.apiKey;
+        const baseUrl = provider.baseUrl.replace(/\/$/, '');
+        const model = node.model;
+
+        console.log('[llmService] Integrated Node Config:', {
             model,
-            hasKey: !!apiKey,
+            provider: provider.name
         });
 
-        if (!apiKey) throw new Error('AI API Key not configured');
-        if (!model) throw new Error('AI Model not selected');
+        if (!model) throw new Error('AI Model not selected for chat node');
 
         const url = `${baseUrl}/chat/completions`;
 

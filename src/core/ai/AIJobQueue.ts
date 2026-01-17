@@ -1,7 +1,7 @@
 import { db } from '../storage/db';
 import { TweetRepository } from '../storage/TweetRepository';
 import { TweetAnalyzer } from './analyzer';
-import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
+import { AISettings, DEFAULT_AI_SETTINGS, getSafeAISettings } from '../../shared/types/settings';
 import { ProcessStatus } from '../../shared/types/tweet';
 
 export class AIJobQueue {
@@ -14,7 +14,13 @@ export class AIJobQueue {
         if (this.isProcessing) return;
 
         const settings = await this.getSettings();
-        if (!settings.autoAnalyze || !settings.apiKey || settings.apiKey.trim().length < 5) {
+        const node = settings.workflowNodes.textAnalysis;
+
+        // Check if enabled and has a valid default or node provider
+        const providerId = node.providerId || settings.defaultProviderId;
+        const provider = settings.providers.find(p => p.id === providerId);
+
+        if (!settings.autoAnalyze || !provider || !provider.apiKey) {
             return;
         }
 
@@ -26,7 +32,7 @@ export class AIJobQueue {
                 if (t.isArchived) return false;
 
                 // 如果启用了图片分析且推文有图，必须等图片处理完；
-                const isVisionActive = settings.visionEnabled || settings.ocrEnabled;
+                const isVisionActive = settings.workflowNodes.perception.enabled;
                 if (isVisionActive) {
                     const hasImages = t.media?.some(m => m.type === 'image');
                     if (hasImages && t.imageProcessStatus === ProcessStatus.Pending) {
@@ -110,7 +116,7 @@ export class AIJobQueue {
     private static async getSettings(): Promise<AISettings> {
         return new Promise((resolve) => {
             chrome.storage.local.get(['aiSettings'], (res) => {
-                resolve(res.aiSettings || DEFAULT_AI_SETTINGS);
+                resolve(getSafeAISettings(res.aiSettings));
             });
         });
     }

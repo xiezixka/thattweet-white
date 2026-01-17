@@ -114,11 +114,11 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                         )}
                     </div>
                     <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-[14px] leading-tight text-zinc-100 truncate max-w-[140px]">
+                        <span className="font-bold text-[16px] leading-tight text-zinc-100 truncate max-w-[140px]">
                             {author?.name || 'Unknown'}
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[13px] text-zinc-500 leading-tight">
+                            <span className="text-[15px] text-zinc-500 leading-tight">
                                 @{author?.handle || 'unknown'}
                             </span>
                             {tweet.aiCategory && (
@@ -160,7 +160,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
 
             {tweet.aiSummary && (
                 <div className={cn(
-                    "text-zinc-200 text-[13px] leading-[1.4] p-2.5 rounded-xl border italic mb-1",
+                    "text-zinc-200 text-[15px] leading-[1.4] p-2.5 rounded-xl border italic mb-1",
                     tweet.aiScore && tweet.aiScore >= 90 ? "bg-rose-400/5 border-rose-400/10" : "bg-white/[0.03] border-white/5"
                 )}>
                     <div className="flex items-start gap-2">
@@ -184,7 +184,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
             <div className="relative">
                 <div className={cn(
                     "text-zinc-300 break-words transition-all duration-300",
-                    "text-[14px] leading-[1.4]",
+                    "text-[16px] leading-[1.5]",
                     !isExpanded && isMasonry && "line-clamp-5",
                     "select-text"
                 )}>
@@ -291,11 +291,11 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
 
             {/* Footer Area */}
             <div className="flex items-center justify-between pt-2 mt-1 border-t border-white/5 text-zinc-600">
-                <div className="flex items-center gap-3 text-[11px]">
-                    <span className="flex items-center gap-1"><MessageCircle size={12} /> {formatNumber(tweet.replyCount || 0)}</span>
-                    <span className="flex items-center gap-1"><Repeat2 size={12} /> {formatNumber(tweet.retweetCount || 0)}</span>
-                    <span className="flex items-center gap-1 hover:text-rose-400 transition-colors"><Heart size={12} /> {formatNumber(tweet.favoriteCount || 0)}</span>
-                    <span className="flex items-center gap-1"><Eye size={12} /> {formatNumber(tweet.viewCount || 0)}</span>
+                <div className="flex items-center gap-3 text-[13px]">
+                    <span className="flex items-center gap-1"><MessageCircle size={14} /> {formatNumber(tweet.replyCount || 0)}</span>
+                    <span className="flex items-center gap-1"><Repeat2 size={14} /> {formatNumber(tweet.retweetCount || 0)}</span>
+                    <span className="flex items-center gap-1 hover:text-rose-400 transition-colors"><Heart size={14} /> {formatNumber(tweet.favoriteCount || 0)}</span>
+                    <span className="flex items-center gap-1"><Eye size={14} /> {formatNumber(tweet.viewCount || 0)}</span>
                 </div>
 
                 <div className="flex items-center gap-3">

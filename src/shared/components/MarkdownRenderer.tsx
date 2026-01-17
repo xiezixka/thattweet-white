@@ -20,17 +20,17 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
                 components={{
                     // Custom heading styles
                     h1: ({ children }) => (
-                        <h1 className="text-lg font-bold text-zinc-100 mt-4 mb-2 tracking-tight">{children}</h1>
+                        <h1 className="text-xl font-bold text-zinc-100 mt-5 mb-3 tracking-tight">{children}</h1>
                     ),
                     h2: ({ children }) => (
-                        <h2 className="text-base font-bold text-zinc-200 mt-3 mb-2">{children}</h2>
+                        <h2 className="text-lg font-bold text-zinc-200 mt-4 mb-2">{children}</h2>
                     ),
                     h3: ({ children }) => (
-                        <h3 className="text-sm font-bold text-zinc-300 mt-2 mb-1">{children}</h3>
+                        <h3 className="text-base font-bold text-zinc-300 mt-3 mb-1">{children}</h3>
                     ),
                     // Paragraph
                     p: ({ children }) => (
-                        <p className="text-[13px] leading-relaxed text-zinc-300 mb-3 last:mb-0">{children}</p>
+                        <p className="text-[15px] leading-relaxed text-zinc-300 mb-4 last:mb-0">{children}</p>
                     ),
                     // Strong/Bold
                     strong: ({ children }) => (
@@ -56,7 +56,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
                         const isInline = !codeClassName;
                         if (isInline) {
                             return (
-                                <code className="px-1.5 py-0.5 rounded bg-white/5 text-[11px] font-mono text-zinc-300 border border-white/5">
+                                <code className="px-1.5 py-0.5 rounded bg-white/5 text-[13px] font-mono text-zinc-300 border border-white/5">
                                     {children}
                                 </code>
                             );
@@ -85,10 +85,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
                     ),
                     // Lists
                     ul: ({ children }) => (
-                        <ul className="list-disc list-inside space-y-1 my-2 text-[13px] text-zinc-300">{children}</ul>
+                        <ul className="list-disc list-inside space-y-2 my-2 text-[15px] text-zinc-300">{children}</ul>
                     ),
                     ol: ({ children }) => (
-                        <ol className="list-decimal list-inside space-y-1 my-2 text-[13px] text-zinc-300">{children}</ol>
+                        <ol className="list-decimal list-inside space-y-2 my-2 text-[15px] text-zinc-300">{children}</ol>
                     ),
                     li: ({ children }) => (
                         <li className="leading-relaxed">{children}</li>
@@ -116,8 +116,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
                     ),
                     // Table support
                     table: ({ children }) => (
-                        <div className="overflow-x-auto my-3 no-scrollbar">
-                            <table className="w-full text-[11px] border-collapse">{children}</table>
+                        <div className="overflow-x-auto my-4 no-scrollbar">
+                            <table className="w-full text-[13px] border-collapse">{children}</table>
                         </div>
                     ),
                     thead: ({ children }) => (

@@ -33,6 +33,8 @@ export interface UserCache {
   aiProfile?: {
     summary: string;        // AI 生成的人物画像文本
     keywords: string[];     // 提取的关键词标签
+    sentiment?: string;     // 新增：情绪调性评价
+    semantic?: string;      // 新增：深度语义研判
     lastAnalyzedAt: number; // 上次分析的时间戳
     tweetCountAtAnalysis: number; // 上次分析时，该作者存了多少条推文
   }

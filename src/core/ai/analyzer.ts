@@ -39,6 +39,9 @@ class PromptBuilder {
     }
 
     static buildBatchPrompt(tweets: Tweet[], settings: AISettings): string {
+        const node = settings.workflowNodes.textAnalysis;
+        const promptTemplate = node.prompt || "";
+
         const tweetBlocks = tweets.map((tweet, index) => {
             const fullContent = this.buildFullContent(tweet);
             return this.fillVariables(`--- TWEET ID: {tweet_id} ---\nAuthor: @{author}\nContent: {tweet_text}`, tweet, fullContent, settings);
@@ -49,17 +52,8 @@ class PromptBuilder {
             "Analyze the following tweets and return a JSON array containing analysis results for EACH tweet.",
             `Available categories: ${settings.categories.join(', ')}`,
             "",
-            "[SCORING & CATEGORIZATION RULES]",
-            settings.promptAnalysis
-                .replace(/{tweet_text}/g, 'The tweet content')
-                .replace(/{author}/g, 'The author handle')
-                .replace(/{tweet_id}/g, 'The tweet ID')
-                .replace(/{ai_style_focus}/g, settings.aiStyleFocus || ''),
-            "",
-            "[SUMMARY RULES]",
-            settings.promptSummary
-                .replace(/{tweet_text}/g, 'The tweet content')
-                .replace(/{author}/g, 'The author handle'),
+            "[ANALYSIS RULES]",
+            this.fillVariables(promptTemplate, tweets[0] || {} as any, "", settings),
             "",
             "[TWEETS TO ANALYZE]",
             tweetBlocks,
@@ -143,22 +137,40 @@ class OutputParser {
  * 通用 OpenAI 兼容适配器
  */
 class OpenAIAdapter implements AIProviderAdapter {
+    private resolveConfig(settings: AISettings, nodeKey: keyof AISettings['workflowNodes']) {
+        const node = settings.workflowNodes[nodeKey];
+        const providerId = node.providerId || settings.defaultProviderId;
+        const provider = settings.providers.find(p => p.id === providerId);
+
+        if (!provider) {
+            throw new Error(`Provider not found for node: ${nodeKey}`);
+        }
+
+        return {
+            apiKey: provider.apiKey.trim(),
+            baseUrl: provider.baseUrl.trim().replace(/\/$/, ''),
+            model: node.model?.trim() || '',
+            prompt: node.prompt || ''
+        };
+    }
+
     async analyzeBatch(tweets: Tweet[], settings: AISettings): Promise<(AIAnalysisResult | null)[]> {
         if (tweets.length === 0) return [];
 
-        const url = `${settings.baseUrl}/chat/completions`;
+        const config = this.resolveConfig(settings, 'textAnalysis');
+        const url = `${config.baseUrl}/chat/completions`;
         const batchPrompt = PromptBuilder.buildBatchPrompt(tweets, settings);
 
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${settings.apiKey}`,
+                'Authorization': `Bearer ${config.apiKey}`,
                 'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
                 'X-Title': 'ThatTweet'
             },
             body: JSON.stringify({
-                model: settings.model,
+                model: config.model,
                 messages: [
                     {
                         role: 'system',
@@ -175,8 +187,12 @@ class OpenAIAdapter implements AIProviderAdapter {
         });
 
         if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Batch AI Provider Error: ${response.status} - ${error}`);
+            const errText = await response.text();
+            if (response.status === 404) {
+                throw new Error(`404 - Model Not Found. Please check your model name: ${config.model}`);
+            }
+            const isOpenRouterPrivacyError = response.status === 403 && errText.includes('data policy');
+            throw new Error(`${response.status} ${isOpenRouterPrivacyError ? '- OpenRouter requires "Free model publication" enabled in Settings > Privacy' : errText}`);
         }
 
         const data = await response.json();
@@ -208,40 +224,43 @@ class OpenAIAdapter implements AIProviderAdapter {
         throw new Error("Single tweet analysis failed");
     }
 
-    async generateProfile(tweets: Tweet[], settings: AISettings): Promise<{ summary: string; keywords: string[] }> {
-        // 1. 配置优先级 (Profile > Chat > Global)
-        const apiKey = settings.profileApiKey || settings.chatApiKey || settings.apiKey;
-        let baseUrl = settings.profileBaseUrl || settings.chatBaseUrl || settings.baseUrl || 'https://openrouter.ai/api/v1';
-        const modelToUse = settings.profileModel || settings.chatModel || settings.model || 'mistralai/mistral-7b-instruct:free';
+    async generateProfile(tweets: Tweet[], settings: AISettings): Promise<{ summary: string; keywords: string[]; sentiment: string; semantic: string }> {
+        const config = this.resolveConfig(settings, 'profile');
+        const url = `${config.baseUrl}/chat/completions`;
 
-        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-        const url = `${baseUrl}/chat/completions`;
-
-        // 构造 Profile Prompt
+        // 构造 Profile Prompt (严格基于原文，排除 AI 生成的标签/摘要)
         const context = tweets.map((t, i) => {
             const date = new Date(Number(t.savedAt)).toLocaleDateString();
-            const tags = (t.aiTags || []).join(', ');
-            // 风格分析必须基于原文 (Raw Text)，AI Summary 会丢失语气特征
-            // 增加截取长度至 500 字符，尽可能保留完整语境
-            const content = t.text.slice(0, 500);
-            return `#${i + 1} [${date}] [Tags: ${tags}]\n${content}`;
+            // 风格与语义分析必须基于“无污染”的原文 (Pure Raw Content)
+            const rawText = t.text;
+            // OCR 属于原始图像证据，属于“原文”范畴
+            const ocr = t.ocrText ? `\n[图像原始文本]: ${t.ocrText}` : '';
+            return `--- 推文片段 #${i + 1} [${date}] ---\n${rawText}${ocr}`;
         }).join('\n\n');
 
-        const prompt = settings.promptProfile
+        let prompt = config.prompt
             .replace('{count}', String(tweets.length))
             .replace('{context}', context);
+
+        // 🛡️ 强制增强防护：如果用户设置中的 Prompt 不包含新指令，强制追加
+        if (!prompt.includes('sentiment') || !prompt.includes('semantic')) {
+            prompt += `\n\n[EXTRA INSTRUCTION]
+Please also include the following fields in your JSON response:
+3. "sentiment": Evaluate the emotional tone and trust level (50-100 words in Chinese).
+4. "semantic": Analyze the depth and consistency of their core topics (50-100 words in Chinese).`;
+        }
 
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${config.apiKey}`,
                     'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
                     'X-Title': 'ThatTweet'
                 },
                 body: JSON.stringify({
-                    model: modelToUse,
+                    model: config.model,
                     messages: [
                         { role: 'system', content: 'You are an expert profiler. Return valid JSON.' },
                         { role: 'user', content: prompt }
@@ -252,7 +271,11 @@ class OpenAIAdapter implements AIProviderAdapter {
 
             if (!response.ok) {
                 const errText = await response.text();
-                throw new Error(`API Error ${response.status}: ${errText}`);
+                if (response.status === 404) {
+                    throw new Error(`404 - Model Not Found. Please check your model name: ${config.model}`);
+                }
+                const isOpenRouterPrivacyError = response.status === 403 && errText.includes('data policy');
+                throw new Error(`${response.status} ${isOpenRouterPrivacyError ? '- OpenRouter requires "Free model publication" enabled in Settings > Privacy' : errText}`);
             }
 
             const data = await response.json();
@@ -265,7 +288,9 @@ class OpenAIAdapter implements AIProviderAdapter {
 
             return {
                 summary: parsed.summary || "",
-                keywords: Array.isArray(parsed.keywords) ? parsed.keywords : []
+                keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+                sentiment: parsed.sentiment || "",
+                semantic: parsed.semantic || ""
             };
 
         } catch (e: any) {
@@ -275,12 +300,8 @@ class OpenAIAdapter implements AIProviderAdapter {
     }
 
     async chatWithAuthorExpert(query: string, tweets: Tweet[], settings: AISettings): Promise<string> {
-        const apiKey = settings.expertApiKey || settings.chatApiKey || settings.apiKey;
-        let baseUrl = settings.expertBaseUrl || settings.chatBaseUrl || settings.baseUrl || 'https://openrouter.ai/api/v1';
-        const modelToUse = settings.expertModel || settings.chatModel || settings.model || 'mistralai/mistral-7b-instruct:free';
-
-        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-        const url = `${baseUrl}/chat/completions`;
+        const config = this.resolveConfig(settings, 'salon');
+        const url = `${config.baseUrl}/chat/completions`;
 
         // 构造 RAG Context
         const context = tweets.slice(0, 20).map((t, i) => {
@@ -302,12 +323,12 @@ class OpenAIAdapter implements AIProviderAdapter {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${config.apiKey}`,
                     'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
                     'X-Title': 'ThatTweet'
                 },
                 body: JSON.stringify({
-                    model: modelToUse,
+                    model: config.model,
                     messages: [
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: query }
@@ -335,29 +356,25 @@ class OpenAIAdapter implements AIProviderAdapter {
         settings: AISettings,
         onChunk: (text: string) => void
     ): Promise<void> {
-        const apiKey = settings.expertApiKey || settings.chatApiKey || settings.apiKey;
-        let baseUrl = settings.expertBaseUrl || settings.chatBaseUrl || settings.baseUrl || 'https://openrouter.ai/api/v1';
-        const modelToUse = settings.expertModel || settings.chatModel || settings.model || 'mistralai/mistral-7b-instruct:free';
-
-        if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-        const url = `${baseUrl}/chat/completions`;
+        const config = this.resolveConfig(settings, 'salon');
+        const url = `${config.baseUrl}/chat/completions`;
 
         // === PHASE 1: Extract Keywords (Fast Model) ===
         let keywords: string[] = [];
         try {
-            const extractionModel = settings.model || 'xiaomi/mimo-v2-flash:free';
-            const extractionUrl = `${(settings.baseUrl || 'https://openrouter.ai/api/v1').replace(/\/$/, '')}/chat/completions`;
+            const extractionNode = settings.workflowNodes.textAnalysis;
+            const extractionConfig = this.resolveConfig(settings, 'textAnalysis');
 
-            const extractionResponse = await fetch(extractionUrl, {
+            const extractionResponse = await fetch(`${extractionConfig.baseUrl}/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${settings.apiKey}`,
+                    'Authorization': `Bearer ${extractionConfig.apiKey}`,
                     'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
                     'X-Title': 'ThatTweet'
                 },
                 body: JSON.stringify({
-                    model: extractionModel,
+                    model: extractionConfig.model,
                     messages: [
                         { role: 'system', content: 'Extract 3-5 core search keywords from the user question. Return ONLY a JSON array of strings, nothing else. Example: ["Web3", "decentralization", "future"]' },
                         { role: 'user', content: query }
@@ -465,12 +482,12 @@ class OpenAIAdapter implements AIProviderAdapter {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${config.apiKey}`,
                     'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
                     'X-Title': 'ThatTweet'
                 },
                 body: JSON.stringify({
-                    model: modelToUse,
+                    model: config.model,
                     messages: [
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: query }
@@ -482,7 +499,11 @@ class OpenAIAdapter implements AIProviderAdapter {
 
             if (!response.ok) {
                 const errText = await response.text();
-                throw new Error(`${response.status} ${errText.includes('data policy') ? '- OpenRouter requires "Free model publication" enabled in Settings > Privacy' : errText}`);
+                if (response.status === 404) {
+                    throw new Error(`404 - Model Not Found. Please check your model name: ${config.model}`);
+                }
+                const isOpenRouterPrivacyError = response.status === 403 && errText.includes('data policy');
+                throw new Error(`${response.status} ${isOpenRouterPrivacyError ? '- OpenRouter requires "Free model publication" enabled in Settings > Privacy' : errText}`);
             }
 
             const reader = response.body?.getReader();

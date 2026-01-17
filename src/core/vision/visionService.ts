@@ -1,6 +1,6 @@
 import { db } from '../storage/db';
 import { Tweet, ProcessStatus, MediaItem } from '../../shared/types/tweet';
-import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
+import { AISettings, DEFAULT_AI_SETTINGS, getSafeAISettings } from '../../shared/types/settings';
 
 /**
  * 视觉与 OCR 核心服务 (SiliconFlow Multi-modal 驱动)
@@ -19,31 +19,18 @@ export class VisionService {
         if (Date.now() < this.BUSY_COOLDOWN_UNTIL) return;
 
         const settings = await this.getSettings();
-        if (!settings.visionEnabled && !settings.ocrEnabled) return;
+        const node = settings.workflowNodes.perception;
+        if (!node.enabled) return;
 
-        // 获取可能的 Key
-        let apiKeys: string[] = [];
-        if (settings.visionProvider === 'siliconflow') {
-            if (settings.siliconFlowApiKeys && settings.siliconFlowApiKeys.length > 0) {
-                apiKeys = settings.siliconFlowApiKeys;
-            } else if (settings.imageKeys && settings.imageKeys.trim()) {
-                apiKeys = settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean);
-            } else if (settings.apiKey) {
-                apiKeys = [settings.apiKey];
-            }
-        } else {
-            // OpenRouter: Use specific vision key, or fallback to global if it looks like OpenRouter
-            const orKey = settings.visionApiKeyOpenRouter || (settings.apiKey?.startsWith('sk-or') ? settings.apiKey : '');
-            if (orKey) apiKeys = [orKey];
-        }
+        // Resolve Config
+        const providerId = node.providerId || settings.defaultProviderId;
+        const provider = settings.providers.find(p => p.id === providerId);
+        if (!provider || !provider.apiKey) return;
 
-        const availableKeys = apiKeys.filter(k => !this.activeKeys.has(k));
-        console.log(`[VisionService] Starting ${settings.visionProvider} queue process. Keys found: ${apiKeys.length}, Available: ${availableKeys.length}`);
+        const apiKey = provider.apiKey;
+        if (this.activeKeys.has(apiKey)) return;
 
-        if (availableKeys.length === 0) {
-            if (apiKeys.length === 0) console.warn(`[VisionService] No API keys found for provider: ${settings.visionProvider}`);
-            return;
-        }
+        console.log(`[VisionService] Starting perception process using provider: ${provider.name}`);
 
         // 查找待处理的推文
         const pendingTweets = await db.tweets
@@ -63,21 +50,11 @@ export class VisionService {
         try {
             // 一次处理一批
             const batchSize = settings.visionBatchSize || 3;
-            const tweetsToProcess = eligibleTweets.slice(0, batchSize * availableKeys.length);
+            const tweetsToProcess = eligibleTweets.slice(0, batchSize);
 
-            // 按 Key 分组并发执行
-            const tasks: Promise<void>[] = [];
-            for (let i = 0; i < availableKeys.length; i++) {
-                const key = availableKeys[i];
-                const startIdx = i * batchSize;
-                const batch = tweetsToProcess.slice(startIdx, startIdx + batchSize);
-
-                if (batch.length > 0) {
-                    tasks.push(this.processBatch(batch, key, settings));
-                }
+            if (tweetsToProcess.length > 0) {
+                await this.processBatch(tweetsToProcess, apiKey, settings);
             }
-
-            await Promise.all(tasks);
         } finally {
             this.isProcessing = false;
         }
@@ -184,24 +161,24 @@ export class VisionService {
                 return `- Tweet ID [${t.id}]: 包含图片索引 ${JSON.stringify(indices)}`;
             }).join('\n');
 
-            const prompt = (settings.promptVision || DEFAULT_AI_SETTINGS.promptVision)
+            const node = settings.workflowNodes.perception;
+            const prompt = (node.prompt || "")
                 .replace(/{ai_style_focus}/g, settings.aiStyleFocus || '')
                 .replace(/{tweet_mapping}/g, mappingInfo);
 
+            const model = node.model;
+            const providerId = node.providerId || settings.defaultProviderId;
+            const provider = settings.providers.find(p => p.id === providerId);
 
-            const model = settings.visionModel || (settings.visionProvider === 'siliconflow' ? 'Qwen/Qwen2-VL-7B-Instruct' : 'google/gemini-pro-1.5-exp');
+            if (!provider) throw new Error("Provider not found");
 
-            let baseUrl = 'https://api.siliconflow.cn/v1';
+            const baseUrl = provider.baseUrl.trim().replace(/\/$/, '');
             const headers: Record<string, string> = {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
+                'Authorization': `Bearer ${apiKey.trim()}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'https://github.com/RechardLLee/thattweet-vite',
+                'X-Title': 'ThatTweet'
             };
-
-            if (settings.visionProvider === 'openrouter') {
-                baseUrl = 'https://openrouter.ai/api/v1';
-                headers['HTTP-Referer'] = 'https://github.com/RechardLLee/thattweet-vite';
-                headers['X-Title'] = 'ThatTweet (Advanced Vision)';
-            }
 
             const url = `${baseUrl}/chat/completions`;
 
@@ -213,31 +190,19 @@ export class VisionService {
 
             const systemInstruction = '你是一个专业的推文图像分析助手。你必须严格按 JSON 格式返回结果，不包含任何解释或 Markdown 标记。';
 
-            if (settings.visionProvider === 'siliconflow') {
-                messages.push({ role: 'system', content: systemInstruction });
-                messages.push({
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: prompt },
-                        ...imageBase64List.map(base64 => ({
-                            type: 'image_url',
-                            image_url: { url: base64, detail: 'auto' }
-                        }))
-                    ]
-                });
-            } else {
-                // OpenRouter: 合并 Prompt
-                messages.push({
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: `${systemInstruction}\n\n${prompt}` },
-                        ...imageBase64List.map(base64 => ({
-                            type: 'image_url',
-                            image_url: { url: base64 } // OpenRouter 有些模型不喜欢 detail: auto
-                        }))
-                    ]
-                });
-            }
+            // Use System Message if provider is NO OpenRouter to play safe, 
+            // but OpenAI-compatible usually should support system role
+            messages.push({ role: 'system', content: systemInstruction });
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    ...imageBase64List.map(base64 => ({
+                        type: 'image_url',
+                        image_url: { url: base64, detail: 'auto' }
+                    }))
+                ]
+            });
 
             try {
                 const body: any = {
@@ -258,9 +223,13 @@ export class VisionService {
 
                 if (response.status === 429 || response.status === 503) return 'BUSY';
                 if (!response.ok) {
-                    const errorBody = await response.text();
-                    console.error(`[VisionService] API Error ${response.status}:`, errorBody);
-                    throw new Error(`API error: ${response.status} - ${errorBody}`);
+                    const errText = await response.text();
+                    if (response.status === 404) {
+                        throw new Error(`404 - Model Not Found. Please check your model name: ${model}`);
+                    }
+                    const isOpenRouterPrivacyError = response.status === 403 && errText.includes('data policy');
+                    console.error(`[VisionService] API Error ${response.status}:`, errText);
+                    throw new Error(`${response.status} ${isOpenRouterPrivacyError ? '- OpenRouter requires "Free model publication" enabled in Settings > Privacy' : errText}`);
                 }
 
                 const data = await response.json();
@@ -450,38 +419,25 @@ export class VisionService {
      */
     static async forceProcessTweet(tweetId: string) {
         const settings = await this.getSettings();
-        if (!settings.visionEnabled && !settings.ocrEnabled) return;
+        const node = settings.workflowNodes.perception;
+        if (!node.enabled) return;
 
         const tweet = await db.tweets.get(tweetId);
         if (!tweet) return;
 
-        // 获取 Key
-        let apiKey = '';
-        if (settings.visionProvider === 'siliconflow') {
-            if (settings.siliconFlowApiKeys?.length > 0) {
-                apiKey = settings.siliconFlowApiKeys[0];
-            } else if (settings.imageKeys?.trim()) {
-                apiKey = settings.imageKeys.split('\n')[0].trim();
-            } else if (settings.apiKey) {
-                apiKey = settings.apiKey;
-            }
-        } else {
-            apiKey = settings.visionApiKeyOpenRouter || (settings.apiKey?.startsWith('sk-or') ? settings.apiKey : '');
-        }
+        // Resolve Config
+        const providerId = node.providerId || settings.defaultProviderId;
+        const provider = settings.providers.find(p => p.id === providerId);
+        if (!provider || !provider.apiKey) return;
 
-        if (!apiKey) {
-            console.warn(`[VisionService] No API key for ${settings.visionProvider}`);
-            return;
-        }
-
-        console.log(`[VisionService] Forcing immediate ${settings.visionProvider} vision analysis for ${tweetId}`);
-        await this.processBatch([tweet], apiKey, settings);
+        console.log(`[VisionService] Forcing immediate perception analysis for ${tweetId}`);
+        await this.processBatch([tweet], provider.apiKey, settings);
     }
 
     private static async getSettings(): Promise<AISettings> {
         return new Promise((resolve) => {
             chrome.storage.local.get(['aiSettings'], (res) => {
-                resolve(res.aiSettings || DEFAULT_AI_SETTINGS);
+                resolve(getSafeAISettings(res.aiSettings));
             });
         });
     }
@@ -532,16 +488,15 @@ export class VisionService {
      */
     static async debugListModels() {
         const settings = await this.getSettings();
-        const apiKeys = settings.siliconFlowApiKeys.length > 0
-            ? settings.siliconFlowApiKeys
-            : (settings.apiKey ? [settings.apiKey] : []);
+        const providerId = settings.workflowNodes.perception.providerId || settings.defaultProviderId;
+        const provider = settings.providers.find(p => p.id === providerId);
 
-        if (apiKeys.length === 0) {
+        if (!provider || !provider.apiKey) {
             console.warn('[VisionService] No API keys configured');
             return;
         }
 
-        const models = await this.fetchAvailableModels(apiKeys[0], settings.visionProvider);
+        const models = await this.fetchAvailableModels(provider.apiKey, provider.provider === 'openrouter' ? 'openrouter' : 'siliconflow');
         console.table(models);
     }
 }

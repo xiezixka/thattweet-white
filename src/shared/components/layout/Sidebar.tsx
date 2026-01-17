@@ -26,9 +26,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false }) => {
 
     const navItems = [
         { id: 'feed', icon: LayoutDashboard, label: t('nav_feed') },
-        { id: 'intelligence', icon: BrainCircuit, label: t('nav_intelligence') },
         { id: 'stats', icon: BarChart3, label: t('nav_stats') },
         { id: 'analytics', icon: LineChart, label: t('nav_analytics') },
+        { id: 'intelligence', icon: BrainCircuit, label: t('nav_intelligence') },
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];
 
@@ -82,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false }) => {
                                 )}
                             />
 
-                            <span className="text-[13px] font-medium whitespace-nowrap z-10">
+                            <span className="text-sm font-medium whitespace-nowrap z-10">
                                 {item.label}
                             </span>
                         </button>
@@ -92,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false }) => {
 
             {/* Bottom Section */}
             <div className="p-5 mt-auto border-t border-white/[0.05]">
-                <div className="text-[10px] text-zinc-500 font-medium tracking-tight">
+                <div className="text-[11px] text-zinc-500 font-medium tracking-tight">
                     Hover edge to reveal
                 </div>
             </div>

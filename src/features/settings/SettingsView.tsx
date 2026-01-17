@@ -1,951 +1,386 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    Save,
-    Key,
-    Cpu,
-    RotateCcw,
-    CheckCircle,
-    AlertCircle,
-    Loader2,
-    Heart,
-    Shield,
-    Eye,
-    Zap,
-    Database,
-    Terminal,
-    FileText,
-    FolderOpen,
-    Trash2,
-    Plus,
-    Check,
-    X,
-    MessageSquare,
-    Search,
-    RefreshCw,
-    Clock,
-    Upload,
-    Download,
-    Sparkles,
-    Settings,
-    Activity,
-    BookOpen,
-    ScanFace,
-    ChevronDown,
-    Globe
+    Activity, Cpu, Database, Eye, FileText, Heart,
+    RefreshCw, Search, Settings, Sparkles, Terminal,
+    X, Plus, Zap, ChevronDown, Check, ScanFace, BookOpen, AlertCircle, Loader2,
+    BrainCircuit, HardDrive, Info, Sliders, PlayCircle, PauseCircle, Fingerprint
 } from 'lucide-react';
-import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { useTranslation } from '../../shared/hooks/useTranslation';
-import supportImg from '../../assets/img/支持一下.png';
 import { cn } from '../../shared/utils/cn';
-import { selectBackupDirectory, hasBackupDirectory, BackupResult, importBackupFromFile, ImportResult } from '../../core/backup/backupService';
-import { TweetAnalyzer } from '../../core/ai/analyzer';
+import { useSettingsStore, SettingsState } from '../../shared/store/useSettingsStore';
+import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
+import { AIEngineManager } from './AIEngineManager';
+import { AIPipelineDesigner } from './AIPipelineDesigner';
+import supportImg from '../../assets/img/支持一下.png';
 
-// ============ Reorganized Types ============
-type SettingsGroup = 'ai' | 'advanced' | 'intelligence' | 'automation' | 'system';
+type SettingsGroup = 'neural' | 'memory' | 'system';
 
-// ============ Backup Card Component ============
-const BackupCard: React.FC = () => {
-    const { t } = useTranslation();
-    const [backupStatus, setBackupStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
-    const [backupMessage, setBackupMessage] = useState<string>('');
-    const [folderName, setFolderName] = useState<string | null>(null);
-    const [lastBackupTime, setLastBackupTime] = useState<string | null>(null);
+// --- UI COMPONENTS ---
 
-    // Import state
-    const [importStatus, setImportStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
-    const [importMessage, setImportMessage] = useState<string>('');
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        hasBackupDirectory().then(status => {
-            if (status.configured && status.name) {
-                setFolderName(status.name);
-            }
-        });
-    }, []);
-
-    const handleSelectFolder = async () => {
-        const result = await selectBackupDirectory();
-        if (result.success && result.name) {
-            setFolderName(result.name);
-            setBackupMessage(t('settings_save_success'));
-            setTimeout(() => setBackupMessage(''), 2000);
-        }
-    };
-
-    const handleBackupNow = () => {
-        setBackupStatus('running');
-        setBackupMessage('');
-
-        chrome.runtime.sendMessage({ type: 'thattweet-backup-now' }, (response: BackupResult) => {
-            if (response?.ok) {
-                setBackupStatus('success');
-                setBackupMessage(t('settings_verify_success'));
-                setLastBackupTime(new Date().toLocaleString());
-            } else if (response?.reason === 'no-change') {
-                setBackupStatus('idle');
-                setBackupMessage(t('settings_waiting'));
-            } else if (response?.reason === 'no-handle') {
-                setBackupStatus('error');
-                setBackupMessage(t('settings_no_folder'));
-            } else {
-                setBackupStatus('error');
-                setBackupMessage(t('settings_verify_failed'));
-            }
-            setTimeout(() => {
-                setBackupStatus('idle');
-                setBackupMessage('');
-            }, 3000);
-        });
-    };
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setImportStatus('running');
-        try {
-            const result = await importBackupFromFile(file);
-            if (result.ok) {
-                setImportStatus('success');
-                setImportMessage(`${t('settings_verify_success')} +${result.imported}`);
-            } else {
-                setImportStatus('error');
-                setImportMessage(result.error || t('settings_verify_failed'));
-            }
-        } catch (error) {
-            setImportStatus('error');
-            setImportMessage(String(error));
-        }
-
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        setTimeout(() => {
-            setImportStatus('idle');
-            setImportMessage('');
-        }, 5000);
-    };
-
-    return (
-        <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 space-y-6 relative overflow-hidden">
-            <div className="flex items-center justify-between relative z-10">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-brand/10 text-brand rounded-2xl">
-                        <Database size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-bold text-white">{t('settings_section_backup')}</h3>
-                        <p className="text-xs text-zinc-500">{t('settings_backup_shield')}</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
-                <button
-                    onClick={handleBackupNow}
-                    disabled={backupStatus === 'running' || !folderName}
-                    className={cn(
-                        "flex flex-col items-center justify-center gap-2 p-6 rounded-2xl border transition-all active:scale-95 group",
-                        !folderName
-                            ? "bg-zinc-900/50 border-white/5 text-zinc-600 grayscale cursor-not-allowed"
-                            : "bg-white/[0.02] border-white/5 hover:border-brand/40 text-brand"
-                    )}
-                >
-                    {backupStatus === 'running' ? <Loader2 size={24} className="animate-spin" /> : <Download size={24} />}
-                    <span className="text-xs font-black uppercase tracking-widest">{t('settings_backup_now')}</span>
-                </button>
-
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={importStatus === 'running'}
-                    className="flex flex-col items-center justify-center gap-2 p-6 bg-white/[0.02] border border-white/5 rounded-2xl hover:border-emerald-500/40 text-emerald-500 transition-all active:scale-95 group"
-                >
-                    {importStatus === 'running' ? <Loader2 size={24} className="animate-spin" /> : <Upload size={24} />}
-                    <span className="text-xs font-black uppercase tracking-widest">{t('settings_import')}</span>
-                    <input ref={fileInputRef} type="file" accept=".json" onChange={handleFileChange} className="hidden" />
-                </button>
-            </div>
-
-            <div className="space-y-4 pt-2 border-t border-white/5">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <FolderOpen size={16} className="text-zinc-500" />
-                        <div className="text-xs">
-                            <p className="text-zinc-500 uppercase font-black tracking-tighter text-[9px]">{t('settings_backup_folder')}</p>
-                            <p className="text-zinc-300 font-bold max-w-[150px] truncate">{folderName || t('settings_no_folder')}</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleSelectFolder}
-                        className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-[10px] font-bold text-white rounded-lg transition-colors border border-white/5"
-                    >
-                        {t('settings_select_folder')}
-                    </button>
-                </div>
-
-                <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                    <p className="text-[10px] text-zinc-500 leading-relaxed font-medium">
-                        {t('settings_backup_auto_info')}
-                    </p>
-                </div>
-            </div>
+const SectionHeader = ({ title, icon: Icon, rightContent }: any) => (
+    <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+        <div className="flex items-center gap-3">
+            <Icon size={18} className="text-zinc-500" />
+            <h2 className="text-xs font-black text-white uppercase tracking-[0.25em]">{title}</h2>
         </div>
-    );
-};
-
-// ============ Helper Components (Moved Out to Fix Focus Loss) ============
-const Card = ({ children, title, icon: Icon, description }: any) => (
-    <section className="bg-white/[0.02] border border-white/[0.05] rounded-[32px] p-8 space-y-8 relative group/card hover:bg-white/[0.03] transition-all duration-500">
-        <div className="absolute top-0 right-0 p-8 text-white/[0.02] pointer-events-none group-hover/card:text-white/[0.04] transition-colors duration-700">
-            {Icon && <Icon size={120} strokeWidth={1} />}
-        </div>
-        <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-2">
-                {Icon && <div className="p-2 bg-brand/10 rounded-xl text-brand"><Icon size={20} /></div>}
-                <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
-            </div>
-            {description && <p className="text-xs text-zinc-500 font-medium mb-8 max-w-lg leading-relaxed">{description}</p>}
-            <div className="space-y-6">
-                {children}
-            </div>
-        </div>
-    </section>
-);
-
-const Field = ({ label, description, children }: any) => (
-    <div className="space-y-2 group/field">
-        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest block group-focus-within/field:text-brand transition-colors">
-            {label}
-        </label>
-        {children}
-        {description && <p className="text-[10px] text-zinc-600 font-medium italic">{description}</p>}
+        {rightContent}
     </div>
 );
 
-// ============ Model Selection Component ============
-const ModelSelect = ({ value, onChange, baseUrl, apiKey, placeholder }: any) => {
-    const [models, setModels] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+const Card = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <div className={cn("bg-[#0A0A0A] border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-colors duration-300", className)}>
+        {children}
+    </div>
+);
 
-    const handleFetch = async () => {
-        if (!baseUrl || !apiKey) return;
-        setLoading(true);
-        setError(null);
-        try {
-            const list = await TweetAnalyzer.fetchAvailableModels(baseUrl, apiKey);
-            setModels(list);
-            setIsOpen(true);
-            if (list.length === 0) setError('No models found');
-        } catch (e: any) {
-            console.error("Fetch models failed", e);
-            setError(e.message || 'Fetch failed');
-            setIsOpen(true);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="relative flex gap-2 w-full">
-            <div className="relative flex-1">
-                <input
-                    type="text"
-                    value={value}
-                    onChange={e => onChange(e.target.value)}
-                    placeholder={placeholder}
-                    className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                />
-                {isOpen && (
-                    <div className="absolute z-[100] top-full left-0 right-0 mt-2 max-h-64 overflow-y-auto bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-200 no-scrollbar">
-                        {error ? (
-                            <div className="px-4 py-3 text-[10px] text-zinc-500 italic flex items-center gap-2">
-                                <AlertCircle size={12} className="text-zinc-700" />
-                                {error}
-                            </div>
-                        ) : models.length > 0 ? (
-                            models.map(m => (
-                                <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => {
-                                        onChange(m);
-                                        setIsOpen(false);
-                                    }}
-                                    className={cn(
-                                        "w-full text-left px-4 py-2.5 text-[10px] font-mono rounded-xl transition-all truncate",
-                                        value === m ? "bg-brand text-white shadow-lg shadow-brand/20" : "text-zinc-400 hover:text-white hover:bg-white/5"
-                                    )}
-                                >
-                                    {m}
-                                </button>
-                            ))
-                        ) : null}
-                    </div>
-                )}
-            </div>
-            <button
-                type="button"
-                onClick={handleFetch}
-                disabled={loading || !baseUrl || !apiKey}
-                className="px-4 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30"
-                title="Fetch models from API"
-            >
-                {loading ? <Loader2 size={16} className="animate-spin text-brand" /> : <ChevronDown size={16} />}
-            </button>
-            {isOpen && <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />}
+const Field = ({ label, children, description }: any) => (
+    <div className="space-y-2.5">
+        <div className="flex items-center justify-between">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</label>
         </div>
-    );
-};
+        {children}
+        {description && <p className="text-[9px] text-zinc-600 font-medium leading-relaxed">{description}</p>}
+    </div>
+);
 
-// ============ Main View Component ============
+// --- MAIN VIEW ---
+
 export const SettingsView: React.FC = () => {
     const { t } = useTranslation();
-    const [activeGroup, setActiveGroup] = useState<SettingsGroup>('ai');
-    const [settings, setSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
-    const [status, setStatus] = useState<string>('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [isValidating, setIsValidating] = useState<string | null>(null);
+    const settings = useSettingsStore((s: SettingsState) => s.settings);
+    const updateSettings = useSettingsStore((s: SettingsState) => s.updateSettings);
+    const [activeGroup, setActiveGroup] = useState<SettingsGroup>('neural');
+    const [status, setStatus] = useState('');
     const [newTag, setNewTag] = useState('');
-
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+    // Initial Load & Migration
     useEffect(() => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.get(['aiSettings'], (result) => {
                 if (result.aiSettings) {
-                    setSettings(prev => ({ ...prev, ...result.aiSettings }));
+                    let loaded = { ...result.aiSettings };
+
+                    // Legacy Migration
+                    const legacy = result.aiSettings as any;
+                    if ((!loaded.providers || loaded.providers.length === 0) && legacy.apiKey) {
+                        const newProviderId = crypto.randomUUID();
+                        const isSilicon = legacy.baseUrl?.includes('siliconflow') || legacy.apiKey?.startsWith('sk-');
+                        const isOR = legacy.baseUrl?.includes('openrouter') || legacy.apiKey?.startsWith('sk-or');
+
+                        loaded.providers = [{
+                            id: newProviderId,
+                            name: isSilicon ? 'SiliconFlow (Migrated)' : isOR ? 'OpenRouter (Migrated)' : 'Legacy Provider',
+                            provider: isSilicon ? 'siliconflow' : isOR ? 'openrouter' : 'custom',
+                            baseUrl: legacy.baseUrl || 'https://api.openai.com/v1',
+                            apiKey: legacy.apiKey,
+                            status: 'connected',
+                            lastChecked: Date.now()
+                        }];
+                        loaded.defaultProviderId = newProviderId;
+                    }
+
+                    // Safe Merge
+                    loaded.workflowNodes = { ...DEFAULT_AI_SETTINGS.workflowNodes, ...(loaded.workflowNodes || {}) };
+                    updateSettings(loaded);
                 }
             });
         }
     }, []);
 
-    // Debounced Auto-save
-    const isFirstMount = useRef(true);
-    const hasLoaded = useRef(false);
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    useEffect(() => {
-        if (isFirstMount.current) {
-            isFirstMount.current = false;
-            return;
-        }
-
-        // 避免在数据加载完成前触发保存
-        if (!hasLoaded.current) {
-            hasLoaded.current = true;
-            return;
-        }
-
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
-        saveTimeoutRef.current = setTimeout(() => {
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.set({ aiSettings: settings }, () => {
-                    setStatus(t('settings_save_success'));
-                    setTimeout(() => setStatus(''), 2000);
-                });
-            }
-        }, 1000);
-
-        return () => {
-            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        };
-    }, [settings]);
-
     const handleChange = (key: keyof AISettings, value: any) => {
-        setSettings(prev => ({ ...prev, [key]: value }));
+        const newSettings = { ...settings, [key]: value };
+        updateSettings(newSettings);
+        handleSave(newSettings);
     };
 
-    const handleSave = () => {
-        setIsSaving(true);
+    const handleSettingsUpdate = (newSettings: AISettings) => {
+        updateSettings(newSettings);
+        handleSave(newSettings);
+    };
+
+    const handleSave = (newSettings: AISettings) => {
+        setStatus('SAVING...');
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.set({ aiSettings: settings }, () => {
-                setTimeout(() => {
-                    setIsSaving(false);
-                    setStatus(t('settings_save_success'));
-                    setTimeout(() => setStatus(''), 3000);
-                }, 600);
+            chrome.storage.local.set({ aiSettings: newSettings }, () => {
+                setTimeout(() => setStatus('SAVED'), 500);
+                setTimeout(() => setStatus(''), 2000);
             });
-        }
-    };
-
-
-    const handleVerifyKey = async (type: 'api' | 'vision' | 'chat' | 'rag') => {
-        setIsValidating(type);
-        setStatus(t('settings_verifying'));
-
-        let apiKey = '';
-        let baseUrl = '';
-        let model = '';
-
-        if (type === 'api') {
-            apiKey = settings.apiKey;
-            baseUrl = settings.baseUrl;
-            model = settings.model;
-        } else if (type === 'chat') {
-            apiKey = settings.chatApiKey || settings.apiKey;
-            baseUrl = settings.chatBaseUrl || settings.baseUrl;
-            model = settings.chatModel || settings.model;
-        } else if (type === 'vision') {
-            if (settings.visionProvider === 'siliconflow') {
-                const apiKeys = settings.siliconFlowApiKeys.length > 0
-                    ? settings.siliconFlowApiKeys
-                    : (settings.imageKeys.trim() ? settings.imageKeys.split('\n').map(k => k.trim()).filter(Boolean) : []);
-
-                apiKey = apiKeys[0] || settings.apiKey;
-                baseUrl = 'https://api.siliconflow.cn/v1';
-            } else {
-                apiKey = settings.visionApiKeyOpenRouter || (settings.apiKey?.startsWith('sk-or') ? settings.apiKey : '');
-                baseUrl = 'https://openrouter.ai/api/v1';
-            }
-            model = settings.visionModel;
-        } else if (type === 'rag') {
-            apiKey = settings.ragApiKey;
-            baseUrl = settings.embeddingUrl;
-        }
-
-        if (!apiKey) {
-            setIsValidating(null);
-            setStatus(t('settings_no_key'));
-            return;
-        }
-
-        try {
-            const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                    'X-Title': 'ThatTweet'
-                },
-                body: JSON.stringify({
-                    model: model || 'xiaomi/mimo-v2-flash:free',
-                    messages: [{ role: 'user', content: 'hi' }],
-                    max_tokens: 5
-                })
-            });
-
-            if (response.ok) {
-                setStatus(t('settings_verify_success'));
-            } else {
-                const err = await response.json();
-                setStatus(`${t('settings_verify_failed')}: ${err.error?.message || response.statusText}`);
-            }
-        } catch (error) {
-            setStatus(t('settings_verify_error'));
-        } finally {
-            setIsValidating(null);
-            setTimeout(() => setStatus(''), 3000);
         }
     };
 
     const groups = [
-        { id: 'ai', icon: Shield, label: t('settings_group_ai'), sublabel: 'Connections & Models' },
-        { id: 'advanced', icon: Zap, label: t('settings_group_advanced'), sublabel: 'Vision & Knowledge' },
-        { id: 'intelligence', icon: Activity, label: t('settings_group_intelligence'), sublabel: 'Prompts & Rules' },
-        { id: 'automation', icon: Terminal, label: t('settings_group_workflow'), sublabel: 'Automation & Tags' },
-        { id: 'system', icon: Settings, label: t('settings_group_system'), sublabel: 'Data & Maintenance' },
+        { id: 'neural', label: t('nav_neural'), icon: BrainCircuit, sub: t('sub_neural') },
+        { id: 'memory', label: t('nav_memory'), icon: HardDrive, sub: t('sub_memory') },
+        { id: 'system', label: t('nav_system'), icon: Info, sub: t('sub_system') },
     ];
 
     return (
-        <div className="flex h-full bg-[#050505]">
-            {/* Elegant Sidebar */}
-            <aside className="w-[300px] border-r border-white/5 flex flex-col bg-[#080808]">
-                <div className="p-10">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center shadow-lg shadow-brand/20">
-                            <Sparkles size={18} className="text-white" />
+        <div className="flex h-full bg-black font-sans selection:bg-white selection:text-black">
+            {/* --- SIDEBAR --- */}
+            <aside className="w-[260px] border-r border-white/10 flex flex-col bg-black shrink-0 relative z-20">
+                <div className="p-8 pb-10">
+                    <div className="flex items-center gap-3 mb-1">
+                        <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
+                            <Terminal size={14} className="text-black" />
                         </div>
-                        <h1 className="text-lg font-black text-white tracking-tighter">{t('settings_lab')}</h1>
+                        <h1 className="text-base font-black text-white tracking-widest">THATTWEET</h1>
                     </div>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">{t('settings_sys_config')}</p>
+                    <p className="text-[9px] text-zinc-600 font-mono pl-9 tracking-widest">INTELLIGENCE CONSOLE</p>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-1.5">
+                <nav className="flex-1 px-4 space-y-2">
                     {groups.map((group) => (
                         <button
                             key={group.id}
                             onClick={() => setActiveGroup(group.id as SettingsGroup)}
                             className={cn(
-                                "w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 group",
+                                "w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-300 group relative overflow-hidden",
                                 activeGroup === group.id
-                                    ? "bg-white/[0.04] text-white border border-white/10 shadow-xl shadow-black/40"
-                                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.01]"
+                                    ? "bg-white text-black"
+                                    : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"
                             )}
                         >
-                            <group.icon size={20} className={cn(
-                                "transition-colors duration-300",
-                                activeGroup === group.id ? "text-brand" : "text-zinc-600 group-hover:text-zinc-400"
-                            )} />
-                            <div className="text-left">
-                                <p className="text-sm font-bold tracking-tight">{group.label}</p>
-                                <p className="text-[9px] font-medium opacity-40 uppercase tracking-wider">{group.sublabel}</p>
+                            <group.icon size={18} className={cn("relative z-10 transition-colors", activeGroup === group.id ? "text-black" : "text-zinc-600 group-hover:text-zinc-400")} />
+                            <div className="text-left relative z-10">
+                                <p className="text-[11px] font-black tracking-[0.1em] leading-tight">{group.label}</p>
+                                <p className={cn("text-[8px] font-mono mt-0.5", activeGroup === group.id ? "text-neutral-500" : "text-zinc-600")}>{group.sub}</p>
                             </div>
-                            {activeGroup === group.id && (
-                                <div className="ml-auto w-1 h-1 rounded-full bg-brand shadow-[0_0_8px_var(--brand)]" />
-                            )}
                         </button>
                     ))}
                 </nav>
 
                 <div className="p-6">
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">{t('settings_save_status')}</span>
-                            <div className={cn("w-1.5 h-1.5 rounded-full", status ? "bg-emerald-500 animate-pulse" : "bg-zinc-800")} />
-                        </div>
-                        <p className="text-[10px] text-zinc-500 font-bold truncate leading-none">
-                            {status || t('settings_waiting')}
-                        </p>
-                        <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-black transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-brand/10 mt-2"
-                        >
-                            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                            {t('settings_save')}
-                        </button>
+                    <div className="flex items-center justify-between px-2">
+                        <span className="text-[9px] font-mono text-zinc-600">{status || 'READY'}</span>
+                        <div className={cn("w-1.5 h-1.5 rounded-full", status ? "bg-white animate-pulse" : "bg-zinc-800")} />
                     </div>
                 </div>
             </aside>
 
-            {/* Content Area */}
-            <main className="flex-1 overflow-y-auto no-scrollbar" ref={scrollContainerRef}>
-                <div className="max-w-4xl mx-auto px-12 py-16 space-y-12 pb-40">
+            {/* --- MAIN CONTENT --- */}
+            <main className="flex-1 overflow-y-auto no-scrollbar bg-[#050505] relative" ref={scrollContainerRef}>
+                <div className="p-8 min-h-full">
 
-                    {/* GROUP 1: AI CORE */}
-                    {activeGroup === 'ai' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card title={t('settings_section_api')} icon={Cpu} description={t('settings_api_key_desc')}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <Field label={t('settings_api_key')}>
-                                        <div className="relative flex gap-2">
-                                            <div className="relative flex-1 group/field">
-                                                <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within/field:text-brand transition-colors" size={14} />
-                                                <input
-                                                    type="password"
-                                                    value={settings.apiKey}
-                                                    onChange={e => handleChange('apiKey', e.target.value)}
-                                                    className="w-full bg-black/40 border border-white/5 rounded-xl pl-9 pr-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                                    placeholder="sk-..."
-                                                />
-                                            </div>
-                                            <button
-                                                onClick={() => handleVerifyKey('api')}
-                                                disabled={isValidating !== null}
-                                                className="px-4 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl border border-white/5 transition-all flex items-center gap-2 active:scale-95"
-                                            >
-                                                {isValidating === 'api' ? <Loader2 size={14} className="animate-spin" /> : <Terminal size={14} />}
-                                            </button>
+                    {/* === TAB: NEURAL FORGE === */}
+                    {activeGroup === 'neural' && (
+                        <div className="flex gap-8 h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
+
+                            {/* Left: Engine Inventory (Sticky Sidebar) */}
+                            <div className="w-[320px] shrink-0 sticky top-0 h-fit space-y-6">
+                                <Card className="border-white/10 bg-black shadow-2xl">
+                                    <AIEngineManager settings={settings} onUpdate={handleSettingsUpdate} />
+                                </Card>
+
+                                {/* Advanced Tuning (Moved here for quick access) */}
+                                <Card className="border-white/5 space-y-6">
+                                    <SectionHeader title="KERNEL TUNING" icon={Sliders} />
+                                    <Field label="Vision Scope" description="Which images to analyze">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {(['all', 'new'] as const).map(mode => (
+                                                <button
+                                                    key={mode}
+                                                    onClick={() => handleChange('visionEnabledAt', mode === 'all' ? 0 : Date.now())}
+                                                    className={cn(
+                                                        "py-2 px-3 rounded-lg text-[9px] font-black border transition-all uppercase tracking-widest",
+                                                        (mode === 'all' ? settings.visionEnabledAt === 0 : settings.visionEnabledAt > 0)
+                                                            ? "bg-white text-black border-white"
+                                                            : "bg-black border-white/10 text-zinc-600 hover:border-white/20"
+                                                    )}
+                                                >
+                                                    {mode === 'all' ? 'All Time' : 'New Only'}
+                                                </button>
+                                            ))}
                                         </div>
                                     </Field>
-                                    <Field label={t('settings_model')} description={t('settings_model_desc')}>
-                                        <ModelSelect
-                                            value={settings.model}
-                                            onChange={(v: string) => handleChange('model', v)}
-                                            baseUrl={settings.baseUrl}
-                                            apiKey={settings.apiKey}
-                                            placeholder="gpt-3.5-turbo..."
-                                        />
-                                    </Field>
-                                </div>
-                                <Field label={t('settings_api_url')}>
-                                    <input
-                                        type="text"
-                                        value={settings.baseUrl}
-                                        onChange={e => handleChange('baseUrl', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                    />
-                                </Field>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* GROUP 2: ADVANCED (Vision & RAG & Engines) */}
-                    {activeGroup === 'advanced' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card title={t('settings_section_vision')} icon={Eye} description={t('settings_vision_keys_desc')}>
-                                {/* Provider Selection */}
-                                <Field label={t('settings_vision_provider')}>
-                                    <div className="flex gap-2">
-                                        {(['siliconflow', 'openrouter'] as const).map(p => (
-                                            <button
-                                                key={p}
-                                                onClick={() => handleChange('visionProvider', p)}
-                                                className={cn(
-                                                    "flex-1 py-3 rounded-xl text-xs font-bold border transition-all uppercase tracking-widest",
-                                                    settings.visionProvider === p ? "bg-brand/10 border-brand/40 text-brand" : "bg-white/5 border-white/5 text-zinc-500"
-                                                )}
-                                            >
-                                                {p === 'siliconflow' ? 'SiliconFlow' : 'OpenRouter'}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </Field>
-
-                                {settings.visionProvider === 'siliconflow' ? (
-                                    <Field label={t('settings_vision_keys')} description={t('settings_vision_multi_line')}>
-                                        <textarea
-                                            rows={3}
-                                            value={settings.imageKeys}
-                                            onChange={e => handleChange('imageKeys', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
-                                            placeholder="sk-..."
-                                        />
-                                    </Field>
-                                ) : (
-                                    <Field label={t('settings_openrouter_key')} description={t('settings_openrouter_key_desc')}>
-                                        <input
-                                            type="password"
-                                            value={settings.visionApiKeyOpenRouter}
-                                            onChange={e => handleChange('visionApiKeyOpenRouter', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                            placeholder={settings.apiKey?.startsWith('sk-or') ? "Using Global Key (OpenRouter Detected)" : "sk-or-..."}
-                                        />
-                                    </Field>
-                                )}
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div onClick={() => handleChange('ocrEnabled', !settings.ocrEnabled)} className={cn(
-                                        "p-4 rounded-2xl border cursor-pointer transition-all",
-                                        settings.ocrEnabled ? "bg-brand/5 border-brand/20" : "bg-white/[0.01] border-white/5 text-zinc-600"
-                                    )}>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <FileText size={18} className={settings.ocrEnabled ? "text-brand" : "text-zinc-600"} />
-                                            <div className={cn("w-8 h-4 rounded-full relative", settings.ocrEnabled ? "bg-brand" : "bg-zinc-800")}>
-                                                <div className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", settings.ocrEnabled ? "left-4.5" : "left-0.5")} />
-                                            </div>
-                                        </div>
-                                        <p className="text-xs font-black uppercase tracking-tight">{t('settings_ocr_enable')}</p>
-                                    </div>
-                                    <div onClick={() => handleChange('visionEnabled', !settings.visionEnabled)} className={cn(
-                                        "p-4 rounded-2xl border cursor-pointer transition-all",
-                                        settings.visionEnabled ? "bg-emerald-500/5 border-emerald-500/20" : "bg-white/[0.01] border-white/5 text-zinc-600"
-                                    )}>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <Eye size={18} className={settings.visionEnabled ? "text-emerald-500" : "text-zinc-600"} />
-                                            <div className={cn("w-8 h-4 rounded-full relative", settings.visionEnabled ? "bg-emerald-500" : "bg-zinc-800")}>
-                                                <div className={cn("absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all", settings.visionEnabled ? "left-4.5" : "left-0.5")} />
-                                            </div>
-                                        </div>
-                                        <p className="text-xs font-black uppercase tracking-tight">{t('settings_vision_enable')}</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4 pt-4 border-t border-white/5">
-                                    <Field label="Vision Model" description={`${settings.visionProvider === 'siliconflow' ? 'SiliconFlow' : 'OpenRouter'} Multi-modal Model Name`}>
-                                        <ModelSelect
-                                            value={settings.visionModel}
-                                            onChange={(v: string) => handleChange('visionModel', v)}
-                                            baseUrl={settings.visionProvider === 'siliconflow' ? 'https://api.siliconflow.cn/v1' : 'https://openrouter.ai/api/v1'}
-                                            apiKey={settings.visionProvider === 'siliconflow'
-                                                ? (settings.siliconFlowApiKeys[0] || settings.imageKeys.split('\n')[0] || settings.apiKey)
-                                                : (settings.visionApiKeyOpenRouter || settings.apiKey)
-                                            }
-                                            placeholder={settings.visionProvider === 'siliconflow' ? "e.g. Qwen/Qwen2-VL-7B-Instruct" : "e.g. google/gemini-pro-1.5-exp"}
-                                        />
-                                    </Field>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <Field label="Max Images / Tweet">
+                                    <Field label={t('label_performance')} description={t('desc_performance')}>
+                                        <div className="flex items-center gap-4">
                                             <input
-                                                type="number"
-                                                value={settings.maxImagesPerTweet}
-                                                onChange={e => handleChange('maxImagesPerTweet', parseInt(e.target.value))}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-white"
-                                            />
-                                        </Field>
-                                        <Field label="Batch Size (Tweets)">
-                                            <input
-                                                type="number"
-                                                value={settings.visionBatchSize}
-                                                onChange={e => handleChange('visionBatchSize', parseInt(e.target.value))}
-                                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-2.5 text-xs font-mono text-white"
-                                            />
-                                        </Field>
-                                    </div>
-
-                                    <Field label="Processing Scope">
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => handleChange('visionEnabledAt', 0)}
-                                                className={cn(
-                                                    "flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all",
-                                                    settings.visionEnabledAt === 0 ? "bg-brand/10 border-brand/40 text-brand" : "bg-white/5 border-white/5 text-zinc-500"
-                                                )}
-                                            >
-                                                Process All History
-                                            </button>
-                                            <button
-                                                onClick={() => handleChange('visionEnabledAt', Date.now())}
-                                                className={cn(
-                                                    "flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all",
-                                                    settings.visionEnabledAt > 0 ? "bg-brand/10 border-brand/40 text-brand" : "bg-white/5 border-white/5 text-zinc-500"
-                                                )}
-                                            >
-                                                Only New Tweets
-                                            </button>
-                                        </div>
-                                    </Field>
-                                </div>
-                            </Card>
-
-                            <Card title={t('settings_section_rag')} icon={Search} description={t('settings_rag_desc')}>
-                                <div className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl mb-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className={cn("p-2 rounded-xl", settings.ragEnabled ? "bg-blue-500/10 text-blue-500" : "bg-zinc-900 text-zinc-600")}>
-                                            <Database size={18} />
-                                        </div>
-                                        <span className="text-sm font-bold text-white uppercase">{t('settings_rag_enable')}</span>
-                                    </div>
-                                    <div onClick={() => handleChange('ragEnabled', !settings.ragEnabled)} className={cn("w-10 h-5 rounded-full relative cursor-pointer", settings.ragEnabled ? "bg-blue-500" : "bg-zinc-800")}>
-                                        <div className={cn("absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all", settings.ragEnabled ? "left-5.5" : "left-0.5")} />
-                                    </div>
-                                </div>
-                                {settings.ragEnabled && (
-                                    <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                                        <Field label={t('settings_embedding')}>
-                                            <input type="text" value={settings.embeddingModel} onChange={e => handleChange('embeddingModel', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white mb-2" />
-                                            <input type="text" value={settings.embeddingUrl} onChange={e => handleChange('embeddingUrl', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white" />
-                                        </Field>
-                                        <Field label={t('settings_reranker')}>
-                                            <input type="text" value={settings.rerankerModel} onChange={e => handleChange('rerankerModel', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white mb-2" />
-                                            <input type="text" value={settings.rerankerUrl} onChange={e => handleChange('rerankerUrl', e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white" />
-                                        </Field>
-                                    </div>
-                                )}
-                            </Card>
-
-                            <Card title={t('settings_section_profile_engine')} icon={ScanFace} description={t('settings_section_profile_engine_desc')}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <Field label={`${t('settings_api_key')} (Optional)`}>
-                                        <input
-                                            type="password"
-                                            value={settings.profileApiKey}
-                                            onChange={e => handleChange('profileApiKey', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                            placeholder="Leave empty to use Chat Key"
-                                        />
-                                    </Field>
-                                    <Field label={t('settings_model')}>
-                                        <ModelSelect
-                                            value={settings.profileModel}
-                                            onChange={(v: string) => handleChange('profileModel', v)}
-                                            baseUrl={settings.profileBaseUrl || settings.chatBaseUrl || settings.baseUrl}
-                                            apiKey={settings.profileApiKey || settings.chatApiKey || settings.apiKey}
-                                            placeholder="mistralai/mistral-7b-instruct:free"
-                                        />
-                                    </Field>
-                                </div>
-                                <Field label={t('settings_api_url')}>
-                                    <input
-                                        type="text"
-                                        value={settings.profileBaseUrl}
-                                        onChange={e => handleChange('profileBaseUrl', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                        placeholder="https://openrouter.ai/api/v1"
-                                    />
-                                </Field>
-                            </Card>
-
-                            <Card title={t('settings_section_expert_engine')} icon={MessageSquare} description={t('settings_section_expert_engine_desc')}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <Field label={`${t('settings_api_key')} (Optional)`}>
-                                        <input
-                                            type="password"
-                                            value={settings.expertApiKey}
-                                            onChange={e => handleChange('expertApiKey', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                            placeholder="Leave empty to use Chat Key"
-                                        />
-                                    </Field>
-                                    <Field label={t('settings_model')}>
-                                        <ModelSelect
-                                            value={settings.expertModel}
-                                            onChange={(v: string) => handleChange('expertModel', v)}
-                                            baseUrl={settings.expertBaseUrl || settings.chatBaseUrl || settings.baseUrl}
-                                            apiKey={settings.expertApiKey || settings.chatApiKey || settings.apiKey}
-                                            placeholder="xiaomi/mimo-v2-flash:free"
-                                        />
-                                    </Field>
-                                </div>
-                                <Field label={t('settings_api_url')}>
-                                    <input
-                                        type="text"
-                                        value={settings.expertBaseUrl}
-                                        onChange={e => handleChange('expertBaseUrl', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                        placeholder="https://openrouter.ai/api/v1"
-                                    />
-                                </Field>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* GROUP 3: INTELLIGENCE */}
-                    {activeGroup === 'intelligence' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card title={t('settings_section_chat')} icon={MessageSquare} description={t('settings_chat_optional_fallback')}>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <Field label={t('settings_api_key')}>
-                                        <input
-                                            type="password"
-                                            value={settings.chatApiKey}
-                                            onChange={e => handleChange('chatApiKey', e.target.value)}
-                                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none transition-all"
-                                        />
-                                    </Field>
-                                    <Field label={t('settings_model')}>
-                                        <ModelSelect
-                                            value={settings.chatModel}
-                                            onChange={(v: string) => handleChange('chatModel', v)}
-                                            baseUrl={settings.chatBaseUrl || settings.baseUrl}
-                                            apiKey={settings.chatApiKey || settings.apiKey}
-                                            placeholder="claude-3-haiku..."
-                                        />
-                                    </Field>
-                                </div>
-                            </Card>
-
-                            <Card title={t('settings_section_prompts')} icon={FileText}>
-                                <Field label={t('settings_ai_style_focus')} description={t('settings_ai_style_focus_desc')}>
-                                    <input
-                                        type="text"
-                                        value={settings.aiStyleFocus}
-                                        onChange={e => handleChange('aiStyleFocus', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-medium text-zinc-300 focus:border-brand/40 outline-none transition-all"
-                                        placeholder="e.g. 技术干货、灵感采集、深度见解..."
-                                    />
-                                </Field>
-                                <Field label={t('settings_prompt_analysis')} description={t('settings_prompt_analysis_desc')}>
-                                    <textarea
-                                        rows={6}
-                                        value={settings.promptAnalysis}
-                                        onChange={e => handleChange('promptAnalysis', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
-                                    />
-                                </Field>
-                                <Field label={t('settings_prompt_vision')} description={t('settings_prompt_vision_desc')}>
-                                    <textarea
-                                        rows={6}
-                                        value={settings.promptVision}
-                                        onChange={e => handleChange('promptVision', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
-                                    />
-                                </Field>
-                                <Field label={t('settings_prompt_summary')} description={t('settings_prompt_summary_desc')}>
-                                    <textarea
-                                        rows={4}
-                                        value={settings.promptSummary}
-                                        onChange={e => handleChange('promptSummary', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
-                                    />
-                                </Field>
-                                <Field label="Profile Prompt" description={t('settings_prompt_profile_desc')}>
-                                    <textarea
-                                        rows={6}
-                                        value={settings.promptProfile}
-                                        onChange={e => handleChange('promptProfile', e.target.value)}
-                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-4 py-3 text-xs font-medium text-zinc-400 focus:border-brand/40 outline-none transition-all resize-none no-scrollbar"
-                                    />
-                                </Field>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* GROUP 4: AUTOMATION */}
-                    {activeGroup === 'automation' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card title={t('settings_section_automation')} icon={Zap} description={t('settings_automation_auto_desc')}>
-                                <div className="flex items-center justify-between p-6 bg-white/[0.02] border border-white/10 rounded-3xl hover:bg-white/[0.04] transition-all">
-                                    <div className="flex items-center gap-4">
-                                        <div className={cn("p-3 rounded-2xl", settings.autoAnalyze ? "bg-brand/10 text-brand" : "bg-zinc-900 text-zinc-600")}>
-                                            <RefreshCw size={24} className={settings.autoAnalyze ? "animate-spin-slow" : ""} />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-white uppercase">{t('settings_automation_auto')}</p>
-                                            <p className="text-[10px] text-zinc-500">{t('settings_automation_auto_desc')}</p>
-                                        </div>
-                                    </div>
-                                    <div onClick={() => handleChange('autoAnalyze', !settings.autoAnalyze)} className={cn("w-12 h-6 rounded-full relative cursor-pointer", settings.autoAnalyze ? "bg-brand" : "bg-zinc-800")}>
-                                        <div className={cn("absolute top-1 w-4 h-4 bg-white rounded-full transition-all", settings.autoAnalyze ? "left-7" : "left-1")} />
-                                    </div>
-                                </div>
-
-                                <div className="mt-8 pt-6 border-t border-white/5">
-                                    <Field label={t('settings_batch_process_size')} description={t('settings_batch_process_size_desc')}>
-                                        <div className="flex items-center gap-6 mt-2">
-                                            <input
-                                                type="range"
-                                                min="1"
-                                                max="50"
-                                                step="1"
+                                                type="range" min="1" max="50" step="1"
                                                 value={settings.batchSize}
                                                 onChange={e => handleChange('batchSize', parseInt(e.target.value))}
-                                                className="flex-1 accent-brand h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                                                className="flex-1 accent-white h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
                                             />
-                                            <div className="min-w-[48px] h-10 bg-brand/10 border border-brand/20 rounded-xl flex items-center justify-center font-mono font-bold text-brand shadow-lg shadow-brand/5">
-                                                {settings.batchSize}
-                                            </div>
+                                            <span className="font-mono text-xs text-white w-8 text-right">{settings.batchSize}</span>
                                         </div>
                                     </Field>
+                                    <Field label={t('label_max_images')} description={t('desc_max_images')}>
+                                        <div className="flex items-center gap-4">
+                                            <input
+                                                type="range" min="1" max="4" step="1"
+                                                value={settings.maxImagesPerTweet ?? 4}
+                                                onChange={e => handleChange('maxImagesPerTweet', parseInt(e.target.value))}
+                                                className="flex-1 accent-white h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                                            />
+                                            <span className="font-mono text-xs text-white w-8 text-right">{settings.maxImagesPerTweet ?? 4}</span>
+                                        </div>
+                                    </Field>
+                                </Card>
+                            </div>
+
+                            {/* Right: Mission Control & Pipeline */}
+                            <div className="flex-1 min-w-0 space-y-6">
+                                {/* Mission Directive (Global Context) */}
+                                <Card className="border-white/10 relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 p-8 opacity-[0.02] pointer-events-none group-hover:scale-110 transition-transform duration-1000">
+                                        <Fingerprint size={120} />
+                                    </div>
+                                    <div className="flex items-start justify-between gap-8 relative z-10">
+                                        <div className="space-y-4 flex-1">
+                                            <div className="flex items-center gap-2 text-zinc-500">
+                                                <ScanFace size={16} />
+                                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('section_directive')}</span>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={settings.aiStyleFocus}
+                                                onChange={e => handleChange('aiStyleFocus', e.target.value)}
+                                                className="w-full bg-transparent border-b border-white/10 py-2 text-lg font-bold text-white placeholder:text-zinc-700 focus:border-white/40 focus:outline-none font-sans"
+                                                placeholder={t('placeholder_directive')}
+                                            />
+                                            <p className="text-[10px] text-zinc-600 font-medium">{t('desc_directive')}</p>
+                                        </div>
+
+                                        {/* Master Switch */}
+                                        <div className="space-y-3 flex flex-col items-end">
+                                            <button
+                                                onClick={() => handleChange('autoAnalyze', !settings.autoAnalyze)}
+                                                className={cn(
+                                                    "flex items-center gap-2 pl-3 pr-4 py-2 rounded-full border transition-all duration-300",
+                                                    settings.autoAnalyze
+                                                        ? "bg-white text-black border-white"
+                                                        : "bg-black text-zinc-500 border-white/10 hover:border-white/30"
+                                                )}
+                                            >
+                                                {settings.autoAnalyze ? <PauseCircle size={16} className="fill-black text-white" /> : <PlayCircle size={16} />}
+                                                <span className="text-[10px] font-black uppercase tracking-widest">
+                                                    {settings.autoAnalyze ? t('system_active') : t('system_paused')}
+                                                </span>
+                                            </button>
+                                            {settings.autoAnalyze && (
+                                                <div className="flex items-center gap-2 text-[9px] text-emerald-500 font-mono uppercase">
+                                                    <span className="relative flex h-2 w-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                                    </span>
+                                                    Online
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </Card>
+
+                                {/* The Pipeline */}
+                                <div className="border border-white/5 rounded-3xl overflow-hidden bg-[#080808]">
+                                    <div className="p-6 border-b border-white/5 bg-white/[0.01]">
+                                        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                            <BrainCircuit size={14} /> {t('pipeline_arch')}
+                                        </h3>
+                                    </div>
+                                    <div className="p-6">
+                                        <AIPipelineDesigner settings={settings} onUpdate={handleSettingsUpdate} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* === TAB: MEMORY CORTEX === */}
+                    {activeGroup === 'memory' && (
+                        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+                            {/* RAG Section */}
+                            <Card className="border-white/10">
+                                <SectionHeader title={t('section_rag')} icon={Database}
+                                    rightContent={
+                                        <div onClick={() => handleChange('ragEnabled', !settings.ragEnabled)} className={cn("cursor-pointer px-3 py-1 rounded bg-white/5 border border-white/5 text-[10px] font-mono", settings.ragEnabled ? "text-emerald-500 border-emerald-500/30" : "text-zinc-600")}>
+                                            {settings.ragEnabled ? t('status_enabled') : t('status_disabled')}
+                                        </div>
+                                    }
+                                />
+                                {settings.ragEnabled ? (
+                                    <div className="grid grid-cols-2 gap-8">
+                                        <Field label={t('label_embedding_model')} description={t('desc_embedding_model')}>
+                                            <input type="text" value={settings.embeddingModel} onChange={e => handleChange('embeddingModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-white/30 outline-none" />
+                                        </Field>
+                                        <Field label={t('label_reranker_model')} description={t('desc_reranker_model')}>
+                                            <input type="text" value={settings.rerankerModel} onChange={e => handleChange('rerankerModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-white/30 outline-none" />
+                                        </Field>
+                                        <div className="col-span-2">
+                                            <Field label={t('label_endpoint')} description={t('desc_endpoint')}>
+                                                <input type="text" value={settings.embeddingUrl} onChange={e => handleChange('embeddingUrl', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-white/30 outline-none" />
+                                            </Field>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-10 text-center space-y-4 opacity-50">
+                                        <Database size={40} className="mx-auto text-zinc-700" />
+                                        <p className="text-xs text-zinc-500 font-mono">{t('rag_offline')}</p>
+                                    </div>
+                                )}
+                            </Card>
+
+                            {/* Backup Section */}
+                            <Card className="border-white/10">
+                                <SectionHeader title={t('section_backup')} icon={RefreshCw} />
+                                <div className="flex items-center justify-between p-6 bg-white/[0.02] border border-white/5 rounded-xl mb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className={cn("p-2 rounded-lg", settings.autoBackupEnabled ? "bg-emerald-900/20 text-emerald-500" : "bg-white/5 text-zinc-600")}>
+                                            <Activity size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-white uppercase tracking-widest">{t('label_auto_backup')}</p>
+                                            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{t('desc_auto_backup')}</p>
+                                        </div>
+                                    </div>
+                                    <div onClick={() => handleChange('autoBackupEnabled', !settings.autoBackupEnabled)} className={cn("w-10 h-5 rounded-full relative cursor-pointer bg-zinc-800 transition-colors", settings.autoBackupEnabled && "bg-white")}>
+                                        <div className={cn("absolute top-1 w-3 h-3 rounded-full transition-all duration-300", settings.autoBackupEnabled ? "bg-black left-6" : "bg-zinc-500 left-1")} />
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-black rounded-xl border border-white/5 flex items-center justify-between">
+                                    <span className="text-[10px] font-mono text-zinc-500">{t('label_location')}</span>
+                                    <span className="text-[10px] font-mono text-white">{settings.backupFolderName || '~/Documents/ThatTweet/Backup'}</span>
                                 </div>
                             </Card>
 
-                            <Card title={t('settings_categories')} icon={BookOpen} description={t('settings_categories_desc')}>
-                                <div className="flex flex-wrap gap-2 p-6 bg-black/20 border border-white/5 rounded-3xl min-h-[140px]">
+                            {/* Taxonomy Section */}
+                            <Card className="border-white/10">
+                                <SectionHeader title={t('section_taxonomy')} icon={BookOpen} />
+                                <div className="flex flex-wrap gap-2">
                                     {settings.categories.map((tag) => (
-                                        <div key={tag} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-white/5 rounded-xl text-xs font-bold text-zinc-300 hover:border-brand/40 hover:bg-zinc-800 transition-all group/tag">
+                                        <div key={tag} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded text-[10px] font-bold text-zinc-300 group hover:border-white/20 hover:text-white transition-all">
                                             <span>{tag}</span>
-                                            <button onClick={() => handleChange('categories', settings.categories.filter(t => t !== tag))} className="text-zinc-700 hover:text-rose-500 transition-colors">
-                                                <X size={14} />
-                                            </button>
+                                            <button onClick={() => handleChange('categories', settings.categories.filter(t => t !== tag))} className="text-zinc-600 hover:text-white"><X size={10} /></button>
                                         </div>
                                     ))}
-                                    <div className="inline-flex items-center relative ml-2">
-                                        <input
-                                            type="text"
-                                            value={newTag}
-                                            onChange={e => setNewTag(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && (() => {
-                                                if (newTag.trim()) {
-                                                    handleChange('categories', [...settings.categories, newTag.trim()]);
-                                                    setNewTag('');
-                                                }
-                                            })()}
-                                            placeholder={t('settings_new_category')}
-                                            className="bg-transparent border-none text-xs font-bold text-brand focus:ring-0 w-28 outline-none placeholder:text-zinc-700"
-                                        />
-                                        <Plus size={14} className="text-brand opacity-40" />
-                                    </div>
+                                    <input
+                                        type="text"
+                                        value={newTag}
+                                        onChange={e => setNewTag(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && newTag.trim() && (handleChange('categories', [...settings.categories, newTag.trim()]), setNewTag(''))}
+                                        placeholder={t('placeholder_new_tag')}
+                                        className="bg-transparent border border-dashed border-white/10 px-3 py-1.5 rounded text-[10px] font-bold text-white focus:border-white/40 focus:outline-none uppercase w-24 placeholder:text-zinc-700"
+                                    />
                                 </div>
                             </Card>
                         </div>
                     )}
 
-                    {/* GROUP 5: SYSTEM */}
+                    {/* === TAB: SYSTEM === */}
                     {activeGroup === 'system' && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <BackupCard />
-
-                            <Card title={t('settings_support_title')} icon={Heart}>
-                                <div className="flex flex-col md:flex-row items-center gap-8 bg-brand/5 border border-brand/10 p-8 rounded-3xl">
-                                    <div className="w-32 h-32 shrink-0 rounded-2xl overflow-hidden shadow-2xl shadow-brand/20">
-                                        <img src={supportImg} alt="Support" className="w-full h-full object-cover" />
-                                    </div>
-                                    <div className="space-y-4">
-                                        <h4 className="text-lg font-bold text-white">{t('settings_support_title')}</h4>
-                                        <p className="text-xs text-zinc-400 leading-relaxed font-medium">{t('settings_support_subtitle')}</p>
-                                        <div className="flex items-center gap-2 p-2 bg-white/[0.04] rounded-xl border border-white/5 w-fit">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
-                                            <span className="text-[10px] font-black text-brand uppercase tracking-widest">v1.1.0 Experimental</span>
-                                        </div>
-                                    </div>
+                        <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center">
+                            <div className="p-12 border border-white/10 rounded-[3rem] bg-zinc-900/50 relative overflow-hidden">
+                                <img src={supportImg} className="w-24 h-24 rounded-2xl mx-auto mb-6 shadow-2xl grayscale hover:grayscale-0 transition-all duration-500" />
+                                <h1 className="text-2xl font-black text-white tracking-widest mb-2">THATTWEET</h1>
+                                <p className="text-xs text-zinc-500 font-mono uppercase tracking-widest mb-8">{t('app_suite_version')}</p>
+                                <div className="flex justify-center gap-4">
+                                    <button className="px-6 py-2 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-zinc-200 transition-colors">{t('btn_docs')}</button>
+                                    <button className="px-6 py-2 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-white/5 transition-colors">{t('btn_github')}</button>
                                 </div>
-                            </Card>
+                            </div>
                         </div>
                     )}
+
                 </div>
             </main>
         </div>

@@ -1,4 +1,4 @@
-{
+﻿{
   "extName": {
     "message": "ThatTweet 那条推文"
   },
@@ -544,5 +544,305 @@
   },
   "analytics_up_to_date": {
     "message": "当前画像已是最新"
+  },
+  "engine_hub_title": {
+    "message": "服务商配置"
+  },
+  "engine_hub_desc": {
+    "message": "在此管理您的 AI 密钥。配置好的服务商将自动出现在下方的流水线中。"
+  },
+  "engine_add_new": {
+    "message": "添加服务商"
+  },
+  "engine_add_custom": {
+    "message": "自定义"
+  },
+  "engine_edit": {
+    "message": "编辑配置"
+  },
+  "engine_provider": {
+    "message": "服务提供商"
+  },
+  "engine_name": {
+    "message": "实例名称"
+  },
+  "engine_test_connection": {
+    "message": "测试连通性"
+  },
+  "confirm_delete_engine": {
+    "message": "确定要删除吗？"
+  },
+  "route_global": {
+    "message": "全局默认"
+  },
+  "route_desc_global": {
+    "message": "主力模型"
+  },
+  "select_engine": {
+    "message": "选择引擎..."
+  },
+  "cancel": {
+    "message": "取消"
+  },
+  "save": {
+    "message": "保存"
+  },
+  "settings_group_engines": {
+    "message": "AI 引擎"
+  },
+  "engine_empty_title": {
+    "message": "尚未接入任何服务商"
+  },
+  "engine_empty_desc": {
+    "message": "请先添加 DeepSeek、OpenRouter 或 OpenAI 等服务以启用 AI 功能。"
+  },
+  "engine_quick_start_deepseek": {
+    "message": "一键配置 DeepSeek"
+  },
+  "pipeline_title": {
+    "message": "AI 工作流 (Workflow Studio)"
+  },
+  "pipeline_desc": {
+    "message": "为推文处理阶段分配模型。留空将使用默认路径。"
+  },
+  "node_perception": {
+    "message": "视觉皮层 (VISION)"
+  },
+  "node_perception_desc": {
+    "message": "图像分析与 OCR 识别"
+  },
+  "node_text": {
+    "message": "语义分析 (CONTEXT)"
+  },
+  "node_text_desc": {
+    "message": "推文深度理解与评分"
+  },
+  "node_profile": {
+    "message": "认知核心 (COGNITIVE)"
+  },
+  "node_profile_desc": {
+    "message": "用户画像与性格建模"
+  },
+  "node_chat": {
+    "message": "快速对话 (CHAT)"
+  },
+  "node_chat_desc": {
+    "message": "直接的 AI 互动体验"
+  },
+  "node_salon": {
+    "message": "思想沙龙 (SALON)"
+  },
+  "node_salon_desc": {
+    "message": "基于 RAG 的深度研讨"
+  },
+  "stage_capture": {
+    "message": "01 数据捕获"
+  },
+  "stage_analysis": {
+    "message": "02 认知分析"
+  },
+  "stage_interaction": {
+    "message": "03 动态交互"
+  },
+  "select_provider": {
+    "message": "分配服务商"
+  },
+  "select_model": {
+    "message": "指定模型"
+  },
+  "follow_global": {
+    "message": "跟随默认路径"
+  },
+  "loading_models": {
+    "message": "加载中..."
+  },
+  "edit_prompt": {
+    "message": "配置指令集 (Prompt)"
+  },
+  "node_enabled": {
+    "message": "已启用"
+  },
+  "node_disabled": {
+    "message": "已禁用"
+  },
+  "setting_api_key": {
+    "message": "API 密钥"
+  },
+  "setting_base_url": {
+    "message": "接口地址"
+  },
+  "engine_use_primary": {
+    "message": "设为主引擎"
+  },
+  "engine_primary_label": {
+    "message": "主引擎"
+  },
+  "engine_status_inactive": {
+    "message": "未激活"
+  },
+  "pipeline_status_online": {
+    "message": "在线"
+  },
+  "prompt_hub_title": {
+    "message": "指令工程中心"
+  },
+  "prompt_deploy": {
+    "message": "部署指令"
+  },
+  "prompt_placeholder": {
+    "message": "在此编写您的 AI 系统指令..."
+  },
+  "prompt_variables": {
+    "message": "可用变量"
+  },
+  "node_status_active": {
+    "message": "活跃"
+  },
+  "node_status_disabled": {
+    "message": "禁用"
+  },
+  "label_provider": {
+    "message": "服务商"
+  },
+  "label_model": {
+    "message": "模型"
+  },
+  "fallback_global": {
+    "message": "全局默认"
+  },
+  "btn_reset_default": {
+    "message": "重置为默认指令"
+  },
+  "cancel": {
+    "message": "取消"
+  },
+  "label_max_images": {
+    "message": "单推图片上限"
+  },
+  "desc_max_images": {
+    "message": "每次分析处理的最大图片数量"
+  },
+  "nav_neural": {
+    "message": "神经中枢"
+  },
+  "nav_memory": {
+    "message": "记忆皮层"
+  },
+  "nav_system": {
+    "message": "系统信息"
+  },
+  "sub_neural": {
+    "message": "引擎与流水线"
+  },
+  "sub_memory": {
+    "message": "知识库与备份"
+  },
+  "sub_system": {
+    "message": "版本与支持"
+  },
+  "status_ready": {
+    "message": "就绪"
+  },
+  "status_saving": {
+    "message": "保存中..."
+  },
+  "status_saved": {
+    "message": "已保存"
+  },
+  "section_kernel": {
+    "message": "内核调优"
+  },
+  "label_vision_scope": {
+    "message": "视觉范围"
+  },
+  "desc_vision_scope": {
+    "message": "选择需要分析的图像范围"
+  },
+  "opt_all_time": {
+    "message": "全部历史"
+  },
+  "opt_new_only": {
+    "message": "仅限新增"
+  },
+  "label_performance": {
+    "message": "性能参数"
+  },
+  "desc_performance": {
+    "message": "批处理大小 (Batch Size)"
+  },
+  "section_directive": {
+    "message": "全局指令"
+  },
+  "placeholder_directive": {
+    "message": "例如：关注技术架构、隐藏细节..."
+  },
+  "desc_directive": {
+    "message": "此指令将影响整个神经流水线的内容相关性判断。"
+  },
+  "system_active": {
+    "message": "系统运行中"
+  },
+  "system_paused": {
+    "message": "系统暂停"
+  },
+  "pipeline_arch": {
+    "message": "流水线架构"
+  },
+  "section_rag": {
+    "message": "向量数据库 (RAG)"
+  },
+  "status_enabled": {
+    "message": "已启用"
+  },
+  "status_disabled": {
+    "message": "已禁用"
+  },
+  "label_embedding_model": {
+    "message": "嵌入模型 (Embedding)"
+  },
+  "desc_embedding_model": {
+    "message": "用于推文向量化的模型 ID"
+  },
+  "label_reranker_model": {
+    "message": "重排模型 (Reranker)"
+  },
+  "desc_reranker_model": {
+    "message": "用于语义重排序的模型 ID"
+  },
+  "label_endpoint": {
+    "message": "接口配置"
+  },
+  "desc_endpoint": {
+    "message": "向量服务的 Base URL"
+  },
+  "rag_offline": {
+    "message": "本地知识库已离线"
+  },
+  "section_backup": {
+    "message": "快照协议 (BACKUP)"
+  },
+  "label_auto_backup": {
+    "message": "自动备份"
+  },
+  "desc_auto_backup": {
+    "message": "每日自动生成本地快照"
+  },
+  "label_location": {
+    "message": "存储位置"
+  },
+  "section_taxonomy": {
+    "message": "分类学 (TAXONOMY)"
+  },
+  "placeholder_new_tag": {
+    "message": "+ 新建标签"
+  },
+  "app_suite_version": {
+    "message": "智能套件 v1.1.0"
+  },
+  "btn_docs": {
+    "message": "文档"
+  },
+  "btn_github": {
+    "message": "GITHUB"
   }
 }
