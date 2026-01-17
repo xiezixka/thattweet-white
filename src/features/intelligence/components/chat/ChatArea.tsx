@@ -71,15 +71,26 @@ export const ChatArea: React.FC = () => {
 
     useEffect(() => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            // 获取设置和模型
             chrome.storage.local.get(['aiSettings', 'availableModels'], (res) => {
                 if (res.aiSettings) setAiSettings(res.aiSettings);
-                if (res.availableModels) setAvailableModels(res.availableModels);
+
+                // 智能合并可用模型：1. 存储在 availableModels 里的 2. settings 各个 provider 缓存里的
+                const modelsFromProviders = res.aiSettings?.providers?.flatMap((p: any) => p.cachedModels || []) || [];
+                const combinedModels = Array.from(new Set([...(res.availableModels || []), ...modelsFromProviders]));
+                if (combinedModels.length > 0) setAvailableModels(combinedModels);
             });
 
             const handleStorage = (changes: any, area: string) => {
                 if (area === 'local') {
-                    if (changes.aiSettings) setAiSettings(changes.aiSettings.newValue);
-                    if (changes.availableModels) setAvailableModels(changes.availableModels.newValue);
+                    if (changes.aiSettings) {
+                        const newSettings = changes.aiSettings.newValue;
+                        setAiSettings(newSettings);
+                        // 同时刷新模型列表
+                        const modelsFromProviders = newSettings?.providers?.flatMap((p: any) => p.cachedModels || []) || [];
+                        setAvailableModels(prev => Array.from(new Set([...prev, ...modelsFromProviders])));
+                    }
+                    if (changes.availableModels) setAvailableModels(prev => Array.from(new Set([...prev, ...changes.availableModels.newValue])));
                 }
             };
             chrome.storage.onChanged.addListener(handleStorage);
@@ -128,7 +139,17 @@ export const ChatArea: React.FC = () => {
     };
 
     const handleModelChange = (model: string) => {
-        const newSettings = { ...aiSettings, chatModel: model };
+        const newSettings = { ...aiSettings };
+        if (!newSettings.workflowNodes) {
+            newSettings.workflowNodes = (DEFAULT_AI_SETTINGS as any).workflowNodes;
+        }
+
+        // 更新工作流节点中的模型
+        newSettings.workflowNodes.chat = {
+            ...newSettings.workflowNodes.chat,
+            model: model
+        };
+
         setAiSettings(newSettings);
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.set({ aiSettings: newSettings });
@@ -184,7 +205,7 @@ export const ChatArea: React.FC = () => {
                             onClick={() => setShowModelDropdown(!showModelDropdown)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold text-zinc-400 group"
                         >
-                            <span>{(aiSettings.chatModel || aiSettings.model) || "Select Model"}</span>
+                            <span>{aiSettings.workflowNodes?.chat?.model || aiSettings.chatModel || aiSettings.model || "Select Model"}</span>
                             <ChevronDown size={14} className={cn("transition-transform", showModelDropdown && "rotate-180")} />
                         </button>
 
@@ -199,7 +220,7 @@ export const ChatArea: React.FC = () => {
                                                 className="w-full flex items-center justify-between px-4 py-2 text-sm hover:bg-white/5 text-zinc-300 transition-colors"
                                             >
                                                 <span className="truncate">{m}</span>
-                                                {(aiSettings.chatModel || aiSettings.model) === m && <Check size={14} className="text-brand shrink-0" />}
+                                                {(aiSettings.workflowNodes?.chat?.model || aiSettings.chatModel || aiSettings.model) === m && <Check size={14} className="text-brand shrink-0" />}
                                             </button>
                                         ))
                                     ) : (

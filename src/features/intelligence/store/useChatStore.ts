@@ -213,36 +213,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
         get()._appendMessageToCurrent(userMsg);
 
         try {
-            // 2. 执行混合搜索 (精确 + 评分)
-            get().setStatusMessage('正在检索推文知识库...');
+            // 2. 执行搜索 (根据模式选择精确/语义/混合)
+            const mode = get().searchMode;
             let contextCitations: Tweet[] = [];
-
             let lastSearchMethod: ChatMessage['searchMethod'] = 'none';
 
             if (content.length > 1 || citations.length > 0) {
                 if (content.length > 1) {
-                    const mode = get().searchMode;
-                    const searchResults = await ragService.search(content, 12);
-
-                    // 根据 SearchMode 过滤结果
-                    let filteredResults = searchResults;
-                    if (mode === 'structured') {
-                        filteredResults = searchResults.filter(r => r.method === 'structured');
-                    } else if (mode === 'rag') {
-                        filteredResults = searchResults.filter(r => r.method === 'rag');
+                    // 根据模式显示不同状态
+                    if (mode === 'rag') {
+                        get().setStatusMessage('正在进行语义向量检索...');
+                    } else if (mode === 'structured') {
+                        get().setStatusMessage('正在进行精确关键词检索...');
+                    } else {
+                        get().setStatusMessage('正在进行智能混合检索...');
                     }
 
-                    contextCitations = filteredResults.map(r => {
+                    // 调用 ragService，直接传递模式
+                    const searchResults = await ragService.search(content, 12, mode);
+
+                    contextCitations = searchResults.map(r => {
                         const t = r.tweet as any;
-                        t.relevanceScore = Math.min(Math.round(r.score), 100); // Normalize to roughly 0-100 range for display
+                        t.relevanceScore = Math.min(Math.round(r.score), 100);
                         return t;
                     });
 
-                    // 如果是精确搜索且有结果，设置 searchMethod
-                    if (filteredResults.length > 0) {
-                        const hasStructured = filteredResults.some(r => r.method === 'structured');
-                        const hasRag = filteredResults.some(r => r.method === 'rag');
-                        if (hasStructured && hasRag) lastSearchMethod = 'auto' as any;
+                    // 确定最终使用的搜索方法
+                    if (searchResults.length > 0) {
+                        const hasStructured = searchResults.some(r => r.method === 'structured');
+                        const hasRag = searchResults.some(r => r.method === 'rag');
+                        if (hasStructured && hasRag) lastSearchMethod = 'structured'; // 混合模式标记为 structured
                         else if (hasStructured) lastSearchMethod = 'structured';
                         else lastSearchMethod = 'rag';
                     }

@@ -14,6 +14,8 @@ import { AIEngineManager } from './AIEngineManager';
 import { AIPipelineDesigner } from './AIPipelineDesigner';
 import { TweetRepository } from '../../core/storage/TweetRepository';
 import supportImg from '../../assets/img/支持一下.png';
+import { embeddingSyncManager } from '../intelligence/services/embeddingSyncManager';
+import { SyncProgress } from '../intelligence/services/embeddingService';
 import logoPng from '../../assets/img/icon.png';
 
 type SettingsGroup = 'neural' | 'memory' | 'system';
@@ -60,9 +62,44 @@ export const SettingsView: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const [includeSettings, setIncludeSettings] = useState(false);
+    const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+    const [embedStats, setEmbedStats] = useState<any>(null);
     const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Initial Load & Migration
+    useEffect(() => {
+        const loadStats = async () => {
+            const stats = await embeddingSyncManager.getStats();
+            setEmbedStats(stats);
+        };
+        loadStats();
+
+        embeddingSyncManager.onProgress((p) => {
+            setSyncProgress(p);
+            if (p.status === 'completed') {
+                loadStats();
+                setTimeout(() => setSyncProgress(null), 3000);
+            }
+        });
+
+        return () => embeddingSyncManager.offProgress();
+    }, []);
+
+    const handleSyncEmbeddings = async () => {
+        try {
+            await embeddingSyncManager.syncNow();
+        } catch (error) {
+            console.error('Manual sync failed:', error);
+        }
+    };
+
+    const handleClearEmbeddings = async () => {
+        if (confirm('Are you sure you want to clear all embeddings? This cannot be undone.')) {
+            await embeddingSyncManager.clearAll();
+            const stats = await embeddingSyncManager.getStats();
+            setEmbedStats(stats);
+        }
+    };
     useEffect(() => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.get(['aiSettings'], (result) => {
@@ -419,17 +456,71 @@ export const SettingsView: React.FC = () => {
                                     }
                                 />
                                 {settings.ragEnabled ? (
-                                    <div className="grid grid-cols-2 gap-8">
-                                        <Field label={t('label_embedding_model')} description={t('desc_embedding_model')}>
-                                            <input type="text" value={settings.embeddingModel} onChange={e => handleChange('embeddingModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
-                                        </Field>
-                                        <Field label={t('label_reranker_model')} description={t('desc_reranker_model')}>
-                                            <input type="text" value={settings.rerankerModel} onChange={e => handleChange('rerankerModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
-                                        </Field>
-                                        <div className="col-span-2">
-                                            <Field label={t('label_endpoint')} description={t('desc_endpoint')}>
-                                                <input type="text" value={settings.embeddingUrl} onChange={e => handleChange('embeddingUrl', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
+                                    <div className="space-y-8">
+                                        <div className="grid grid-cols-2 gap-8">
+                                            <Field label={t('label_embedding_model')} description={t('desc_embedding_model')}>
+                                                <input type="text" value={settings.embeddingModel} onChange={e => handleChange('embeddingModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
                                             </Field>
+                                            <Field label={t('label_reranker_model')} description={t('desc_reranker_model')}>
+                                                <input type="text" value={settings.rerankerModel} onChange={e => handleChange('rerankerModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
+                                            </Field>
+                                            <div className="col-span-2">
+                                                <Field label={t('label_endpoint')} description={t('desc_endpoint')}>
+                                                    <input type="text" value={settings.embeddingUrl} onChange={e => handleChange('embeddingUrl', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
+                                                </Field>
+                                            </div>
+                                        </div>
+
+                                        {/* Embedding Sync Control */}
+                                        <div className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <Fingerprint size={18} className="text-zinc-500" />
+                                                    <div>
+                                                        <h4 className="text-xs font-black text-white uppercase tracking-widest">向量库状态</h4>
+                                                        <p className="text-[10px] text-zinc-600 font-mono mt-0.5">
+                                                            {embedStats ? `${embedStats.totalEmbeddings} / ${embedStats.totalTweets} 条推文已索引 (${embedStats.coveragePercent}%)` : '正在获取状态...'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={handleClearEmbeddings}
+                                                        className="px-3 py-1.5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-600 hover:text-red-400 hover:border-red-400/30 transition-all uppercase tracking-widest"
+                                                    >
+                                                        清空索引
+                                                    </button>
+                                                    <button
+                                                        onClick={handleSyncEmbeddings}
+                                                        disabled={syncProgress?.status === 'syncing'}
+                                                        className={cn(
+                                                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                                            syncProgress?.status === 'syncing'
+                                                                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                                                                : "bg-white text-black hover:bg-zinc-200"
+                                                        )}
+                                                    >
+                                                        {syncProgress?.status === 'syncing' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                                                        {syncProgress?.status === 'syncing' ? '同步中...' : '立即同步'}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Progress Bar */}
+                                            {syncProgress && (
+                                                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                                                    <div className="flex justify-between text-[10px] font-mono">
+                                                        <span className="text-zinc-500">{syncProgress.message}</span>
+                                                        <span className="text-zinc-400">{Math.round((syncProgress.processed / (syncProgress.total || 1)) * 100)}%</span>
+                                                    </div>
+                                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-white transition-all duration-500"
+                                                            style={{ width: `${(syncProgress.processed / (syncProgress.total || 1)) * 100}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ) : (

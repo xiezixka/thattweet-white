@@ -1,5 +1,16 @@
+/**
+ * RAG Service - 检索增强生成服务
+ * 
+ * 支持三种检索模式：
+ * - structured: 精确关键词匹配 (作者、标签等)
+ * - rag: 基于向量的语义检索 + Rerank
+ * - auto: 智能融合两种模式
+ */
+
 import { db } from '../../../core/storage/db';
 import { Tweet } from '../../../shared/types/tweet';
+import { embeddingService, buildSearchableText } from './embeddingService';
+import { rerankService } from './rerankService';
 
 export interface SearchResult {
     tweet: Tweet;
@@ -22,9 +33,9 @@ export const ragService = {
     },
 
     /**
-     * 执行混合搜索 (精确 + 评分)
+     * 精确关键词搜索 (原有逻辑)
      */
-    async search(query: string, limit: number = 15): Promise<SearchResult[]> {
+    async structuredSearch(query: string, limit: number = 15): Promise<SearchResult[]> {
         const criteria = this.analyzeQuery(query);
         if (criteria.keywords.length === 0) return [];
 
@@ -33,7 +44,7 @@ export const ragService = {
 
         const results: SearchResult[] = candidates.map(tweet => {
             let score = 0;
-            let method: 'structured' | 'rag' = 'rag';
+            const method: 'structured' | 'rag' = 'structured';
 
             const text = (tweet.text || '').toLowerCase();
             const authorName = (tweet.authorName || '').toLowerCase();
@@ -49,10 +60,8 @@ export const ragService = {
             // 关键词多维度匹配
             criteria.keywords.forEach(keyword => {
                 // 1. 作者匹配 (权重最高：50分)
-                // 只要关键词包含在账号或昵称中，就视为精确匹配
                 if (authorHandle.includes(keyword) || authorName.includes(keyword)) {
                     score += 50;
-                    method = 'structured';
                 }
 
                 // 2. 正文匹配 (权重: 20分)
@@ -99,5 +108,133 @@ export const ragService = {
             }
             return res;
         }));
+    },
+
+    /**
+     * 向量语义搜索 + Rerank
+     */
+    async semanticSearch(query: string, limit: number = 10): Promise<SearchResult[]> {
+        // Step 1: 向量检索 Top-50
+        const vectorResults = await embeddingService.vectorSearch(query, 50);
+
+        if (vectorResults.length === 0) {
+            console.log('[RAGService] No vector results, falling back to structured search');
+            return this.structuredSearch(query, limit);
+        }
+
+        // Step 2: 获取对应的推文
+        const tweetIds = vectorResults.map(r => r.tweetId);
+        const tweets = await db.tweets.bulkGet(tweetIds);
+        const validTweets = tweets.filter((t): t is Tweet => t !== undefined);
+
+        if (validTweets.length === 0) {
+            return [];
+        }
+
+        // Step 3: 构建候选文档列表 (用于 Rerank)
+        const tweetMap = new Map<string, Tweet>();
+        const documents: string[] = [];
+        const docToTweetId: string[] = [];
+
+        for (const tweet of validTweets) {
+            const text = buildSearchableText(tweet);
+            documents.push(text);
+            docToTweetId.push(tweet.id);
+            tweetMap.set(tweet.id, tweet);
+        }
+
+        // Step 4: Rerank
+        const rerankResults = await rerankService.rerank(query, documents, limit);
+
+        // Step 5: 构建最终结果
+        const results: SearchResult[] = [];
+
+        for (const rr of rerankResults) {
+            const tweetId = docToTweetId[rr.index];
+            const tweet = tweetMap.get(tweetId);
+
+            if (tweet) {
+                // 填充作者信息
+                if (tweet.authorId) {
+                    const user = await db.users.get(tweet.authorId);
+                    if (user) {
+                        (tweet as any).author = {
+                            id: user.id,
+                            handle: user.handle,
+                            name: user.name,
+                            avatar: user.avatar || (tweet as any).authorAvatarUrl
+                        };
+                    }
+                }
+
+                results.push({
+                    tweet,
+                    score: rr.score * 100, // 归一化到 0-100
+                    method: 'rag'
+                });
+            }
+        }
+
+        return results;
+    },
+
+    /**
+     * 混合搜索 (自动融合精确和语义)
+     */
+    async hybridSearch(query: string, limit: number = 12): Promise<SearchResult[]> {
+        // 并行执行两种搜索
+        const [structuredResults, semanticResults] = await Promise.all([
+            this.structuredSearch(query, limit),
+            this.semanticSearch(query, limit)
+        ]);
+
+        // 合并结果，去重
+        const seen = new Set<string>();
+        const merged: SearchResult[] = [];
+
+        // 优先取精确匹配的高分结果
+        for (const r of structuredResults) {
+            if (r.score >= 50 && !seen.has(r.tweet.id)) {
+                seen.add(r.tweet.id);
+                merged.push(r);
+            }
+        }
+
+        // 然后取语义搜索结果
+        for (const r of semanticResults) {
+            if (!seen.has(r.tweet.id)) {
+                seen.add(r.tweet.id);
+                merged.push(r);
+            }
+        }
+
+        // 补充精确匹配的低分结果
+        for (const r of structuredResults) {
+            if (!seen.has(r.tweet.id)) {
+                seen.add(r.tweet.id);
+                merged.push(r);
+            }
+        }
+
+        return merged.slice(0, limit);
+    },
+
+    /**
+     * 统一搜索入口
+     */
+    async search(query: string, limit: number = 15, mode: 'auto' | 'structured' | 'rag' = 'auto'): Promise<SearchResult[]> {
+        console.log(`[RAGService] Searching with mode: ${mode}, query: "${query.slice(0, 50)}..."`);
+
+        switch (mode) {
+            case 'structured':
+                return this.structuredSearch(query, limit);
+
+            case 'rag':
+                return this.semanticSearch(query, limit);
+
+            case 'auto':
+            default:
+                return this.hybridSearch(query, limit);
+        }
     }
 };
