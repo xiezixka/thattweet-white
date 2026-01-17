@@ -69,50 +69,86 @@ class PromptBuilder {
  */
 class OutputParser {
     /**
-     * 更强悍的解析逻辑：支持标准的 [..] 数组，也支持 AI 抽风返回的多个 {..} {..} 对象
+     * 清理并提取 JSON 字符串
      */
-    static tryParseArray(text: string): any[] {
-        let cleaned = text.trim();
+    static cleanJson(str: string): string {
+        let target = str.trim();
 
-        // 1. 尝试直接解析标准的 JSON 数组
-        try {
-            const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-            const target = codeBlockMatch ? codeBlockMatch[1] : cleaned;
+        // 1. 基础清理：移除 Markdown 代码块标记及外部杂质
+        const firstBrace = target.indexOf('{');
+        const firstBracket = target.indexOf('[');
+        const start = (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) ? firstBrace : firstBracket;
 
-            const firstBracket = target.indexOf("[");
-            const lastBracket = target.lastIndexOf("]");
-            if (firstBracket >= 0 && lastBracket > firstBracket) {
-                return JSON.parse(target.slice(firstBracket, lastBracket + 1));
-            }
+        const lastBrace = target.lastIndexOf('}');
+        const lastBracket = target.lastIndexOf(']');
+        const end = (lastBrace !== -1 && (lastBracket === -1 || lastBrace > lastBracket)) ? lastBrace : lastBracket;
 
-            // 如果是单个对象被解析成数组
-            const direct = JSON.parse(target);
-            if (Array.isArray(direct)) return direct;
-            if (typeof direct === 'object' && direct !== null) return [direct];
-        } catch (e) {
-            // 解析失败，进入容错逻辑
+        if (start !== -1 && end !== -1 && end > start) {
+            target = target.substring(start, end + 1);
         }
 
-        // 2. 容错逻辑：针对 AI 返回一连串 {..} {..} 的情况 (JSON Lines 风格)
+        // 2. 移除尾随逗号 (Trailing Commas)
+        target = target.replace(/,\s*([\]}])/g, '$1');
+
+        // 3. 移除单行/多行注释
+        target = target.replace(/\/\/.*$/gm, '');
+        target = target.replace(/\/\*[\s\S]*?\*\//g, '');
+
+        // 4. 修复控制字符 (换行、制表符等在 JSON 字符串内是非法的)
+        target = target.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, content) => {
+            return `"${content
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t')
+                .replace(/[\x00-\x1F]/g, '')}"`;
+        });
+
+        // 5. 修复引号内未转义的双引号 (针对常见的 "key": "value "with" quotes" 情况)
+        // 寻找在引号内但未转义的引号（不包括该字段开头和结尾的引号）
+        // 这个正则比较复杂，优先处理简单的 key-value 结构
+        target = target.replace(/(?<=: \s*")(.+?)(?="\s*[,}\]])/gs, (match, content) => {
+            return content.replace(/(?<!\\)"/g, '\\"');
+        });
+
+        return target;
+    }
+
+    static tryParseArray(text: string): any[] {
+        const cleaned = this.cleanJson(text);
         try {
-            // 正则匹配所有独立的花括号对象
+            const parsed = JSON.parse(cleaned);
+            if (Array.isArray(parsed)) return parsed;
+            if (typeof parsed === 'object' && parsed !== null) return [parsed];
+        } catch (e) {
+            // 解析失败，尝试针对 {..} {..} 这种多对象格式
             const matches = text.match(/\{[\s\S]*?\}/g);
             if (matches && matches.length > 0) {
                 const results: any[] = [];
-                for (const match of matches) {
+                for (const m of matches) {
                     try {
-                        results.push(JSON.parse(match));
-                    } catch (e) {
-                        // 忽略格式错误的单个块
-                    }
+                        results.push(JSON.parse(this.cleanJson(m)));
+                    } catch (inner) { }
                 }
                 if (results.length > 0) return results;
             }
-        } catch (e) {
-            // 容错也失败
         }
-
         throw new Error("Failed to parse structured AI response");
+    }
+
+    static tryParseObject(text: string): any {
+        const cleaned = this.cleanJson(text);
+        try {
+            return JSON.parse(cleaned);
+        } catch (e) {
+            // 如果解析失败，尝试抓取第一个花括号对象
+            const match = text.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    return JSON.parse(this.cleanJson(match[0]));
+                } catch (inner) { }
+            }
+        }
+        throw new Error("Failed to parse structured AI response into object");
     }
 
     static normalize(parsed: any, settings: AISettings): AIAnalysisResult {
@@ -143,7 +179,11 @@ class OpenAIAdapter implements AIProviderAdapter {
         const provider = settings.providers.find(p => p.id === providerId);
 
         if (!provider) {
-            throw new Error(`Provider not found for node: ${nodeKey}`);
+            const msg = `Provider not found for node: ${String(nodeKey)}. ` +
+                `Required Provider ID: ${providerId}. ` +
+                `Available Providers: ${settings.providers.map(p => p.id).join(', ') || 'None'}. ` +
+                `Please check your AI Workflow settings.`;
+            throw new Error(msg);
         }
 
         return {
@@ -287,10 +327,7 @@ Please also include the following fields in your JSON response:
             const data = await response.json();
             const content = data.choices?.[0]?.message?.content || "";
 
-            // 尝试提取 JSON
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
-            const target = jsonMatch ? jsonMatch[0] : content;
-            const parsed = JSON.parse(target);
+            const parsed = OutputParser.tryParseObject(content);
 
             return {
                 summary: parsed.summary || "",

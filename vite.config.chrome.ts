@@ -11,11 +11,18 @@ export default mergeConfig(
     plugins: [
       crx({
         manifest: {
-          ...baseManifest,
+          ...(baseManifest as any),
           background: {
             service_worker: 'src/pages/background/index.ts',
             type: 'module'
           },
+          web_accessible_resources: [
+            ...((baseManifest as any).web_accessible_resources || []),
+            {
+              resources: ['src/core/extractor/injected.ts'],
+              matches: ['https://twitter.com/*', 'https://x.com/*'],
+            }
+          ]
         } as ManifestV3Export,
         browser: 'chrome',
         contentScripts: {

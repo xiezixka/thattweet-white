@@ -7,12 +7,14 @@ import { useSettingsStore } from '../../shared/store/useSettingsStore';
 
 export class AIJobQueue {
     private static isProcessing = false;
+    private static BUSY_COOLDOWN_UNTIL = 0;
 
     /**
      * 启动一次队列处理任务 (自动批处理)
      */
     static async processNextBatch() {
         if (this.isProcessing) return;
+        if (Date.now() < this.BUSY_COOLDOWN_UNTIL) return;
 
         const settings = await this.getSettings();
         const node = settings.workflowNodes.textAnalysis;
@@ -73,10 +75,20 @@ export class AIJobQueue {
                     }
                 }
                 console.log(`%c[ThatTweet] Batch AI Success: ${toProcess.length} tweets processed.`, 'color: #4CAF50');
-            } catch (err) {
+            } catch (err: any) {
                 console.error(`[ThatTweet] Batch AI Processing Failed:`, err);
-                for (const tweet of toProcess) {
-                    await db.tweets.update(tweet.id, { aiStatus: ProcessStatus.Failed });
+                // 如果是网络错误或 50x，重置为 Pending 以便重试，并进入冷却
+                const isRetriable = err.message?.includes('fetch') || err.message?.includes('50') || err.message?.includes('busy');
+
+                if (isRetriable) {
+                    this.BUSY_COOLDOWN_UNTIL = Date.now() + 60 * 1000;
+                    for (const tweet of toProcess) {
+                        await db.tweets.update(tweet.id, { aiStatus: ProcessStatus.Pending });
+                    }
+                } else {
+                    for (const tweet of toProcess) {
+                        await db.tweets.update(tweet.id, { aiStatus: ProcessStatus.Failed });
+                    }
                 }
             }
         } finally {
@@ -115,9 +127,16 @@ export class AIJobQueue {
     }
 
     private static async getSettings(): Promise<AISettings> {
-        // Use the global Zustand store which is the source of truth for the app runtime
-        // This works in both dev (localhost) and extension environments (if store is initialized)
-        const state = useSettingsStore.getState();
-        return state.settings;
+        return new Promise((resolve) => {
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(['aiSettings'], (res) => {
+                    resolve(getSafeAISettings(res.aiSettings));
+                });
+            } else {
+                // Fallback for non-extension environments (dev)
+                const state = useSettingsStore.getState();
+                resolve(state.settings);
+            }
+        });
     }
 }

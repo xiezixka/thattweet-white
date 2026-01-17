@@ -27,7 +27,20 @@ export const baseManifest = {
 
 export const baseBuildOptions: BuildOptions = {
   sourcemap: isDev,
-  emptyOutDir: !isDev
+  emptyOutDir: !isDev,
+  rollupOptions: {
+    input: {
+      injected: resolve(__dirname, 'src/core/extractor/injected.ts'),
+    },
+    output: {
+      entryFileNames: (chunkInfo) => {
+        if (chunkInfo.name === 'injected') {
+          return 'assets/[name].js'; // 保持名称固定，方便注入
+        }
+        return 'assets/[name]-[hash].js';
+      }
+    }
+  }
 }
 
 export default defineConfig({

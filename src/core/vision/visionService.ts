@@ -65,6 +65,7 @@ export class VisionService {
      */
     public static async processBatch(tweets: Tweet[], apiKey: string, settings: AISettings) {
         this.activeKeys.add(apiKey);
+        const processedTweets: Tweet[] = [];
         try {
             console.log(`[VisionService] Processing batch of ${tweets.length} tweets...`);
 
@@ -78,12 +79,26 @@ export class VisionService {
             let allBase64: string[] = [];
             let imageToTweetMap: Array<{ tweetId: string; localIndex: number }> = [];
 
+            const MAX_TOTAL_IMAGES = 10; // OpenRouter/Nvidia Hard Limit
+
             for (const tweet of tweets) {
                 const imageUrls = tweet.media
                     ?.filter(m => m.type === 'image')
                     .slice(0, settings.maxImagesPerTweet || 4)
                     .map(m => m.url) || [];
 
+                // 如果加入这推文的图片会超过 10 张，则停止处理本批次后续推文
+                if (allBase64.length + imageUrls.length > MAX_TOTAL_IMAGES) {
+                    console.warn(`[VisionService] Batch too large (images: ${allBase64.length + imageUrls.length} > ${MAX_TOTAL_IMAGES}). Truncating batch.`);
+                    // 将未处理的推文状态标回 Pending，以便下一次队列处理
+                    const remaining = tweets.slice(tweets.indexOf(tweet));
+                    for (const rt of remaining) {
+                        await db.tweets.update(rt.id, { imageProcessStatus: ProcessStatus.Pending });
+                    }
+                    break;
+                }
+
+                processedTweets.push(tweet);
                 const base64List: string[] = [];
                 for (let i = 0; i < imageUrls.length; i++) {
                     const b64 = await this.fetchImageAsBase64(imageUrls[i]);
@@ -98,25 +113,28 @@ export class VisionService {
 
             if (allBase64.length === 0) {
                 for (const t of tweets) {
-                    await db.tweets.update(t.id, { imageProcessStatus: ProcessStatus.Skipped });
+                    // 如果是因为图片拉取全失败导致的 0，且没进入上面的 Truncate
+                    if (processedTweets.includes(t)) {
+                        await db.tweets.update(t.id, { imageProcessStatus: ProcessStatus.Skipped });
+                    }
                 }
                 return;
             }
 
-            // 3. 构建多模态请求
-            const analysisResult = await this.callVLM(allBase64, tweets, imageToTweetMap, apiKey, settings);
+            // 3. 构建多模态请求 (只处理 processedTweets)
+            const analysisResult = await this.callVLM(allBase64, processedTweets, imageToTweetMap, apiKey, settings);
 
             if (analysisResult === 'BUSY') {
                 this.BUSY_COOLDOWN_UNTIL = Date.now() + 60 * 1000;
                 // 重置状态为 Pending 以便重试
-                for (const t of tweets) {
+                for (const t of processedTweets) {
                     await db.tweets.update(t.id, { imageProcessStatus: ProcessStatus.Pending });
                 }
                 return;
             }
 
             // 4. 解析结果并写回数据库
-            for (const tweet of tweets) {
+            for (const tweet of processedTweets) {
                 const result = analysisResult[tweet.id];
                 if (result) {
                     // 合并所有图片的 OCR 文字到一个大文本
@@ -136,7 +154,8 @@ export class VisionService {
 
         } catch (err) {
             console.error(`[VisionService] Batch process failed:`, err);
-            for (const t of tweets) {
+            const targets = processedTweets.length > 0 ? processedTweets : tweets;
+            for (const t of targets) {
                 await db.tweets.update(t.id, { imageProcessStatus: ProcessStatus.Failed });
             }
         } finally {
@@ -248,6 +267,11 @@ export class VisionService {
                 // If still no content, check for error messages in the response
                 if (!rawContent && data.error) {
                     console.error('[VisionService] API returned error:', data.error);
+                    const code = data.error.code;
+                    // Handle retriable errors (502, 503, 429) as BUSY
+                    if (code === 502 || code === 503 || code === 429 || (data.error.message && data.error.message.includes('busy'))) {
+                        return 'BUSY';
+                    }
                     throw new Error(`API error: ${data.error.message || JSON.stringify(data.error)}`);
                 }
 
