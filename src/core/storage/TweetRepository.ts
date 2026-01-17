@@ -122,5 +122,28 @@ export const TweetRepository = {
      */
     async updateAuthorProfile(id: string, updates: Partial<UserCache>) {
         return await db.users.update(id, updates);
+    },
+
+    /**
+     * 导出所有数据
+     */
+    async exportAllData() {
+        const tweets = await db.tweets.toArray();
+        const users = await db.users.toArray();
+        return { tweets, users, version: 1, exportedAt: Date.now() };
+    },
+
+    /**
+     * 导入数据
+     */
+    async importData(data: any) {
+        return await db.transaction('rw', [db.tweets, db.users], async () => {
+            if (data.users && Array.isArray(data.users)) {
+                await db.users.bulkPut(data.users);
+            }
+            if (data.tweets && Array.isArray(data.tweets)) {
+                await db.tweets.bulkPut(data.tweets);
+            }
+        });
     }
 };

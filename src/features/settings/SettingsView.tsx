@@ -3,7 +3,8 @@ import {
     Activity, Cpu, Database, Eye, FileText, Heart,
     RefreshCw, Search, Settings, Sparkles, Terminal,
     X, Plus, Zap, ChevronDown, Check, ScanFace, BookOpen, AlertCircle, Loader2,
-    BrainCircuit, HardDrive, Info, Sliders, PlayCircle, PauseCircle, Fingerprint
+    BrainCircuit, HardDrive, Info, Sliders, PlayCircle, PauseCircle, Fingerprint, FolderOpen,
+    Download, Upload
 } from 'lucide-react';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { cn } from '../../shared/utils/cn';
@@ -11,7 +12,9 @@ import { useSettingsStore, SettingsState } from '../../shared/store/useSettingsS
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { AIEngineManager } from './AIEngineManager';
 import { AIPipelineDesigner } from './AIPipelineDesigner';
+import { TweetRepository } from '../../core/storage/TweetRepository';
 import supportImg from '../../assets/img/支持一下.png';
+import logoPng from '../../assets/img/icon.png';
 
 type SettingsGroup = 'neural' | 'memory' | 'system';
 
@@ -21,7 +24,7 @@ const SectionHeader = ({ title, icon: Icon, rightContent }: any) => (
     <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
         <div className="flex items-center gap-3">
             <Icon size={18} className="text-zinc-500" />
-            <h2 className="text-xs font-black text-white uppercase tracking-[0.25em]">{title}</h2>
+            <h2 className="text-sm font-black text-white uppercase tracking-[0.25em]">{title}</h2>
         </div>
         {rightContent}
     </div>
@@ -36,10 +39,10 @@ const Card = ({ children, className }: { children: React.ReactNode, className?: 
 const Field = ({ label, children, description }: any) => (
     <div className="space-y-2.5">
         <div className="flex items-center justify-between">
-            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</label>
+            <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{label}</label>
         </div>
         {children}
-        {description && <p className="text-[9px] text-zinc-600 font-medium leading-relaxed">{description}</p>}
+        {description && <p className="text-[11px] text-zinc-600 font-medium leading-relaxed">{description}</p>}
     </div>
 );
 
@@ -53,6 +56,9 @@ export const SettingsView: React.FC = () => {
     const [status, setStatus] = useState('');
     const [newTag, setNewTag] = useState('');
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const restoreInputRef = useRef<HTMLInputElement>(null);
+    const [includeSettings, setIncludeSettings] = useState(false);
 
     // Initial Load & Migration
     useEffect(() => {
@@ -94,6 +100,76 @@ export const SettingsView: React.FC = () => {
         handleSave(newSettings);
     };
 
+    const handleBrowseFolder = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            // Try to get path if available (Electron/special env) or fallback to name
+            const path = (files[0] as any).path || files[0].webkitRelativePath?.split('/')[0];
+            if (path) {
+                handleChange('backupFolderName', path);
+            }
+        }
+    };
+
+    const handleManualBackup = async () => {
+        try {
+            setStatus('BACKING UP...');
+            const data: any = await TweetRepository.exportAllData();
+
+            // Optionally include settings
+            if (includeSettings) {
+                data.settings = settings;
+            }
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ThatTweet-Backup-${new Date().toISOString().slice(0, 10)}${includeSettings ? '-Full' : ''}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setStatus('EXPORTED');
+            setTimeout(() => setStatus(''), 2000);
+        } catch (error) {
+            console.error('Backup failed:', error);
+            setStatus('ERROR');
+        }
+    };
+
+    const handleRestoreFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setStatus('IMPORTING...');
+            const text = await file.text();
+            const data = JSON.parse(text);
+
+            // Restore DB data
+            await TweetRepository.importData(data);
+
+            // Restore Settings if present
+            if (data.settings) {
+                updateSettings(data.settings);
+                handleSave(data.settings);
+            }
+
+            setStatus('RESTORED');
+            setTimeout(() => setStatus(''), 2000);
+        } catch (error) {
+            console.error('Restore failed:', error);
+            setStatus('ERROR');
+        } finally {
+            if (restoreInputRef.current) restoreInputRef.current.value = '';
+        }
+    };
+
     const handleSettingsUpdate = (newSettings: AISettings) => {
         updateSettings(newSettings);
         handleSave(newSettings);
@@ -121,12 +197,12 @@ export const SettingsView: React.FC = () => {
             <aside className="w-[260px] border-r border-white/10 flex flex-col bg-black shrink-0 relative z-20">
                 <div className="p-8 pb-10">
                     <div className="flex items-center gap-3 mb-1">
-                        <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
-                            <Terminal size={14} className="text-black" />
+                        <div className="w-6 h-6 bg-white rounded flex items-center justify-center overflow-hidden p-0.5">
+                            <img src={logoPng} className="w-full h-full object-contain" alt="Logo" />
                         </div>
-                        <h1 className="text-base font-black text-white tracking-widest">THATTWEET</h1>
+                        <h1 className="text-lg font-black text-white tracking-widest">THATTWEET</h1>
                     </div>
-                    <p className="text-[9px] text-zinc-600 font-mono pl-9 tracking-widest">INTELLIGENCE CONSOLE</p>
+                    <p className="text-[11px] text-zinc-600 font-mono pl-9 tracking-widest">INTELLIGENCE CONSOLE</p>
                 </div>
 
                 <nav className="flex-1 px-4 space-y-2">
@@ -143,8 +219,8 @@ export const SettingsView: React.FC = () => {
                         >
                             <group.icon size={18} className={cn("relative z-10 transition-colors", activeGroup === group.id ? "text-black" : "text-zinc-600 group-hover:text-zinc-400")} />
                             <div className="text-left relative z-10">
-                                <p className="text-[11px] font-black tracking-[0.1em] leading-tight">{group.label}</p>
-                                <p className={cn("text-[8px] font-mono mt-0.5", activeGroup === group.id ? "text-neutral-500" : "text-zinc-600")}>{group.sub}</p>
+                                <p className="text-[13px] font-black tracking-[0.1em] leading-tight">{group.label}</p>
+                                <p className={cn("text-[10px] font-mono mt-0.5", activeGroup === group.id ? "text-neutral-500" : "text-zinc-600")}>{group.sub}</p>
                             </div>
                         </button>
                     ))}
@@ -152,7 +228,7 @@ export const SettingsView: React.FC = () => {
 
                 <div className="p-6">
                     <div className="flex items-center justify-between px-2">
-                        <span className="text-[9px] font-mono text-zinc-600">{status || 'READY'}</span>
+                        <span className="text-[11px] font-mono text-zinc-600">{status || 'READY'}</span>
                         <div className={cn("w-1.5 h-1.5 rounded-full", status ? "bg-white animate-pulse" : "bg-zinc-800")} />
                     </div>
                 </div>
@@ -174,8 +250,8 @@ export const SettingsView: React.FC = () => {
 
                                 {/* Advanced Tuning (Moved here for quick access) */}
                                 <Card className="border-white/5 space-y-6">
-                                    <SectionHeader title="KERNEL TUNING" icon={Sliders} />
-                                    <Field label="Vision Scope" description="Which images to analyze">
+                                    <SectionHeader title="内核调优" icon={Sliders} />
+                                    <Field label="视觉范围" description="分析哪些图片">
                                         <div className="grid grid-cols-2 gap-2">
                                             {(['all', 'new'] as const).map(mode => (
                                                 <button
@@ -229,16 +305,16 @@ export const SettingsView: React.FC = () => {
                                         <div className="space-y-4 flex-1">
                                             <div className="flex items-center gap-2 text-zinc-500">
                                                 <ScanFace size={16} />
-                                                <span className="text-[10px] font-black uppercase tracking-[0.2em]">{t('section_directive')}</span>
+                                                <span className="text-xs font-black uppercase tracking-[0.2em]">{t('section_directive')}</span>
                                             </div>
                                             <input
                                                 type="text"
                                                 value={settings.aiStyleFocus}
                                                 onChange={e => handleChange('aiStyleFocus', e.target.value)}
-                                                className="w-full bg-transparent border-b border-white/10 py-2 text-lg font-bold text-white placeholder:text-zinc-700 focus:border-white/40 focus:outline-none font-sans"
+                                                className="w-full bg-transparent border-b border-white/10 py-2 text-xl font-bold text-white placeholder:text-zinc-700 focus:border-white/40 focus:outline-none font-sans"
                                                 placeholder={t('placeholder_directive')}
                                             />
-                                            <p className="text-[10px] text-zinc-600 font-medium">{t('desc_directive')}</p>
+                                            <p className="text-xs text-zinc-600 font-medium">{t('desc_directive')}</p>
                                         </div>
 
                                         {/* Master Switch */}
@@ -253,12 +329,12 @@ export const SettingsView: React.FC = () => {
                                                 )}
                                             >
                                                 {settings.autoAnalyze ? <PauseCircle size={16} className="fill-black text-white" /> : <PlayCircle size={16} />}
-                                                <span className="text-[10px] font-black uppercase tracking-widest">
+                                                <span className="text-xs font-black uppercase tracking-widest">
                                                     {settings.autoAnalyze ? t('system_active') : t('system_paused')}
                                                 </span>
                                             </button>
                                             {settings.autoAnalyze && (
-                                                <div className="flex items-center gap-2 text-[9px] text-emerald-500 font-mono uppercase">
+                                                <div className="flex items-center gap-2 text-[11px] text-emerald-500 font-mono uppercase">
                                                     <span className="relative flex h-2 w-2">
                                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -273,7 +349,7 @@ export const SettingsView: React.FC = () => {
                                 {/* The Pipeline */}
                                 <div className="border border-white/5 rounded-3xl overflow-hidden bg-[#080808]">
                                     <div className="p-6 border-b border-white/5 bg-white/[0.01]">
-                                        <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <h3 className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-2">
                                             <BrainCircuit size={14} /> {t('pipeline_arch')}
                                         </h3>
                                     </div>
@@ -293,7 +369,7 @@ export const SettingsView: React.FC = () => {
                             <Card className="border-white/10">
                                 <SectionHeader title={t('section_rag')} icon={Database}
                                     rightContent={
-                                        <div onClick={() => handleChange('ragEnabled', !settings.ragEnabled)} className={cn("cursor-pointer px-3 py-1 rounded bg-white/5 border border-white/5 text-[10px] font-mono", settings.ragEnabled ? "text-emerald-500 border-emerald-500/30" : "text-zinc-600")}>
+                                        <div onClick={() => handleChange('ragEnabled', !settings.ragEnabled)} className={cn("cursor-pointer px-3 py-1 rounded bg-white/5 border border-white/5 text-xs font-mono", settings.ragEnabled ? "text-emerald-500 border-emerald-500/30" : "text-zinc-600")}>
                                             {settings.ragEnabled ? t('status_enabled') : t('status_disabled')}
                                         </div>
                                     }
@@ -301,21 +377,21 @@ export const SettingsView: React.FC = () => {
                                 {settings.ragEnabled ? (
                                     <div className="grid grid-cols-2 gap-8">
                                         <Field label={t('label_embedding_model')} description={t('desc_embedding_model')}>
-                                            <input type="text" value={settings.embeddingModel} onChange={e => handleChange('embeddingModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-white/30 outline-none" />
+                                            <input type="text" value={settings.embeddingModel} onChange={e => handleChange('embeddingModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
                                         </Field>
                                         <Field label={t('label_reranker_model')} description={t('desc_reranker_model')}>
-                                            <input type="text" value={settings.rerankerModel} onChange={e => handleChange('rerankerModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-white/30 outline-none" />
+                                            <input type="text" value={settings.rerankerModel} onChange={e => handleChange('rerankerModel', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
                                         </Field>
                                         <div className="col-span-2">
                                             <Field label={t('label_endpoint')} description={t('desc_endpoint')}>
-                                                <input type="text" value={settings.embeddingUrl} onChange={e => handleChange('embeddingUrl', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:border-white/30 outline-none" />
+                                                <input type="text" value={settings.embeddingUrl} onChange={e => handleChange('embeddingUrl', e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-white/30 outline-none" />
                                             </Field>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="p-10 text-center space-y-4 opacity-50">
                                         <Database size={40} className="mx-auto text-zinc-700" />
-                                        <p className="text-xs text-zinc-500 font-mono">{t('rag_offline')}</p>
+                                        <p className="text-sm text-zinc-500 font-mono">{t('rag_offline')}</p>
                                     </div>
                                 )}
                             </Card>
@@ -329,17 +405,86 @@ export const SettingsView: React.FC = () => {
                                             <Activity size={20} />
                                         </div>
                                         <div>
-                                            <p className="text-xs font-bold text-white uppercase tracking-widest">{t('label_auto_backup')}</p>
-                                            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{t('desc_auto_backup')}</p>
+                                            <p className="text-sm font-bold text-white uppercase tracking-widest">{t('label_auto_backup')}</p>
+                                            <p className="text-xs text-zinc-500 font-mono mt-0.5">{t('desc_auto_backup')}</p>
                                         </div>
                                     </div>
                                     <div onClick={() => handleChange('autoBackupEnabled', !settings.autoBackupEnabled)} className={cn("w-10 h-5 rounded-full relative cursor-pointer bg-zinc-800 transition-colors", settings.autoBackupEnabled && "bg-white")}>
                                         <div className={cn("absolute top-1 w-3 h-3 rounded-full transition-all duration-300", settings.autoBackupEnabled ? "bg-black left-6" : "bg-zinc-500 left-1")} />
                                     </div>
                                 </div>
-                                <div className="p-4 bg-black rounded-xl border border-white/5 flex items-center justify-between">
-                                    <span className="text-[10px] font-mono text-zinc-500">{t('label_location')}</span>
-                                    <span className="text-[10px] font-mono text-white">{settings.backupFolderName || '~/Documents/ThatTweet/Backup'}</span>
+                                <div className="p-4 bg-black rounded-xl border border-white/5 flex items-center gap-4">
+                                    <span className="text-xs font-mono text-zinc-500 whitespace-nowrap">{t('label_location')}</span>
+                                    <div className="flex-1 flex items-center gap-2 justify-end">
+                                        <input
+                                            type="text"
+                                            value={settings.backupFolderName || ''}
+                                            onChange={e => handleChange('backupFolderName', e.target.value)}
+                                            placeholder="~/Documents/ThatTweet/Backup"
+                                            className="w-full bg-transparent text-xs font-mono text-white outline-none text-right placeholder:text-zinc-700 hover:placeholder:text-zinc-600 focus:placeholder:text-zinc-600 transition-colors"
+                                        />
+                                        <button
+                                            onClick={handleBrowseFolder}
+                                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-white transition-colors"
+                                            title="Select Folder"
+                                        >
+                                            <FolderOpen size={14} />
+                                        </button>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        {...({ webkitdirectory: "", directory: "" } as any)}
+                                        onChange={handleFolderSelect}
+                                    />
+                                </div>
+
+                                {/* Manual Backup & Restore */}
+                                <div className="mt-4 flex items-center justify-between p-6 bg-white/[0.02] border border-white/5 rounded-xl">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 rounded-lg bg-white/5 text-zinc-600">
+                                            <HardDrive size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white uppercase tracking-widest">{t('backup_manual_title')}</p>
+                                            <p className="text-xs text-zinc-500 font-mono mt-0.5">{t('backup_manual_desc')}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-3">
+                                        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIncludeSettings(!includeSettings)}>
+                                            <div className={cn("w-4 h-4 rounded border flex items-center justify-center transition-colors", includeSettings ? "bg-brand border-brand" : "border-zinc-600 group-hover:border-zinc-400")}>
+                                                {includeSettings && <Check size={10} className="text-white" />}
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold text-zinc-400 group-hover:text-zinc-300 uppercase tracking-wider">{t('label_include_settings')}</p>
+                                                <p className="text-[9px] text-zinc-600 text-right">{t('desc_include_settings')}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleManualBackup}
+                                                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors border border-white/5"
+                                            >
+                                                <Download size={14} />
+                                                {t('btn_backup_download')}
+                                            </button>
+                                            <button
+                                                onClick={() => restoreInputRef.current?.click()}
+                                                className="px-4 py-2 bg-brand/10 hover:bg-brand/20 text-brand rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors border border-brand/20"
+                                            >
+                                                <Upload size={14} />
+                                                {t('btn_backup_upload')}
+                                            </button>
+                                            <input
+                                                type="file"
+                                                ref={restoreInputRef}
+                                                className="hidden"
+                                                accept=".json"
+                                                onChange={handleRestoreFileSelect}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </Card>
 
@@ -348,7 +493,7 @@ export const SettingsView: React.FC = () => {
                                 <SectionHeader title={t('section_taxonomy')} icon={BookOpen} />
                                 <div className="flex flex-wrap gap-2">
                                     {settings.categories.map((tag) => (
-                                        <div key={tag} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded text-[10px] font-bold text-zinc-300 group hover:border-white/20 hover:text-white transition-all">
+                                        <div key={tag} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded text-xs font-bold text-zinc-300 group hover:border-white/20 hover:text-white transition-all">
                                             <span>{tag}</span>
                                             <button onClick={() => handleChange('categories', settings.categories.filter(t => t !== tag))} className="text-zinc-600 hover:text-white"><X size={10} /></button>
                                         </div>
@@ -359,7 +504,7 @@ export const SettingsView: React.FC = () => {
                                         onChange={e => setNewTag(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && newTag.trim() && (handleChange('categories', [...settings.categories, newTag.trim()]), setNewTag(''))}
                                         placeholder={t('placeholder_new_tag')}
-                                        className="bg-transparent border border-dashed border-white/10 px-3 py-1.5 rounded text-[10px] font-bold text-white focus:border-white/40 focus:outline-none uppercase w-24 placeholder:text-zinc-700"
+                                        className="bg-transparent border border-dashed border-white/10 px-3 py-1.5 rounded text-xs font-bold text-white focus:border-white/40 focus:outline-none uppercase w-24 placeholder:text-zinc-700"
                                     />
                                 </div>
                             </Card>
@@ -368,15 +513,69 @@ export const SettingsView: React.FC = () => {
 
                     {/* === TAB: SYSTEM === */}
                     {activeGroup === 'system' && (
-                        <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-center">
-                            <div className="p-12 border border-white/10 rounded-[3rem] bg-zinc-900/50 relative overflow-hidden">
-                                <img src={supportImg} className="w-24 h-24 rounded-2xl mx-auto mb-6 shadow-2xl grayscale hover:grayscale-0 transition-all duration-500" />
-                                <h1 className="text-2xl font-black text-white tracking-widest mb-2">THATTWEET</h1>
-                                <p className="text-xs text-zinc-500 font-mono uppercase tracking-widest mb-8">{t('app_suite_version')}</p>
-                                <div className="flex justify-center gap-4">
-                                    <button className="px-6 py-2 bg-white text-black text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-zinc-200 transition-colors">{t('btn_docs')}</button>
-                                    <button className="px-6 py-2 border border-white/20 text-white text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-white/5 transition-colors">{t('btn_github')}</button>
+                        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+                            {/* Identity Header */}
+                            <div className="p-8 border border-white/10 rounded-3xl bg-gradient-to-br from-zinc-900 via-black to-black relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
+                                    <Terminal size={200} />
                                 </div>
+                                <div className="relative z-10">
+                                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-white/10 overflow-hidden p-3">
+                                        <img src={logoPng} className="w-full h-full object-contain" alt="Logo" />
+                                    </div>
+                                    <h1 className="text-4xl font-black text-white tracking-widest mb-2">THATTWEET</h1>
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="px-2 py-1 rounded bg-white/10 border border-white/10 text-[10px] font-mono text-white">
+                                            v1.1.0
+                                        </div>
+                                        <div className="px-2 py-1 rounded bg-emerald-900/30 border border-emerald-500/30 text-[10px] font-mono text-emerald-500 uppercase">
+                                            Stable Channel
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-zinc-400 max-w-lg leading-relaxed">{t('system_about_desc')}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Connect & Resources */}
+                                <Card className="border-white/10 space-y-6 h-full flex flex-col">
+                                    <SectionHeader title={t('system_connect_title')} icon={FileText} />
+                                    <div className="flex-1 grid gap-4">
+                                        <a href="https://github.com/RechardLLee/thattweet-vite" target="_blank" rel="noreferrer" className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] transition-all group">
+                                            <div className="p-3 rounded-lg bg-black text-white border border-white/10 group-hover:border-white/30">
+                                                <Terminal size={20} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-bold text-white">GitHub</h3>
+                                                <p className="text-xs text-zinc-500 font-mono">RechardLLee/thattweet-vite</p>
+                                            </div>
+                                        </a>
+                                        <a href="#" className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 hover:scale-[1.02] transition-all group">
+                                            <div className="p-3 rounded-lg bg-black text-white border border-white/10 group-hover:border-white/30">
+                                                <FileText size={20} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-bold text-white">{t('btn_docs')}</h3>
+                                                <p className="text-xs text-zinc-500 font-mono">Documentation (Coming Soon)</p>
+                                            </div>
+                                        </a>
+                                    </div>
+                                </Card>
+
+                                {/* Support */}
+                                <Card className="border-white/10 space-y-6 h-full flex flex-col">
+                                    <SectionHeader title={t('system_sponsor_title')} icon={Heart} />
+                                    <div className="flex-1 flex flex-col items-center text-center p-2">
+                                        <div className="p-2 bg-white rounded-xl mb-6 shadow-xl max-w-[160px]">
+                                            <img src={supportImg} className="w-full h-auto rounded-lg" alt="Support" />
+                                        </div>
+                                        <p className="text-xs text-zinc-400 leading-relaxed mb-4 px-4">{t('system_sponsor_desc')}</p>
+                                        <button className="px-6 py-2 bg-pink-600/10 hover:bg-pink-600/20 text-pink-500 border border-pink-500/20 hover:border-pink-500/50 rounded-full text-[10px] font-black uppercase tracking-widest transition-all">
+                                            Sponsor Project
+                                        </button>
+                                    </div>
+                                </Card>
                             </div>
                         </div>
                     )}

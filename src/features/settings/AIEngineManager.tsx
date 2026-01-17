@@ -121,7 +121,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <h3 className="text-2xl font-bold text-white flex items-center gap-2">
                         {editingId === 'new' ? <Plus size={20} /> : <Edit2 size={20} />}
                         {editingId === 'new' ? t('engine_add_new') : t('engine_edit')}
                     </h3>
@@ -133,41 +133,41 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                 <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-6 space-y-5">
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('engine_provider')}</label>
-                            <div className="px-4 py-3 bg-zinc-900/50 border border-white/5 rounded-xl text-zinc-400 font-mono text-sm leading-none flex items-center gap-2">
+                            <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">{t('engine_provider')}</label>
+                            <div className="px-4 py-3 bg-zinc-900/50 border border-white/5 rounded-xl text-zinc-400 font-mono text-base leading-none flex items-center gap-2">
                                 {preset?.icon && <img src={preset.icon} className="w-4 h-4 rounded-full" />}
                                 {preset?.name}
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('engine_name')}</label>
+                            <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">{t('engine_name')}</label>
                             <input
                                 type="text"
                                 value={formState.name}
                                 onChange={e => setFormState({ ...formState, name: e.target.value })}
-                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-brand/40 outline-none transition-all"
+                                className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-base text-white focus:border-brand/40 outline-none transition-all"
                             />
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('setting_api_key')}</label>
+                        <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">{t('setting_api_key')}</label>
                         <input
                             type="password"
                             value={formState.apiKey}
                             onChange={e => setFormState({ ...formState, apiKey: e.target.value })}
                             placeholder="sk-..."
-                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none"
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-base font-mono text-white focus:border-brand/40 outline-none"
                         />
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{t('setting_base_url')}</label>
+                        <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">{t('setting_base_url')}</label>
                         <input
                             type="text"
                             value={formState.baseUrl}
                             onChange={e => setFormState({ ...formState, baseUrl: e.target.value })}
-                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-mono text-white focus:border-brand/40 outline-none"
+                            className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-base font-mono text-white focus:border-brand/40 outline-none"
                         />
                     </div>
 
@@ -176,13 +176,13 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                             <button
                                 onClick={handleTestConnection}
                                 disabled={isTesting || !formState.apiKey}
-                                className="px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-zinc-300 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                                className="px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-zinc-300 text-[11px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors disabled:opacity-50"
                             >
                                 {isTesting ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />}
                                 {t('engine_test_connection')}
                             </button>
                             {testResult && (
-                                <div className={cn("flex items-center gap-2 text-[9px] font-black uppercase tracking-tight", testResult.success ? "text-emerald-500" : "text-rose-500")}>
+                                <div className={cn("flex items-center gap-2 text-[11px] font-black uppercase tracking-tight", testResult.success ? "text-emerald-500" : "text-rose-500")}>
                                     {testResult.success ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
                                     <span className="truncate max-w-[80px]">{testResult.success ? 'OK' : 'Error'}</span>
                                 </div>
@@ -191,7 +191,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                         <button
                             onClick={handleSave}
                             disabled={!formState.name || !formState.apiKey}
-                            className="w-full py-3 bg-brand hover:bg-brand-hover text-white rounded-xl text-[9px] font-black uppercase tracking-[0.2em] shadow-lg shadow-brand/20 transition-all active:scale-[0.98] disabled:opacity-50"
+                            className="w-full py-3 bg-brand hover:bg-brand-hover text-white rounded-xl text-[11px] font-black uppercase tracking-[0.2em] shadow-lg shadow-brand/20 transition-all active:scale-[0.98] disabled:opacity-50"
                         >
                             {t('save')}
                         </button>
@@ -207,7 +207,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
             {/* Header & Quick Add */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+                    <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
                         <Server className="text-brand" size={18} />
                         {t('engine_hub_title')}
                     </h2>
@@ -220,14 +220,14 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                             className="group flex items-center gap-3 px-4 py-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-brand/40 hover:bg-brand/5 transition-all"
                         >
                             <img src={preset.icon} className="w-4 h-4 rounded-full grayscale group-hover:grayscale-0 transition-all" alt="" />
-                            <span className="text-[9px] font-black text-zinc-600 group-hover:text-zinc-400 uppercase tracking-widest">
+                            <span className="text-[11px] font-black text-zinc-600 group-hover:text-zinc-400 uppercase tracking-widest">
                                 {preset.name}
                             </span>
                         </button>
                     ))}
                     <button
                         onClick={() => handleCreate('custom')}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 text-[9px] font-black uppercase tracking-widest border border-dashed border-white/10 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 text-[11px] font-black uppercase tracking-widest border border-dashed border-white/10 transition-colors"
                     >
                         <Plus size={14} /> {t('engine_add_custom')}
                     </button>
@@ -248,7 +248,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                             <div className={cn("w-1.5 h-1.5 rounded-full",
                                 provider.status === 'connected' ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : "bg-zinc-700"
                             )} />
-                            <span className="text-[8px] text-zinc-600 font-black uppercase tracking-widest">
+                            <span className="text-[10px] text-zinc-600 font-black uppercase tracking-widest">
                                 {provider.status === 'connected' ? `${provider.latency || '?'}ms` : t('engine_status_inactive')}
                             </span>
                         </div>
@@ -263,18 +263,18 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                                 ) : <Server size={14} className="text-zinc-700" />}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <h4 className="font-bold text-white text-xs truncate leading-tight transition-colors">{provider.name}</h4>
-                                <p className="text-[10px] text-zinc-600 font-mono mt-0.5 truncate">{provider.baseUrl}</p>
+                                <h4 className="font-bold text-white text-sm truncate leading-tight transition-colors">{provider.name}</h4>
+                                <p className="text-xs text-zinc-600 font-mono mt-0.5 truncate">{provider.baseUrl}</p>
                             </div>
                         </div>
 
                         <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between">
                             <div className="flex gap-2.5">
-                                <button onClick={() => handleEdit(provider)} className="text-[8px] font-black text-zinc-600 hover:text-white uppercase tracking-[0.1em] transition-colors flex items-center gap-1">
+                                <button onClick={() => handleEdit(provider)} className="text-[10px] font-black text-zinc-600 hover:text-white uppercase tracking-[0.1em] transition-colors flex items-center gap-1">
                                     <Edit2 size={9} />
                                     {t('edit')}
                                 </button>
-                                <button onClick={() => handleDelete(provider.id)} className="text-[8px] font-black text-zinc-700 hover:text-rose-500 uppercase tracking-[0.1em] transition-colors flex items-center gap-1">
+                                <button onClick={() => handleDelete(provider.id)} className="text-[10px] font-black text-zinc-700 hover:text-rose-500 uppercase tracking-[0.1em] transition-colors flex items-center gap-1">
                                     <Trash2 size={9} />
                                     {t('delete')}
                                 </button>
@@ -283,7 +283,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                             {settings.defaultProviderId !== provider.id && (
                                 <button
                                     onClick={() => handleSetDefault(provider.id)}
-                                    className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[8px] font-black text-zinc-400 hover:text-white uppercase tracking-widest transition-all"
+                                    className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[10px] font-black text-zinc-400 hover:text-white uppercase tracking-widest transition-all"
                                 >
                                     {t('engine_use_primary')}
                                 </button>
@@ -291,7 +291,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                             {settings.defaultProviderId === provider.id && (
                                 <div className="flex items-center gap-1">
                                     <CheckCircle2 size={10} className="text-brand" />
-                                    <span className="text-[8px] font-black text-brand uppercase tracking-widest leading-none">{t('engine_primary_label')}</span>
+                                    <span className="text-[10px] font-black text-brand uppercase tracking-widest leading-none">{t('engine_primary_label')}</span>
                                 </div>
                             )}
                         </div>
@@ -301,7 +301,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
                 {providers.length === 0 && (
                     <div className="col-span-full py-12 flex flex-col items-center justify-center text-center opacity-40">
                         <Server className="text-zinc-600 mb-4" size={32} />
-                        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                        <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest">
                             {t('engine_empty_title')}
                         </p>
                     </div>

@@ -600,37 +600,37 @@
     "message": "一键配置 DeepSeek"
   },
   "pipeline_title": {
-    "message": "AI 工作流 (Workflow Studio)"
+    "message": "AI 工作流"
   },
   "pipeline_desc": {
     "message": "为推文处理阶段分配模型。留空将使用默认路径。"
   },
   "node_perception": {
-    "message": "视觉皮层 (VISION)"
+    "message": "视觉识别"
   },
   "node_perception_desc": {
     "message": "图像分析与 OCR 识别"
   },
   "node_text": {
-    "message": "语义分析 (CONTEXT)"
+    "message": "快速分析"
   },
   "node_text_desc": {
     "message": "推文深度理解与评分"
   },
   "node_profile": {
-    "message": "认知核心 (COGNITIVE)"
+    "message": "作者画像"
   },
   "node_profile_desc": {
     "message": "用户画像与性格建模"
   },
   "node_chat": {
-    "message": "快速对话 (CHAT)"
+    "message": "沉思创作"
   },
   "node_chat_desc": {
     "message": "直接的 AI 互动体验"
   },
   "node_salon": {
-    "message": "思想沙龙 (SALON)"
+    "message": "思想沙龙"
   },
   "node_salon_desc": {
     "message": "基于 RAG 的深度研讨"
@@ -712,9 +712,6 @@
   },
   "btn_reset_default": {
     "message": "重置为默认指令"
-  },
-  "cancel": {
-    "message": "取消"
   },
   "label_max_images": {
     "message": "单推图片上限"
@@ -844,5 +841,38 @@
   },
   "btn_github": {
     "message": "GITHUB"
+  },
+  "backup_manual_title": {
+    "message": "手动备份"
+  },
+  "backup_manual_desc": {
+    "message": "下载当前数据快照或从备份恢复"
+  },
+  "btn_backup_download": {
+    "message": "下载快照"
+  },
+  "btn_backup_upload": {
+    "message": "恢复备份"
+  },
+  "label_include_settings": {
+    "message": "包含扩展设置"
+  },
+  "desc_include_settings": {
+    "message": "将包含 API Key 等敏感配置，请安全存储备份文件"
+  },
+  "system_about_title": {
+    "message": "关于项目"
+  },
+  "system_about_desc": {
+    "message": "ThatTweet 是一个专为严肃阅读者设计的推特知识库工具，旨在将碎片化信息转化为系统性知识。"
+  },
+  "system_connect_title": {
+    "message": "连接与反馈"
+  },
+  "system_sponsor_title": {
+    "message": "支持开发"
+  },
+  "system_sponsor_desc": {
+    "message": "如果这个工具对您有帮助，欢迎请我喝杯咖啡，这将支持我持续维护和开发新功能。"
   }
 }

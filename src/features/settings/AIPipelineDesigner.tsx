@@ -75,7 +75,7 @@ const ProviderSelector: React.FC<{
             >
                 <div className="flex items-center gap-2">
                     <Terminal size={14} className="text-zinc-600" />
-                    <span className={cn("text-xs font-black truncate", value ? "text-white" : "text-zinc-500")}>
+                    <span className={cn("text-sm font-black truncate", value ? "text-white" : "text-zinc-500")}>
                         {selectedProvider ? selectedProvider.name : defaultName}
                     </span>
                 </div>
@@ -86,7 +86,7 @@ const ProviderSelector: React.FC<{
                 <div className="absolute z-50 mt-2 w-full bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden py-1 animate-in zoom-in-95 duration-200">
                     <button
                         onClick={() => { onChange(''); setIsOpen(false); }}
-                        className={cn("w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest flex items-center justify-between transition-colors", !value ? "bg-white text-black" : "text-zinc-500 hover:bg-white/5")}
+                        className={cn("w-full px-4 py-3 text-left text-xs font-black uppercase tracking-widest flex items-center justify-between transition-colors", !value ? "bg-white text-black" : "text-zinc-500 hover:bg-white/5")}
                     >
                         {defaultName}
                         {!value && <Check size={14} />}
@@ -95,7 +95,7 @@ const ProviderSelector: React.FC<{
                         <button
                             key={p.id}
                             onClick={() => { onChange(p.id); setIsOpen(false); }}
-                            className={cn("w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest flex items-center justify-between transition-colors", value === p.id ? "bg-white text-black" : "text-zinc-500 hover:bg-white/5")}
+                            className={cn("w-full px-4 py-3 text-left text-xs font-black uppercase tracking-widest flex items-center justify-between transition-colors", value === p.id ? "bg-white text-black" : "text-zinc-500 hover:bg-white/5")}
                         >
                             {p.name}
                             {value === p.id && <Check size={14} />}
@@ -188,8 +188,8 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                             <meta.icon size={18} />
                         </div>
                         <div>
-                            <h4 className="text-white font-black text-[11px] uppercase tracking-wider">{t(meta.labelKey)}</h4>
-                            <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest mt-0.5">
+                            <h4 className="text-white font-black text-[13px] uppercase tracking-wider">{t(meta.labelKey)}</h4>
+                            <p className="text-[11px] text-zinc-600 font-bold uppercase tracking-widest mt-0.5">
                                 {isEnabled ? t('node_status_active') : t('node_status_disabled')}
                             </p>
                         </div>
@@ -215,7 +215,7 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                     {/* Provider Select */}
                     <div className="space-y-1">
                         <div className="flex items-center justify-between px-1">
-                            <label className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">{t('label_provider')}</label>
+                            <label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">{t('label_provider')}</label>
                             {provider && (
                                 <img src={PROVIDER_PRESETS[provider.provider]?.icon} className="w-3 h-3 rounded-full opacity-40" />
                             )}
@@ -234,7 +234,7 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
 
                     {/* Model Select */}
                     <div className="space-y-1">
-                        <label className="px-1 text-[8px] font-black text-zinc-600 uppercase tracking-widest">{t('label_model')}</label>
+                        <label className="px-1 text-[10px] font-black text-zinc-600 uppercase tracking-widest">{t('label_model')}</label>
                         <ModelSelector
                             value={nodeConfig.model}
                             models={availableModels}
@@ -251,7 +251,7 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                                 onClick={() => setPromptModal(meta.key)}
                                 className="w-full flex items-center justify-between px-3 py-1.5 mt-1 rounded-lg bg-white/5 border border-white/5 hover:border-brand/40 group/p transition-all"
                             >
-                                <span className="text-[9px] font-black text-zinc-600 group-hover:text-brand transition-colors uppercase tracking-widest leading-none">
+                                <span className="text-[11px] font-black text-zinc-600 group-hover:text-brand transition-colors uppercase tracking-widest leading-none">
                                     {t('edit_prompt')}
                                 </span>
                                 <Edit3 size={10} className="text-zinc-700 group-hover:text-brand transition-colors" />
@@ -267,10 +267,10 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
         <div className="flex-1 flex flex-col gap-6 relative">
             {/* Stage Header */}
             <div className="flex items-center gap-3 px-2">
-                <div className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-black text-white">
+                <div className="w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-white">
                     {stageIndex + 1}
                 </div>
-                <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">{t(titleKey)}</h3>
+                <h3 className="text-base font-black text-white uppercase tracking-[0.2em]">{t(titleKey)}</h3>
             </div>
 
             {/* Stage Nodes Container */}
@@ -297,14 +297,14 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                     <Zap size={100} />
                 </div>
                 <div className="relative z-10">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-3">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-black text-emerald-500 uppercase tracking-widest mb-3">
                         <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
                         {t('pipeline_status_online')}
                     </div>
-                    <h2 className="text-xl font-black text-white tracking-tighter uppercase mb-1">
+                    <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-1">
                         {t('pipeline_title')}
                     </h2>
-                    <p className="text-xs text-zinc-500 font-medium max-w-xl">
+                    <p className="text-sm text-zinc-500 font-medium max-w-xl">
                         {t('pipeline_desc')}
                     </p>
                 </div>
@@ -333,10 +333,10 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                                     <BrainCircuit size={24} />
                                 </div>
                                 <div>
-                                    <h3 className="text-2xl font-black text-white tracking-tighter uppercase">
+                                    <h3 className="text-3xl font-black text-white tracking-tighter uppercase">
                                         {t(`node_${promptModal}`)}
                                     </h3>
-                                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1 flex items-center gap-2">
+                                    <p className="text-zinc-500 text-xs font-black uppercase tracking-widest mt-1 flex items-center gap-2">
                                         <Sparkles size={10} />
                                         {t('prompt_hub_title')}
                                     </p>
@@ -352,7 +352,7 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                             {/* Variables Sidebar */}
                             <div className="w-64 bg-black/20 border-r border-white/5 p-6 space-y-6 overflow-y-auto no-scrollbar">
                                 <div className="space-y-2">
-                                    <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-1">
+                                    <h4 className="text-xs font-black text-zinc-500 uppercase tracking-widest px-1">
                                         {t('prompt_variables')}
                                     </h4>
                                     <div className="space-y-1.5 mt-4">
@@ -362,7 +362,7 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                                                 ? ['{context}']
                                                 : ['{tweet_text}', '{author}', '{ai_style_focus}', '{tweet_id}']
                                         ).map(v => (
-                                            <div key={v} className="px-3 py-2 bg-white/5 border border-white/5 rounded-xl text-[10px] font-mono text-brand flex items-center justify-between group cursor-default">
+                                            <div key={v} className="px-3 py-2 bg-white/5 border border-white/5 rounded-xl text-xs font-mono text-brand flex items-center justify-between group cursor-default">
                                                 <span>{v}</span>
                                                 <div className="w-1 h-1 rounded-full bg-brand/40 group-hover:bg-brand transition-colors" />
                                             </div>
@@ -371,7 +371,7 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                                 </div>
 
                                 <div className="p-4 rounded-2xl bg-brand/5 border border-brand/10">
-                                    <p className="text-[9px] text-zinc-500 leading-relaxed italic">
+                                    <p className="text-[11px] text-zinc-500 leading-relaxed italic">
                                         Tips: 使用反斜杠转义双引号 \" 确保 JSON 结构合法。
                                     </p>
                                 </div>
@@ -391,11 +391,11 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                                         });
                                     }}
                                     placeholder={t('prompt_placeholder')}
-                                    className="w-full h-full bg-transparent text-sm font-mono text-zinc-300 outline-none resize-none no-scrollbar leading-relaxed"
+                                    className="w-full h-full bg-transparent text-base font-mono text-zinc-300 outline-none resize-none no-scrollbar leading-relaxed"
                                 />
 
                                 {/* Absolute Decoration */}
-                                <div className="absolute top-8 right-8 text-[10px] font-mono text-zinc-800 pointer-events-none select-none uppercase">
+                                <div className="absolute top-8 right-8 text-xs font-mono text-zinc-800 pointer-events-none select-none uppercase">
                                     System Instructions
                                 </div>
                             </div>
@@ -403,13 +403,13 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
 
                         {/* Modal Footer */}
                         <div className="px-8 py-6 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
-                            <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider">
+                            <p className="text-xs text-zinc-600 font-bold uppercase tracking-wider">
                                 {promptModal === 'profile' ? 'Persona Generation Logic' : 'Contextual Intelligence Model'}
                             </p>
                             <div className="flex gap-4">
                                 <button
                                     onClick={() => setPromptModal(null)}
-                                    className="px-8 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl transition-all uppercase text-[10px] tracking-widest border border-white/5"
+                                    className="px-8 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl transition-all uppercase text-xs tracking-widest border border-white/5"
                                 >
                                     {t('cancel')}
                                 </button>
@@ -424,13 +424,13 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                                             }
                                         }
                                     }}
-                                    className="px-6 py-3 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-black rounded-xl transition-all uppercase text-[10px] tracking-widest border border-white/5"
+                                    className="px-6 py-3 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white font-black rounded-xl transition-all uppercase text-xs tracking-widest border border-white/5"
                                 >
                                     {t('btn_reset_default')}
                                 </button>
                                 <button
                                     onClick={() => setPromptModal(null)}
-                                    className="px-10 py-3 bg-brand text-white font-black rounded-xl hover:brightness-110 hover:scale-[1.02] transition-all active:scale-95 shadow-xl shadow-brand/20 uppercase text-[10px] tracking-widest"
+                                    className="px-10 py-3 bg-brand text-white font-black rounded-xl hover:brightness-110 hover:scale-[1.02] transition-all active:scale-95 shadow-xl shadow-brand/20 uppercase text-xs tracking-widest"
                                 >
                                     {t('prompt_deploy')}
                                 </button>
