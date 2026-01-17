@@ -2,6 +2,7 @@ import React from 'react';
 import './Options.css';
 import { MainLayout } from '../../shared/components/layout/MainLayout';
 import { useUIStore } from '../../shared/store/useUIStore';
+import { useSettingsStore } from '../../shared/store/useSettingsStore';
 import { FeedView } from '../../features/feed/FeedView';
 import { IntelligenceView } from '../../features/intelligence/IntelligenceView';
 import { SettingsView } from '../../features/settings/SettingsView';
@@ -11,6 +12,13 @@ import { MediaLightbox } from '../../shared/components/MediaLightbox';
 
 const Options: React.FC = () => {
   const { activeView } = useUIStore();
+  const settings = useSettingsStore(s => s.settings);
+
+  React.useEffect(() => {
+    if (settings.themeFont) {
+      document.body.style.setProperty('font-family', `"${settings.themeFont}", "ZCOOL XiaoWei", sans-serif`, 'important');
+    }
+  }, [settings.themeFont]);
 
   const renderView = () => {
     switch (activeView) {

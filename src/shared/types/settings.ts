@@ -130,7 +130,10 @@ export interface AISettings {
     // === Legacy & Internal (Minimized) ===
     visionEnabledAt: number;
     maxImagesPerTweet: number;
-    visionBatchSize: number;
+    visionBatchSize: 3;
+
+    // === 6. Appearance ===
+    themeFont: string;
 }
 
 // Backward Compatibility: AIInstance is an alias for AIServiceProvider
@@ -283,7 +286,10 @@ Return ONLY a valid JSON object:
     autoBackupEnabled: false,
     visionEnabledAt: 0,
     maxImagesPerTweet: 4,
-    visionBatchSize: 3
+    visionBatchSize: 3,
+
+    // === 6. Appearance ===
+    themeFont: 'Noto Sans SC' // Default font
 };
 
 /**

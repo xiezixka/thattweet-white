@@ -582,6 +582,35 @@ export const SettingsView: React.FC = () => {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Appearance Settings */}
+                                <Card className="border-white/10 space-y-6 md:col-span-2">
+                                    <SectionHeader title="界面设置" icon={ScanFace} />
+                                    <Field label="字体风格" description="选择您喜欢的界面字体风格">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            {[
+                                                { name: '快乐体 (默认)', value: 'ZCOOL KuaiLe', font: 'ZCOOL KuaiLe' },
+                                                { name: '小薇体 (文艺)', value: 'ZCOOL XiaoWei', font: 'ZCOOL XiaoWei' },
+                                                { name: '标准黑体', value: 'Inter', font: 'Inter' },
+                                                { name: '思源黑体', value: 'Noto Sans SC', font: 'Noto Sans SC' }
+                                            ].map((font) => (
+                                                <button
+                                                    key={font.value}
+                                                    onClick={() => handleChange('themeFont', font.value)}
+                                                    className={cn(
+                                                        "flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-300 gap-2 hover:scale-[1.02]",
+                                                        settings.themeFont === font.value
+                                                            ? "bg-white text-black border-white shadow-lg shadow-white/10"
+                                                            : "bg-black border-white/10 text-zinc-500 hover:text-white hover:border-white/30"
+                                                    )}
+                                                >
+                                                    <span className="text-xl" style={{ fontFamily: font.font }}>Aa</span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-widest">{font.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </Field>
+                                </Card>
+
                                 {/* Connect & Resources */}
                                 <Card className="border-white/10 space-y-6 h-full flex flex-col">
                                     <SectionHeader title={t('system_connect_title')} icon={FileText} />

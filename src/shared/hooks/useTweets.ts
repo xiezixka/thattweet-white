@@ -9,6 +9,9 @@ export function useTweets() {
 
     useEffect(() => {
         const subscription = liveQuery(async () => {
+            // 依赖追踪：虽然我们不需要直接用这个结果，但查询它能让 liveQuery 监听到 users 表的变化
+            await db.users.limit(1).toArray();
+
             const allTweets = await db.tweets.orderBy('savedAt').reverse().toArray();
 
             const tweetsWithUsers = await Promise.all(allTweets.map(async (t: any) => {
@@ -30,11 +33,7 @@ export function useTweets() {
 
                 // 兜底：如果 users 表查不到，尝试从推文嵌入数据构造
                 if (!author) {
-                    // 🔍 调试侦探：打印出这些“孤儿”推文的真实面目
-                    console.log('Orphan Tweet Raw Data:', t);
-
                     // 旧版数据可能直接嵌入了 author/authorName/authorAvatarUrl
-                    // 或者可能是存成了 user 对象
                     const legacyUser = (t as any).user;
                     const legacyHandle = (t as any).author || (t as any).authorHandle || legacyUser?.screen_name || legacyUser?.handle;
                     const legacyName = (t as any).authorName || legacyUser?.name;

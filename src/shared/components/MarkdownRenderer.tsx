@@ -30,7 +30,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
                     ),
                     // Paragraph
                     p: ({ children }) => (
-                        <p className="text-[15px] leading-relaxed text-zinc-300 mb-4 last:mb-0">{children}</p>
+                        <p className="text-[17px] leading-relaxed text-zinc-300 mb-4 last:mb-0">{children}</p>
                     ),
                     // Strong/Bold
                     strong: ({ children }) => (
@@ -85,10 +85,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
                     ),
                     // Lists
                     ul: ({ children }) => (
-                        <ul className="list-disc list-inside space-y-2 my-2 text-[15px] text-zinc-300">{children}</ul>
+                        <ul className="list-disc list-inside space-y-2 my-2 text-[17px] text-zinc-300">{children}</ul>
                     ),
                     ol: ({ children }) => (
-                        <ol className="list-decimal list-inside space-y-2 my-2 text-[15px] text-zinc-300">{children}</ol>
+                        <ol className="list-decimal list-inside space-y-2 my-2 text-[17px] text-zinc-300">{children}</ol>
                     ),
                     li: ({ children }) => (
                         <li className="leading-relaxed">{children}</li>

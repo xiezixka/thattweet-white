@@ -23,6 +23,10 @@ class PromptBuilder {
             content += "\n--- END OF IMAGE DATA ---";
         }
 
+        if (tweet.aiScore) {
+            content += `\n[QUALITY RATING]: ${tweet.aiScore}/100`;
+        }
+
         return content;
     }
 
@@ -477,7 +481,15 @@ Please also include the following fields in your JSON response:
 
         // === PHASE 3: Build Rich Context ===
         const context = topTweets.map((t, i) => {
+            // Calculate weights for prompt
+            const likes = t.favoriteCount || 0;
+            const rts = t.retweetCount || 0;
+            const views = t.viewCount || 1;
+            const dataWeight = Math.min(Math.round(((likes * 1 + rts * 2) / views) * 1000 + Math.log10(likes + rts * 2 + 1) * 20), 99);
+            const qualityWeight = t.aiScore || 50;
+
             let block = `[Memory ${i + 1}]: ${t.text}`;
+            block += `\n(Quality: ${qualityWeight}, Momentum: ${dataWeight})`;
 
             // Include image URLs if available
             if (t.media && t.media.length > 0) {
@@ -509,6 +521,12 @@ Please also include the following fields in your JSON response:
             "- 如果对方的问题让你联想到你写过的某些内容，自然地引用它",
             "- 如果你的记忆（下方的推文片段）中没有相关内容，可以基于你的风格进行合理推测，但要诚实说明",
             "",
+            "关于内容权重的认知：",
+            "- 每一条推文都有 (Quality, Momentum) 标签。",
+            "- Quality 代表内容的「价值/厚度」，Momentum 代表「流量/响度」。",
+            "- 如果两者差距很大（如高 Q 低 M），说明这是你的「深刻但小众」的思想，交流时可以表现出对这类观点的珍视。",
+            "- 如果两者都很高，说明这是你的「成名作」或「代表作」。",
+            "",
             "格式建议：",
             "- 回复不要太长，保持对话节奏感",
             "- 可以用 Markdown 格式化重要观点（**加粗**、列表等）",
@@ -519,7 +537,7 @@ Please also include the following fields in your JSON response:
             "",
             `[用户搜索的话题锚点: ${keywords.join(', ')}]`,
             "",
-            "现在，以 @" + authorHandle + " 的身份，用你的语言风格和对方对话吧。请记住：多陈述，少提问。"
+            "现在，以 @" + authorHandle + " 的身份，用你的语言风格和对方对话吧。请记住：多陈述，少提问。分析时请考虑到你内容的质量与流量对比，展现出真实的创作者气质。"
         ].join('\n');
 
         try {
