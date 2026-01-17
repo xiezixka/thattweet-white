@@ -5,6 +5,7 @@ import {
     BarChart3,
     LineChart,
     Settings2,
+    Network,
     Image as ImageIcon
 } from 'lucide-react';
 import { useUIStore, ViewType } from '../../store/useUIStore';
@@ -32,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false, isPinned 
         { id: 'stats', icon: BarChart3, label: t('nav_stats') },
         { id: 'analytics', icon: LineChart, label: t('nav_analytics') },
         { id: 'intelligence', icon: BrainCircuit, label: t('nav_intelligence') },
+        { id: 'connections', icon: Network, label: '连结' },
         { id: 'gallery', icon: ImageIcon, label: t('nav_gallery') },
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];

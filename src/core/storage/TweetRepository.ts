@@ -1,6 +1,7 @@
 import { db } from './db';
 import { Tweet, UserCache, TweetWithUser } from '../../shared/types/tweet';
 import LZString from 'lz-string';
+import { GraphService } from '../../features/connections/services/graphService';
 
 export const TweetRepository = {
     /**
@@ -8,7 +9,7 @@ export const TweetRepository = {
      * 使用事务保证原子性
      */
     async saveTweet(tweet: Tweet, user: UserCache, rawJson?: object) {
-        return await db.transaction('rw', [db.tweets, db.users], async () => {
+        const resultId = await db.transaction('rw', [db.tweets, db.users], async () => {
             // 1. 处理原始快照压缩
             if (rawJson) {
                 tweet.rawZip = LZString.compressToUTF16(JSON.stringify(rawJson));
@@ -66,6 +67,12 @@ export const TweetRepository = {
 
             return tweet.id;
         });
+
+        // 4. 异步触发图谱更新 (Fire and forget, 但记录错误)
+        // 放在事务之外，避免阻塞主保存流程，也不竞争写锁
+        GraphService.processTweet(tweet).catch(console.error);
+
+        return resultId;
     },
 
     /**

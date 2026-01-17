@@ -10,6 +10,7 @@ import { StatsView } from '../../features/stats/StatsView';
 import { AnalyticsView } from '../../features/analytics/AnalyticsView';
 import { GalleryView } from '../../features/gallery/GalleryView';
 import { MediaLightbox } from '../../shared/components/MediaLightbox';
+import ConnectionsView from '../../features/connections/ConnectionsView';
 
 const Options: React.FC = () => {
   const { activeView } = useUIStore();
@@ -27,6 +28,8 @@ const Options: React.FC = () => {
         return <FeedView />;
       case 'intelligence':
         return <IntelligenceView />;
+      case 'connections':
+        return <ConnectionsView />;
       case 'gallery':
         return <GalleryView />;
       case 'analytics':

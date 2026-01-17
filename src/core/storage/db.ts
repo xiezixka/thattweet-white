@@ -21,6 +21,9 @@ export class ThatTweetDB extends Dexie {
     users!: Table<UserCache>;
     embeddings!: Table<EmbeddingRecord>;
 
+    graphEdges!: Table<GraphEdge>;
+    tagMappings!: Table<TagMapping>;
+
     constructor() {
         super('ThatTweetDB');
 
@@ -36,7 +39,32 @@ export class ThatTweetDB extends Dexie {
             users: 'id, handle, name',
             embeddings: 'tweetId, modelId, updatedAt'
         });
+
+        // Version 3: 添加图谱关系表和标签映射表 (Connections Feature)
+        this.version(3).stores({
+            tweets: 'id, authorId, savedAt, aiStatus, imageProcessStatus, isBookmarked, *tags',
+            users: 'id, handle, name',
+            embeddings: 'tweetId, modelId, updatedAt',
+            graphEdges: '++id, source, target, type, [source+target+type], createdAt',
+            tagMappings: 'originalTag, updatedAt'
+        });
     }
+}
+
+export interface GraphEdge {
+    id?: number;
+    source: string;       // 起点ID (tweetId, userId, tag)
+    target: string;       // 终点ID
+    type: 'reply' | 'quote' | 'author' | 'tag' | 'mention' | 'similarity';
+    weight: number;       // 边的权重/引力
+    createdAt: number;    // 创建时间，用于计算时间衰减
+}
+
+export interface TagMapping {
+    originalTag: string;  // 原始标签 (主键)
+    mappedTag: string;    // 归一化后的标准标签
+    confidence: number;   // AI 置信度
+    updatedAt: number;
 }
 
 export const db = new ThatTweetDB();
