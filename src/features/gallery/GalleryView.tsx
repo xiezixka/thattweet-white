@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useTweets } from '../../shared/hooks/useTweets';
 import { useUIStore } from '../../shared/store/useUIStore';
 import { normalizeTwitterImage } from '../../shared/utils/image';
-import { Search, Filter, Hash, User, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Image as ImageIcon, Loader2, User, Hash, ChevronDown } from 'lucide-react';
 import { cn } from '../../shared/utils/cn';
 import { UserCache } from '../../shared/types/tweet';
 import { useTranslation } from '../../shared/hooks/useTranslation';
@@ -16,41 +16,72 @@ export const GalleryView: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
+    const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+    const [authorSearch, setAuthorSearch] = useState('');
+    const filterPanelRef = useRef<HTMLDivElement>(null);
+
+    // Close filter panel when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+                setIsFilterPanelOpen(false);
+            }
+        };
+        if (isFilterPanelOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isFilterPanelOpen]);
 
     // 1. 提取所有包含媒体的推文
     const mediaTweets = useMemo(() => {
         return tweets.filter(t => t.media && t.media.length > 0);
     }, [tweets]);
 
-    // 2. 提取筛选选项 (作者和标签) - 基于所有媒体推文
+    // 2. 提取筛选选项 (作者和标签) - 基于所有媒体推文，带数量统计
     const filters = useMemo(() => {
-        const authors = new Map<string, UserCache>();
-        const tags = new Set<string>();
+        const authorCounts = new Map<string, { data: UserCache; count: number }>();
+        const tagCounts = new Map<string, number>();
 
         mediaTweets.forEach(t => {
+            // 统计作者
             if (t.author) {
                 const authorData = typeof t.author === 'object'
                     ? t.author
                     : { id: t.authorId, name: t.authorName || 'User', handle: t.author as string, avatar: t.authorAvatarUrl || '', updatedAt: 0 } as UserCache;
 
-                // 确保有 ID
                 const id = authorData.id || t.authorId || 'unknown';
-                authors.set(id, { ...authorData, id });
+                const existing = authorCounts.get(id);
+                if (existing) {
+                    existing.count += t.media.length;
+                } else {
+                    authorCounts.set(id, { data: { ...authorData, id }, count: t.media.length });
+                }
             }
-            // 收集标签
-            t.tags?.forEach(tag => tags.add(tag));
-            t.aiTags?.forEach(tag => tags.add(tag));
+            // 统计标签
+            t.tags?.forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + t.media.length));
+            t.aiTags?.forEach(tag => tagCounts.set(tag, (tagCounts.get(tag) || 0) + t.media.length));
         });
 
-        // 排序作者：按媒体数量多少排序？暂时按名字
-        const authorList = Array.from(authors.values()).sort((a, b) => a.name.localeCompare(b.name));
-        const tagList = Array.from(tags).sort();
+        // 按数量排序
+        const authorList = Array.from(authorCounts.values())
+            .sort((a, b) => b.count - a.count);
+        const tagList = Array.from(tagCounts.entries())
+            .map(([tag, count]) => ({ tag, count }))
+            .sort((a, b) => b.count - a.count);
 
-        return {
-            authors: authorList,
-            tags: tagList
-        };
+        return { authors: authorList, tags: tagList };
     }, [mediaTweets]);
+
+    // Filter authors for search in panel
+    const filteredAuthors = useMemo(() => {
+        if (!authorSearch) return filters.authors;
+        const q = authorSearch.toLowerCase();
+        return filters.authors.filter(a =>
+            a.data.name.toLowerCase().includes(q) ||
+            a.data.handle?.toLowerCase().includes(q)
+        );
+    }, [filters.authors, authorSearch]);
 
     // 3. 执行过滤
     const filteredTweets = useMemo(() => {
@@ -94,7 +125,7 @@ export const GalleryView: React.FC = () => {
     const allMediaForLightbox = useMemo(() => flatGalleryItems.map(i => i.media), [flatGalleryItems]);
     const allAnalysisForLightbox = useMemo(() => flatGalleryItems.map(i => i.analysis || {}), [flatGalleryItems]);
 
-    // 虚拟滚动优化（简化版：限制显示数量）
+    // 虚拟滚动
     const [displayLimit, setDisplayLimit] = useState(50);
     const loadMoreRef = useRef<HTMLDivElement>(null);
     const displayedItems = useMemo(() => flatGalleryItems.slice(0, displayLimit), [flatGalleryItems, displayLimit]);
@@ -111,141 +142,263 @@ export const GalleryView: React.FC = () => {
         return () => observer.disconnect();
     }, [displayedItems.length, flatGalleryItems.length]);
 
+    // Helper to get selected author/tag display name
+    const selectedAuthorData = useMemo(() =>
+        filters.authors.find(a => a.data.id === selectedAuthor)?.data
+        , [filters.authors, selectedAuthor]);
 
-    // 布局说明：
-    // 使用 columns CSS 属性实现真正的 Masonry 瀑布流
-    // 图片高度自适应 (h-auto)
-    // break-inside-avoid 防止图片被切断
+    const activeFilterCount = (selectedAuthor ? 1 : 0) + (selectedTag ? 1 : 0);
+
+    const clearAllFilters = () => {
+        setSelectedAuthor(null);
+        setSelectedTag(null);
+        setSearchQuery('');
+    };
 
     return (
-        <div className="w-full min-h-screen flex flex-col p-4 lg:p-8">
-            {/* Header */}
-            <header className="relative w-full flex flex-col md:flex-row items-start md:items-center justify-between mb-8 px-2 gap-4">
-                <div className="shrink-0">
-                    <h1 className="text-3xl font-black bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent italic tracking-tight flex items-center gap-3">
-                        {t('nav_gallery')}
-                        <span className="text-sm font-bold text-zinc-600 bg-zinc-800/50 px-2 py-0.5 rounded-full not-italic tracking-normal">{flatGalleryItems.length}</span>
-                    </h1>
+        <div className="w-full min-h-screen flex flex-col">
+            {/* Compact Header */}
+            <header className="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5 px-4 lg:px-8 py-4">
+                <div className="flex items-center justify-between gap-4">
+                    {/* Title & Count */}
+                    <div className="flex items-center gap-3 shrink-0">
+                        <h1 className="text-2xl font-black bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent italic tracking-tight">
+                            {t('nav_gallery')}
+                        </h1>
+                        <span className="text-xs font-bold text-zinc-500 bg-zinc-800/60 px-2 py-1 rounded-full">
+                            {flatGalleryItems.length}
+                        </span>
+                    </div>
+
+                    {/* Search & Filter Controls */}
+                    <div className="flex items-center gap-3 flex-1 justify-end max-w-xl">
+                        {/* Search */}
+                        <div className="relative flex-1 max-w-xs">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+                            <input
+                                type="text"
+                                placeholder="搜索..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-zinc-900/60 border border-white/5 rounded-xl pl-10 pr-8 py-2 text-sm text-zinc-200 focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30 placeholder:text-zinc-600 transition-all"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Filter Toggle Button */}
+                        <div className="relative" ref={filterPanelRef}>
+                            <button
+                                onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+                                className={cn(
+                                    "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-sm font-medium",
+                                    isFilterPanelOpen || activeFilterCount > 0
+                                        ? "bg-brand/10 border-brand/30 text-brand"
+                                        : "bg-zinc-900/60 border-white/5 text-zinc-400 hover:text-white hover:border-white/10"
+                                )}
+                            >
+                                <SlidersHorizontal size={16} />
+                                <span className="hidden sm:inline">筛选</span>
+                                {activeFilterCount > 0 && (
+                                    <span className="w-5 h-5 flex items-center justify-center rounded-full bg-brand text-[10px] font-black text-white">
+                                        {activeFilterCount}
+                                    </span>
+                                )}
+                                <ChevronDown size={14} className={cn("transition-transform", isFilterPanelOpen && "rotate-180")} />
+                            </button>
+
+                            {/* Filter Panel Dropdown */}
+                            {isFilterPanelOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-zinc-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                                    {/* Panel Header */}
+                                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                                        <span className="text-sm font-bold text-white">筛选条件</span>
+                                        {activeFilterCount > 0 && (
+                                            <button
+                                                onClick={clearAllFilters}
+                                                className="text-[11px] font-medium text-zinc-500 hover:text-red-400 transition-colors"
+                                            >
+                                                清除全部
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Authors Section */}
+                                    <div className="p-4 border-b border-white/5">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <User size={14} className="text-zinc-500" />
+                                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">来源 / 作者</span>
+                                        </div>
+
+                                        {/* Author Search */}
+                                        {filters.authors.length > 8 && (
+                                            <div className="relative mb-3">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600" size={12} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="搜索作者..."
+                                                    value={authorSearch}
+                                                    onChange={(e) => setAuthorSearch(e.target.value)}
+                                                    className="w-full bg-zinc-800/50 border border-white/5 rounded-lg pl-8 pr-3 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-brand/30 placeholder:text-zinc-600"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Author List */}
+                                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto no-scrollbar">
+                                            {filteredAuthors.slice(0, 20).map(({ data: author, count }) => (
+                                                <button
+                                                    key={author.id}
+                                                    onClick={() => {
+                                                        setSelectedAuthor(selectedAuthor === author.id ? null : author.id);
+                                                    }}
+                                                    className={cn(
+                                                        "flex items-center gap-1.5 pl-0.5 pr-2 py-0.5 rounded-full border transition-all select-none text-[11px]",
+                                                        selectedAuthor === author.id
+                                                            ? "bg-brand/20 border-brand/40 text-white ring-1 ring-brand/20"
+                                                            : "bg-zinc-800/50 border-zinc-700/50 text-zinc-400 hover:bg-zinc-700/50 hover:text-zinc-200"
+                                                    )}
+                                                >
+                                                    <div className="w-4 h-4 rounded-full overflow-hidden shrink-0">
+                                                        <img
+                                                            src={normalizeTwitterImage(author.avatar, 'avatar')}
+                                                            alt={author.name}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => e.currentTarget.src = 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'}
+                                                        />
+                                                    </div>
+                                                    <span className="max-w-[80px] truncate">{author.name}</span>
+                                                    <span className="text-zinc-600 font-medium">({count})</span>
+                                                </button>
+                                            ))}
+                                            {filteredAuthors.length === 0 && (
+                                                <span className="text-xs text-zinc-600">无匹配作者</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Tags Section */}
+                                    <div className="p-4">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Hash size={14} className="text-zinc-500" />
+                                            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">标签</span>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar">
+                                            {filters.tags.slice(0, 30).map(({ tag, count }) => (
+                                                <button
+                                                    key={tag}
+                                                    onClick={() => {
+                                                        setSelectedTag(selectedTag === tag ? null : tag);
+                                                    }}
+                                                    className={cn(
+                                                        "px-2 py-1 rounded-lg text-[11px] font-medium transition-colors select-none border",
+                                                        selectedTag === tag
+                                                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                                                            : "bg-zinc-800/50 border-zinc-700/50 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600"
+                                                    )}
+                                                >
+                                                    #{tag} <span className="text-zinc-600">({count})</span>
+                                                </button>
+                                            ))}
+                                            {filters.tags.length === 0 && (
+                                                <span className="text-xs text-zinc-600">暂无标签</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
-                {/* Toolbar */}
-                <div className="flex-1 w-full md:w-auto flex flex-col md:flex-row items-center gap-4 justify-end">
+                {/* Active Filters Chips */}
+                {(selectedAuthor || selectedTag) && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-white/5">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mr-1">已选:</span>
 
-                    {/* Search */}
-                    <div className="relative w-full md:max-w-xs">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
-                        <input
-                            type="text"
-                            placeholder="搜索视觉内容..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-zinc-900/50 border border-white/10 rounded-xl pl-10 pr-8 py-2 text-sm text-zinc-200 focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/50 placeholder:text-zinc-600 transition-all"
-                        />
-                        {searchQuery && (
+                        {selectedAuthorData && (
                             <button
-                                onClick={() => setSearchQuery('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                                onClick={() => setSelectedAuthor(null)}
+                                className="flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs font-medium group hover:bg-brand/20 transition-colors"
                             >
-                                <X size={14} />
+                                <div className="w-4 h-4 rounded-full overflow-hidden">
+                                    <img src={normalizeTwitterImage(selectedAuthorData.avatar, 'avatar')} className="w-full h-full object-cover" />
+                                </div>
+                                <span>@{selectedAuthorData.handle}</span>
+                                <X size={12} className="opacity-50 group-hover:opacity-100" />
+                            </button>
+                        )}
+
+                        {selectedTag && (
+                            <button
+                                onClick={() => setSelectedTag(null)}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium group hover:bg-emerald-500/20 transition-colors"
+                            >
+                                <span>#{selectedTag}</span>
+                                <X size={12} className="opacity-50 group-hover:opacity-100" />
                             </button>
                         )}
                     </div>
-                </div>
+                )}
             </header>
 
-            {/* Filters Bar */}
-            <div className="flex flex-col gap-4 mb-6 px-2">
-                {/* Author Filters */}
-                {filters.authors.length > 0 && (
-                    <div className="w-full overflow-x-auto no-scrollbar pb-2">
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest shrink-0 mr-2">来源</span>
-                            {filters.authors.map(author => (
-                                <button
-                                    key={author.id}
-                                    onClick={() => setSelectedAuthor(selectedAuthor === author.id ? null : author.id)}
-                                    className={cn(
-                                        "flex items-center gap-1.5 pl-0.5 pr-2 py-0.5 rounded-full border transition-all shrink-0 select-none",
-                                        selectedAuthor === author.id
-                                            ? "bg-brand/20 border-brand/30 text-zinc-100 ring-1 ring-brand/20"
-                                            : "bg-white/5 border-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
-                                    )}
-                                >
-                                    <div className="w-5 h-5 rounded-full overflow-hidden shrink-0">
-                                        <img
-                                            src={normalizeTwitterImage(author.avatar, 'avatar')}
-                                            alt={author.name}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => e.currentTarget.src = 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'}
-                                        />
-                                    </div>
-                                    <span className="text-[11px] font-medium max-w-[100px] truncate">{author.name}</span>
-                                </button>
-                            ))}
+            {/* Gallery Grid */}
+            <div className="flex-1 p-4 lg:p-6">
+                {loading ? (
+                    <div className="flex-1 flex items-center justify-center min-h-[400px]">
+                        <Loader2 className="animate-spin text-zinc-700" size={32} />
+                    </div>
+                ) : flatGalleryItems.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed border-white/5 rounded-3xl">
+                        <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mb-4">
+                            <ImageIcon className="text-zinc-700" size={32} />
                         </div>
+                        <p className="text-zinc-500 font-medium">
+                            {activeFilterCount > 0 ? '没有匹配的图片' : '暂无视觉内容'}
+                        </p>
+                        <p className="text-zinc-700 text-sm mt-1">
+                            {activeFilterCount > 0 ? '尝试调整筛选条件' : '尝试捕捉一些带图片的推文吧'}
+                        </p>
+                        {activeFilterCount > 0 && (
+                            <button
+                                onClick={clearAllFilters}
+                                className="mt-4 px-4 py-2 rounded-xl bg-brand/10 border border-brand/20 text-brand text-sm font-medium hover:bg-brand/20 transition-colors"
+                            >
+                                清除筛选
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-4 select-none space-y-4">
+                        {displayedItems.map((item, index) => {
+                            const { media, tweet } = item;
+
+                            return (
+                                <GalleryGridItem
+                                    key={`${tweet.id}-${item.originalIndex}-${index}`}
+                                    media={media}
+                                    tweet={tweet}
+                                    index={index}
+                                    onClick={() => openLightbox(allMediaForLightbox, index, allAnalysisForLightbox, 'clean')}
+                                />
+                            );
+                        })}
                     </div>
                 )}
 
-                {/* Tag Filters */}
-                {filters.tags.length > 0 && (
-                    <div className="w-full overflow-x-auto no-scrollbar pb-2">
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest shrink-0 mr-2 self-center">标签</span>
-                            {filters.tags.map(tag => (
-                                <button
-                                    key={tag}
-                                    onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                                    className={cn(
-                                        "px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors shrink-0 select-none border",
-                                        selectedTag === tag
-                                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                                            : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
-                                    )}
-                                >
-                                    #{tag}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Gallery Grid - CSS Masonry */}
-            {loading ? (
-                <div className="flex-1 flex items-center justify-center min-h-[400px]">
-                    <Loader2 className="animate-spin text-zinc-700" size={32} />
+                {/* Footer Loader */}
+                <div ref={loadMoreRef} className="h-20 w-full flex items-center justify-center">
+                    {displayedItems.length < flatGalleryItems.length && (
+                        <Loader2 className="animate-spin text-zinc-800" size={20} />
+                    )}
                 </div>
-            ) : flatGalleryItems.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed border-white/5 rounded-3xl m-2">
-                    <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mb-4">
-                        <ImageIcon className="text-zinc-700" size={32} />
-                    </div>
-                    <p className="text-zinc-500 font-medium">暂无视觉内容</p>
-                    <p className="text-zinc-700 text-sm mt-1">尝试捕捉一些带图片的推文吧</p>
-                </div>
-            ) : (
-                <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-4 px-2 select-none space-y-4">
-                    {displayedItems.map((item, index) => {
-                        const { media, tweet } = item;
-
-                        return (
-                            <GalleryGridItem
-                                key={`${tweet.id}-${item.originalIndex}-${index}`}
-                                media={media}
-                                tweet={tweet}
-                                index={index}
-                                onClick={() => openLightbox(allMediaForLightbox, index, allAnalysisForLightbox, 'clean')}
-                            />
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Footer Loader */}
-            <div ref={loadMoreRef} className="h-20 w-full flex items-center justify-center">
-                {displayedItems.length < flatGalleryItems.length && (
-                    <Loader2 className="animate-spin text-zinc-800" size={20} />
-                )}
             </div>
         </div>
     );
