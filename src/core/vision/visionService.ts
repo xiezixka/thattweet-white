@@ -470,6 +470,8 @@ export class VisionService {
                                 || item['差异化描述']
                                 || '';
 
+                            const highlights = item.highlights || item['亮点'] || '';
+
                             const ocr = item.ocr
                                 || item['高精度 OCR']
                                 || item['OCR']
@@ -478,9 +480,14 @@ export class VisionService {
 
                             const typeInfo = item.type || item['类型'] || '';
 
+                            // 组合描述：类型 + 描述 + 亮点
+                            let fullDesc = desc;
+                            if (typeInfo) fullDesc = `[${typeInfo}] ${fullDesc}`;
+                            if (highlights) fullDesc += `\n✨ ${highlights}`;
+
                             return {
                                 ocr: typeof ocr === 'string' ? ocr : '',
-                                description: typeInfo ? `[${typeInfo}] ${desc}` : desc
+                                description: fullDesc
                             };
                         };
 
