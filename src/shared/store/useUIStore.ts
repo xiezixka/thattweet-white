@@ -2,13 +2,14 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { MediaItem } from '../types/tweet';
 
-export type ViewType = 'feed' | 'intelligence' | 'analytics' | 'stats' | 'settings';
+export type ViewType = 'feed' | 'intelligence' | 'gallery' | 'analytics' | 'stats' | 'settings';
 
 interface LightboxState {
     media: MediaItem[];
     analysis?: Array<{ ocr?: string; description?: string }>;
     index: number;
     isOpen: boolean;
+    mode?: 'default' | 'clean';
 }
 
 interface UIState {
@@ -24,7 +25,8 @@ interface UIState {
     openLightbox: (
         media: MediaItem[],
         index: number,
-        analysis?: Array<{ ocr?: string; description?: string }>
+        analysis?: Array<{ ocr?: string; description?: string }>,
+        mode?: 'default' | 'clean'
     ) => void;
     closeLightbox: () => void;
     setLightboxIndex: (index: number) => void;
@@ -46,8 +48,8 @@ export const useUIStore = create<UIState>()(
                 index: 0,
                 isOpen: false,
             },
-            openLightbox: (media, index, analysis) => set({
-                lightbox: { media, index, analysis, isOpen: true }
+            openLightbox: (media, index, analysis, mode = 'default') => set({
+                lightbox: { media, index, analysis, isOpen: true, mode }
             }),
             closeLightbox: () => set((state) => ({
                 lightbox: { ...state.lightbox, isOpen: false }

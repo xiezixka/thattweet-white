@@ -1,18 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useUIStore } from '../store/useUIStore';
 import { createPortal } from 'react-dom';
-import { Sparkles, FileText, Loader2, RefreshCw, X, Copy, Check } from 'lucide-react';
+import { Sparkles, Loader2, X, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * 🛠️ 极简媒体预览组件 (Minimalistic Lightbox)
- * 全程滚动切换，无多余 UI 干扰。
+ * 单图直接显示模式，点哪张显示哪张。
  */
 export const MediaLightbox: React.FC = () => {
     const { lightbox, closeLightbox, setLightboxIndex } = useUIStore();
     const { isOpen, media, index, analysis } = lightbox;
-    const scrollRef = useRef<HTMLDivElement>(null);
-    const lastWheelTime = useRef<number>(0);
     const [copied, setCopied] = React.useState(false);
     const [provider, setProvider] = React.useState<string>('SiliconFlow');
     const { t } = useTranslation();
@@ -33,239 +31,235 @@ export const MediaLightbox: React.FC = () => {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // 同步滚动位置到当前 index
-    useEffect(() => {
-        if (isOpen && scrollRef.current) {
-            const container = scrollRef.current;
-            const targetLeft = index * container.clientWidth;
-            // 只有当偏差较大时才强制同步，避免与手势滚动冲突
-            if (Math.abs(container.scrollLeft - targetLeft) > 10) {
-                container.scrollTo({
-                    left: targetLeft,
-                    behavior: 'smooth'
-                });
-            }
+    // 键盘导航
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        if (!isOpen) return;
+
+        if (e.key === 'Escape') {
+            closeLightbox();
+        } else if (e.key === 'ArrowLeft' && index > 0) {
+            setLightboxIndex(index - 1);
+            setCopied(false);
+        } else if (e.key === 'ArrowRight' && index < media.length - 1) {
+            setLightboxIndex(index + 1);
+            setCopied(false);
         }
-    }, [isOpen, index]);
+    }, [isOpen, index, media.length, closeLightbox, setLightboxIndex]);
 
-    const handleWheel = (e: React.WheelEvent) => {
-        e.stopPropagation();
+    useEffect(() => {
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleKeyDown]);
 
-        const now = Date.now();
-        if (now - lastWheelTime.current < 400) return; // 400ms 频率限制，防止飞快翻页
+    const goToPrev = () => {
+        if (index > 0) {
+            setLightboxIndex(index - 1);
+            setCopied(false);
+        }
+    };
 
-        if (Math.abs(e.deltaY) > 30) {
-            if (e.deltaY > 0 && index < media.length - 1) {
-                setLightboxIndex(index + 1);
-                lastWheelTime.current = now;
-            } else if (e.deltaY < 0 && index > 0) {
-                setLightboxIndex(index - 1);
-                lastWheelTime.current = now;
-            }
+    const goToNext = () => {
+        if (index < media.length - 1) {
+            setLightboxIndex(index + 1);
+            setCopied(false);
         }
     };
 
     if (!isOpen || !media.length) return null;
 
+    const currentItem = media[index];
+    const currentAnalysis = analysis?.[index];
+
     return createPortal(
         <div
-            className="fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-950/80 backdrop-blur-3xl animate-in fade-in duration-500 ease-out"
-            onWheel={handleWheel}
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-950/90 backdrop-blur-2xl animate-in fade-in duration-300 ease-out"
+            onClick={closeLightbox}
         >
             {/* Close Button Top Right */}
             <button
                 onClick={closeLightbox}
-                className="absolute top-8 right-8 z-[10001] p-3 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all active:scale-95 group"
+                className="absolute top-6 right-6 z-[10001] p-3 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all active:scale-95 group"
             >
                 <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
 
-            {/* Ambient Background Glow */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none" onClick={closeLightbox}>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120vw] h-[120vh] bg-[radial-gradient(circle_at_center,rgba(29,155,240,0.08)_0%,transparent_70%)]" />
-                <div className="absolute inset-0 bg-white/[0.01] pointer-events-none" /> {/* Micro-grain hint */}
-            </div>
-            {/* Main Layout Container */}
-            <div className="relative w-full h-full flex flex-col md:flex-row overflow-hidden">
-                {/* 1. Scroll Container (Focus Area) */}
-                <div
-                    className="flex-1 h-full relative overflow-hidden"
-                >
-                    <div
-                        ref={scrollRef}
-                        className="w-full h-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
-                        onScroll={(e) => {
-                            const container = e.currentTarget;
-                            const newIndex = Math.round(container.scrollLeft / container.clientWidth);
-                            if (newIndex !== index) {
-                                setLightboxIndex(newIndex);
-                                setCopied(false);
-                            }
-                        }}
-                    >
-                        {media.map((item, i) => (
-                            <div
-                                key={i}
-                                className="flex-none w-full h-full flex items-center justify-center snap-center relative p-8 md:p-16"
-                                onClick={closeLightbox}
-                            >
-                                <div
-                                    className="relative group/media max-w-full max-h-full flex items-center justify-center perspective-1000 transition-transform duration-700 ease-out hover:scale-[1.01]"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    {/* Soft Glow Backdrop for Image */}
-                                    <div className="absolute -inset-16 bg-brand/5 blur-[120px] rounded-full opacity-30 pointer-events-none" />
+            {/* Navigation Arrows */}
+            {media.length > 1 && (
+                <>
+                    {index > 0 && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); goToPrev(); }}
+                            className="absolute left-6 top-1/2 -translate-y-1/2 z-[10001] p-4 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all active:scale-95"
+                        >
+                            <ChevronLeft size={28} />
+                        </button>
+                    )}
+                    {index < media.length - 1 && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); goToNext(); }}
+                            className="absolute right-6 top-1/2 -translate-y-1/2 z-[10001] p-4 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl transition-all active:scale-95"
+                        >
+                            <ChevronRight size={28} />
+                        </button>
+                    )}
+                </>
+            )}
 
-                                    {item.type === 'video' || item.type === 'gif' ? (
-                                        <video
-                                            src={item.url?.startsWith('blob:') ? '' : item.url}
-                                            poster={item.previewUrl}
-                                            controls
-                                            autoPlay={!item.url?.startsWith('blob:')}
-                                            loop={item.type === 'gif'}
-                                            muted={item.type === 'gif'}
-                                            playsInline
-                                            className="relative max-w-full max-h-[80vh] rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-white/5 object-contain z-10 select-none bg-black/40"
-                                            onError={(e) => {
-                                                // 如果视频加载失败 (比如 URL 失效)，尝试降级显示封面图
-                                                const target = e.currentTarget;
-                                                target.style.display = 'none';
-                                                const img = document.createElement('img');
-                                                img.src = item.previewUrl || '';
-                                                img.className = target.className;
-                                                target.parentElement?.appendChild(img);
-                                            }}
-                                        />
-                                    ) : (
-                                        <img
-                                            src={item.url.includes('pbs.twimg.com') ? `${item.url.split('?')[0]}?format=jpg&name=large` : item.url}
-                                            alt={`Media ${i + 1}`}
-                                            className="relative max-w-full max-h-[80vh] object-contain rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-white/5 select-none z-10"
-                                            referrerPolicy="no-referrer"
-                                        />
+            {/* Main Content Container */}
+            <div className="relative w-full h-full flex flex-col md:flex-row overflow-hidden">
+
+                {/* Image Display Area - Click outside image to close */}
+                <div className="flex-1 h-full flex items-center justify-center p-8 md:p-16" onClick={closeLightbox}>
+                    <div className="relative max-w-full max-h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+                        {/* Soft Glow Backdrop */}
+                        <div className="absolute -inset-16 bg-brand/5 blur-[120px] rounded-full opacity-30 pointer-events-none" />
+
+                        {currentItem.type === 'video' || currentItem.type === 'gif' ? (
+                            <video
+                                key={index}
+                                src={currentItem.url?.startsWith('blob:') ? '' : currentItem.url}
+                                poster={currentItem.previewUrl}
+                                controls
+                                autoPlay={!currentItem.url?.startsWith('blob:')}
+                                loop={currentItem.type === 'gif'}
+                                muted={currentItem.type === 'gif'}
+                                playsInline
+                                className="relative max-w-full max-h-[85vh] rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-white/5 object-contain z-10 select-none bg-black/40"
+                                onError={(e) => {
+                                    const target = e.currentTarget;
+                                    target.style.display = 'none';
+                                    const img = document.createElement('img');
+                                    img.src = currentItem.previewUrl || '';
+                                    img.className = target.className;
+                                    target.parentElement?.appendChild(img);
+                                }}
+                            />
+                        ) : (
+                            <img
+                                key={index}
+                                src={currentItem.url.includes('pbs.twimg.com') ? `${currentItem.url.split('?')[0]}?format=jpg&name=large` : currentItem.url}
+                                alt={`Media ${index + 1}`}
+                                className="relative max-w-full max-h-[85vh] object-contain rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border border-white/5 select-none z-10"
+                                referrerPolicy="no-referrer"
+                            />
+                        )}
+                    </div>
+                </div>
+
+                {/* Sidebar (Desktop Only) - Hide in clean mode */}
+                {lightbox.mode !== 'clean' && (
+                    <div
+                        className="hidden md:flex flex-col w-[420px] h-full bg-zinc-950/40 backdrop-blur-3xl border-l border-white/5 z-20"
+                    >
+                        {/* Sidebar Header */}
+                        <div className="p-8 pb-4 border-b border-white/5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand">
+                                    <Sparkles size={20} />
+                                </div>
+                                <div>
+                                    <div className="text-[10px] font-black text-brand uppercase tracking-[0.2em] leading-none mb-1">Intelligence</div>
+                                    <div className="text-sm font-bold text-white/90 uppercase tracking-tight">AI Insights</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content Scrollable Area */}
+                        <div className="flex-1 overflow-y-auto no-scrollbar p-8">
+                            {currentAnalysis && (currentAnalysis.description || currentAnalysis.ocr) ? (
+                                <div key={index} className="space-y-12 animate-in fade-in duration-500">
+                                    {/* Vision Section */}
+                                    {currentAnalysis.description && (
+                                        <section>
+                                            <div className="text-[11px] font-bold text-white/30 uppercase tracking-[0.1em] mb-4">Vision context</div>
+                                            <p className="text-zinc-100 text-[17px] leading-relaxed font-medium tracking-tight">
+                                                {currentAnalysis.description}
+                                            </p>
+                                        </section>
+                                    )}
+
+                                    {/* OCR Section */}
+                                    {currentAnalysis.ocr && (
+                                        <section>
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="text-[11px] font-bold text-white/30 uppercase tracking-[0.1em]">Extracted text</div>
+                                                <button
+                                                    onClick={() => handleCopyOcr(currentAnalysis.ocr!)}
+                                                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"
+                                                >
+                                                    {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                                                    {copied ? 'Copied' : 'Copy'}
+                                                </button>
+                                            </div>
+                                            <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 shadow-inner">
+                                                <p className="text-zinc-400 text-sm font-mono whitespace-pre-wrap leading-relaxed selection:bg-brand/30">
+                                                    {currentAnalysis.ocr}
+                                                </p>
+                                            </div>
+                                        </section>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center opacity-20 text-center space-y-4">
+                                    <div className="w-12 h-12 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
+                                        <Loader2 size={20} className="animate-spin duration-[3s]" />
+                                    </div>
+                                    <div className="text-[11px] font-bold uppercase tracking-widest text-white/40">Analyzing media...</div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sidebar Footer */}
+                        <div className="p-6 border-t border-white/5 bg-black/20">
+                            <div className="flex items-center justify-between opacity-20 select-none">
+                                <div className="text-[9px] font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-brand" />
+                                    Model: {provider} VLM
+                                </div>
+                                <div className="text-[9px] font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <Check size={10} />
+                                    Safe Search
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Mobile Adaptive Drawer - Hide in clean mode */}
+                {lightbox.mode !== 'clean' && (
+                    <div className="md:hidden p-6 absolute bottom-0 left-0 right-0 z-30">
+                        {currentAnalysis && (
+                            <div className="p-6 bg-zinc-950/90 backdrop-blur-2xl border border-white/10 rounded-[32px] max-h-[40vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 duration-500">
+                                <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-6" />
+                                <div className="space-y-6">
+                                    {currentAnalysis.description && (
+                                        <div>
+                                            <div className="text-[10px] font-bold text-brand uppercase tracking-widest mb-2">Vision</div>
+                                            <p className="text-zinc-100 text-sm leading-relaxed">{currentAnalysis.description}</p>
+                                        </div>
+                                    )}
+                                    {currentAnalysis.ocr && (
+                                        <div className="pt-6 border-t border-white/5">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">OCR</div>
+                                                <button onClick={() => handleCopyOcr(currentAnalysis.ocr!)} className="text-[10px] font-bold text-zinc-400 uppercase">Copy</button>
+                                            </div>
+                                            <p className="text-zinc-400 text-xs font-mono bg-black/40 p-3 rounded-xl">{currentAnalysis.ocr}</p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-
-                    {/* Bottom Indicator Dots (Inside Scroll Container Area) */}
-                    {media.length > 1 && (
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 bg-white/5 backdrop-blur-md border border-white/10 rounded-full pointer-events-none z-20">
-                            {media.map((_, i) => (
-                                <div
-                                    key={i}
-                                    className={`h-1.5 rounded-full transition-all duration-300 ${i === index ? 'w-6 bg-white' : 'w-1.5 bg-white/20'}`}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* 2. Persistent Intelligence Sidebar (Desktop Only) */}
-                <div
-                    className="hidden md:flex flex-col w-[420px] h-full bg-zinc-950/40 backdrop-blur-3xl border-l border-white/5 z-20 transition-all duration-500"
-                    onClick={e => e.stopPropagation()}
-                >
-                    {/* Sidebar Header - Always Visible */}
-                    <div className="p-8 pb-4 border-b border-white/5">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand">
-                                <Sparkles size={20} />
-                            </div>
-                            <div>
-                                <div className="text-[10px] font-black text-brand uppercase tracking-[0.2em] leading-none mb-1">Intelligence</div>
-                                <div className="text-sm font-bold text-white/90 uppercase tracking-tight">AI Insights</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Content Scrollable Area */}
-                    <div className="flex-1 overflow-y-auto no-scrollbar p-8">
-                        {analysis && analysis[index] && (analysis[index].description || analysis[index].ocr) ? (
-                            <div key={index} className="space-y-12 animate-in fade-in duration-500">
-                                {/* Vision Section */}
-                                {analysis[index]?.description && (
-                                    <section>
-                                        <div className="text-[11px] font-bold text-white/30 uppercase tracking-[0.1em] mb-4">Vision context</div>
-                                        <p className="text-zinc-100 text-[17px] leading-relaxed font-medium tracking-tight">
-                                            {analysis[index].description}
-                                        </p>
-                                    </section>
-                                )}
-
-                                {/* OCR Section */}
-                                {analysis[index]?.ocr && (
-                                    <section>
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="text-[11px] font-bold text-white/30 uppercase tracking-[0.1em]">Extracted text</div>
-                                            <button
-                                                onClick={() => handleCopyOcr(analysis[index].ocr!)}
-                                                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"
-                                            >
-                                                {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                                                {copied ? 'Copied' : 'Copy'}
-                                            </button>
-                                        </div>
-                                        <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/5 shadow-inner">
-                                            <p className="text-zinc-400 text-sm font-mono whitespace-pre-wrap leading-relaxed selection:bg-brand/30">
-                                                {analysis[index].ocr}
-                                            </p>
-                                        </div>
-                                    </section>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center opacity-20 text-center space-y-4">
-                                <div className="w-12 h-12 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
-                                    <Loader2 size={20} className="animate-spin duration-[3s]" />
-                                </div>
-                                <div className="text-[11px] font-bold uppercase tracking-widest text-white/40">Analyzing media...</div>
-                            </div>
                         )}
                     </div>
-
-                    {/* Sidebar Footer */}
-                    <div className="p-6 border-t border-white/5 bg-black/20">
-                        <div className="flex items-center justify-between opacity-20 select-none">
-                            <div className="text-[9px] font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-brand" />
-                                Model: {provider} VLM
-                            </div>
-                            <div className="text-[9px] font-bold text-white uppercase tracking-[0.2em] flex items-center gap-2">
-                                <Check size={10} />
-                                Safe Search
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* 3. Mobile Adaptive Drawer */}
-                <div className="md:hidden p-6 absolute bottom-0 left-0 right-0 z-30" onClick={e => e.stopPropagation()}>
-                    {analysis && analysis[index] && (
-                        <div className="p-6 bg-zinc-950/90 backdrop-blur-2xl border border-white/10 rounded-[32px] max-h-[40vh] overflow-y-auto shadow-[0_-20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 duration-500">
-                            <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mb-6" />
-                            <div className="space-y-6">
-                                {analysis[index].description && (
-                                    <div>
-                                        <div className="text-[10px] font-bold text-brand uppercase tracking-widest mb-2">Vision</div>
-                                        <p className="text-zinc-100 text-sm leading-relaxed">{analysis[index].description}</p>
-                                    </div>
-                                )}
-                                {analysis[index].ocr && (
-                                    <div className="pt-6 border-t border-white/5">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">OCR</div>
-                                            <button onClick={() => handleCopyOcr(analysis[index].ocr!)} className="text-[10px] font-bold text-zinc-400 uppercase">Copy</button>
-                                        </div>
-                                        <p className="text-zinc-400 text-xs font-mono bg-black/40 p-3 rounded-xl">{analysis[index].ocr}</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                )}
             </div>
+
+            {/* Bottom Page Indicator */}
+            {media.length > 1 && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[10001] px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-xs font-bold text-white tracking-widest leading-none">
+                    {index + 1} <span className="text-white/30 mx-1">/</span> {media.length}
+                </div>
+            )}
 
         </div>,
         document.body

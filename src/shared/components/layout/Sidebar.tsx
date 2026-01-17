@@ -4,7 +4,8 @@ import {
     BrainCircuit,
     BarChart3,
     LineChart,
-    Settings2
+    Settings2,
+    Image as ImageIcon
 } from 'lucide-react';
 import { useUIStore, ViewType } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -31,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false, isPinned 
         { id: 'stats', icon: BarChart3, label: t('nav_stats') },
         { id: 'analytics', icon: LineChart, label: t('nav_analytics') },
         { id: 'intelligence', icon: BrainCircuit, label: t('nav_intelligence') },
+        { id: 'gallery', icon: ImageIcon, label: t('nav_gallery') },
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];
 
