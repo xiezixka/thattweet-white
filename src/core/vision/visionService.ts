@@ -79,7 +79,7 @@ export class VisionService {
             let allBase64: string[] = [];
             let imageToTweetMap: Array<{ tweetId: string; localIndex: number }> = [];
 
-            const MAX_TOTAL_IMAGES = 10; // OpenRouter/Nvidia Hard Limit
+            const MAX_TOTAL_IMAGES = 6; // Most free VLM models limit to 6 images per request
 
             for (const tweet of tweets) {
                 const imageUrls = tweet.media
@@ -232,6 +232,22 @@ export class VisionService {
                     max_tokens: 4096
                 };
 
+                // Debug: Log request structure (excluding base64 for brevity)
+                const debugBody = {
+                    ...body,
+                    messages: body.messages.map((m: any) => ({
+                        role: m.role,
+                        content: typeof m.content === 'string'
+                            ? m.content.substring(0, 100) + '...'
+                            : Array.isArray(m.content)
+                                ? m.content.map((c: any) => c.type === 'image_url'
+                                    ? { type: 'image_url', image_url: { url: c.image_url?.url?.substring(0, 50) + '... (base64)', detail: c.image_url?.detail } }
+                                    : c)
+                                : m.content
+                    }))
+                };
+                console.log(`[VisionService] Request Body Structure:`, JSON.stringify(debugBody, null, 2));
+
                 console.log(`[VisionService] Fetching from ${url}...`);
                 const response = await fetch(url, {
                     method: 'POST',
@@ -266,13 +282,28 @@ export class VisionService {
 
                 // If still no content, check for error messages in the response
                 if (!rawContent && data.error) {
-                    console.error('[VisionService] API returned error:', data.error);
+                    console.error('[VisionService] API returned error in response body:', data.error);
                     const code = data.error.code;
-                    // Handle retriable errors (502, 503, 429) as BUSY
-                    if (code === 502 || code === 503 || code === 429 || (data.error.message && data.error.message.includes('busy'))) {
+                    const message = data.error.message || '';
+
+                    // Handle retriable errors:
+                    // - HTTP codes: 502 (Bad Gateway), 503 (Service Unavailable), 429 (Rate Limit)
+                    // - Message patterns: "busy", "Network connection lost", "timeout", "overloaded"
+                    const isRetriable =
+                        code === 502 ||
+                        code === 503 ||
+                        code === 429 ||
+                        message.toLowerCase().includes('busy') ||
+                        message.toLowerCase().includes('network connection') ||
+                        message.toLowerCase().includes('timeout') ||
+                        message.toLowerCase().includes('overload') ||
+                        message.toLowerCase().includes('unavailable');
+
+                    if (isRetriable) {
+                        console.warn('[VisionService] Retriable error detected. Returning BUSY for retry later.');
                         return 'BUSY';
                     }
-                    throw new Error(`API error: ${data.error.message || JSON.stringify(data.error)}`);
+                    throw new Error(`API error: ${message || JSON.stringify(data.error)}`);
                 }
 
                 console.log(`[VisionService] Raw VLM Response Content:`, rawContent);
@@ -299,25 +330,50 @@ export class VisionService {
 
                     jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
 
+                    // 0. 反转义：某些模型会多余地转义引号 (\" -> ")
+                    // 检测特征：如果 JSON 里包含 \" 但不包含正常的 " (除了开头和结尾)
+                    if (jsonStr.includes('\\"') && !jsonStr.slice(1, -1).includes('"')) {
+                        console.log('[VisionService] Detected double-escaped JSON, unescaping...');
+                        jsonStr = jsonStr.replace(/\\"/g, '"');
+                    }
+                    // 另一种情况：整个内容都是转义的
+                    if (jsonStr.startsWith('{') && jsonStr.includes('\\"')) {
+                        // 尝试替换所有 \" 为 "，但保护已经正确的结构
+                        const testUnescaped = jsonStr.replace(/\\"/g, '"');
+                        try {
+                            JSON.parse(testUnescaped);
+                            jsonStr = testUnescaped;
+                            console.log('[VisionService] Unescaped double-escaped quotes successfully');
+                        } catch {
+                            // 如果反转义后仍然无法解析，保持原样
+                        }
+                    }
+
                     // 1. 基础清理：移除常见的 JSON 污染（如 Markdown 代码块标记在内部被误切）
                     // 已经在 substring 处理过了，主要是处理内部内容
 
+                    // 1b. 移除 BOM 和其他不可见字符（可能在 JSON 开头）
+                    let cleanedJson = jsonStr.replace(/^\uFEFF/, ''); // Remove BOM
+                    cleanedJson = cleanedJson.replace(/^\s+/, ''); // Remove leading whitespace
+                    cleanedJson = cleanedJson.trim();
+
                     // 2. 移除尾随逗号 (Trailing Commas)
-                    let cleanedJson = jsonStr.replace(/,\s*([\]}])/g, '$1');
+                    cleanedJson = cleanedJson.replace(/,\s*([\]}])/g, '$1');
 
                     // 3. 移除单行/多行注释 (有些模型喜欢在 JSON 里写注释)
                     cleanedJson = cleanedJson.replace(/\/\/.*$/gm, '');
                     cleanedJson = cleanedJson.replace(/\/\*[\s\S]*?\*\//g, '');
 
-                    // 4. 修复控制字符 (Bad control character)
-                    // 模型在 OCR 提取时常在字符串中直接输出真实换行符或制表符，这在 JSON 字符串中是非法的
-                    // 我们通过正则锁定所有引号内的内容，并将这些物理控制字符转换为转义形式
+                    // 4. 修复字符串内的控制字符 (Bad control character)
+                    // 只处理引号内的内容，因为 JSON 结构本身可以有换行符
                     cleanedJson = cleanedJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/gs, (match, content) => {
-                        return `"${content
+                        // 替换字符串值内的真实换行符为转义形式
+                        const cleaned = content
                             .replace(/\n/g, '\\n')
                             .replace(/\r/g, '\\r')
                             .replace(/\t/g, '\\t')
-                            .replace(/[\x00-\x1F]/g, '')}"`;
+                            .replace(/[\x00-\x1F]/g, ''); // 移除其他控制字符
+                        return `"${cleaned}"`;
                     });
 
                     // 5. 修复引号内未转义的双引号
@@ -334,7 +390,126 @@ export class VisionService {
                         parsed = { [actualId]: parsed.tweet_id };
                     }
 
-                    return parsed;
+                    // 7. ID 重映射：检查返回的 ID 是否与实际 Tweet ID 匹配
+                    // 如果不匹配，按顺序将结果映射到实际的 Tweet ID
+                    const parsedKeys = Object.keys(parsed);
+                    const actualIds = tweets.map(t => t.id);
+                    const hasMatchingIds = parsedKeys.some(k => actualIds.includes(k));
+
+                    // 检测是否使用了通用键名如 "Tweet 1", "Tweet 2", "image1", "Tweet_1" 等
+                    const isGenericKeys = parsedKeys.some(k =>
+                        /^(tweet|image|img|图片|推文)[_\s]*\d+$/i.test(k.trim())
+                    );
+
+                    // 过滤掉特殊键如 "多图集成"
+                    const analysisKeys = parsedKeys.filter(k =>
+                        !['多图集成', 'overall_summary', 'summary'].includes(k)
+                    );
+
+                    if ((!hasMatchingIds || isGenericKeys) && analysisKeys.length > 0) {
+                        console.warn('[VisionService] Model returned incorrect/generic IDs. Remapping...');
+                        console.log('[VisionService] Analysis keys:', analysisKeys, 'Actual IDs:', actualIds);
+
+                        // 按键名中的数字排序
+                        const sortedKeys = [...analysisKeys].sort((a, b) => {
+                            const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+                            const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+                            return numA - numB;
+                        });
+
+                        const remapped: any = {};
+
+                        // 特殊情况：如果只有 1 个 Tweet 但有多个分析结果，说明是多图分析
+                        // 应该将所有结果合并到这个 Tweet 的 details 数组里
+                        if (actualIds.length === 1 && sortedKeys.length > 1) {
+                            console.log('[VisionService] Single tweet with multiple image analyses, merging...');
+                            const singleTweetId = actualIds[0];
+
+                            // 合并多图集成的总结（如果有）
+                            const overallSummary = parsed['多图集成'] || parsed['overall_summary'] || '';
+
+                            remapped[singleTweetId] = {
+                                overall: overallSummary || '',
+                                details: sortedKeys.map(key => parsed[key])
+                            };
+                        } else {
+                            // 正常情况：多个 Tweet，按顺序映射
+                            sortedKeys.forEach((fakeId, index) => {
+                                if (index < actualIds.length) {
+                                    remapped[actualIds[index]] = parsed[fakeId];
+                                }
+                            });
+                        }
+                        parsed = remapped;
+                    }
+
+                    // 8. 格式标准化：确保每个结果都有 overall 和 details 结构
+                    const normalized: any = {};
+                    for (const [tweetId, value] of Object.entries(parsed)) {
+                        let data: any = value;
+
+                        // 如果值是字符串（嵌套 JSON），尝试解析
+                        if (typeof value === 'string') {
+                            try {
+                                data = JSON.parse(value);
+                            } catch {
+                                // 如果解析失败，将原始字符串作为 overall
+                                data = { overall: value };
+                            }
+                        }
+
+                        // 辅助函数：标准化单个分析结果为 {ocr, description} 格式
+                        const normalizeDetail = (item: any): { ocr: string; description: string } => {
+                            if (typeof item === 'string') {
+                                return { ocr: '', description: item };
+                            }
+
+                            const desc = item.depth_insight
+                                || item['深度洞察']
+                                || item.description
+                                || item['差异化描述']
+                                || '';
+
+                            const ocr = item.ocr
+                                || item['高精度 OCR']
+                                || item['OCR']
+                                || (Array.isArray(item.key_elements) ? item.key_elements.join('\n') : '')
+                                || '';
+
+                            const typeInfo = item.type || item['类型'] || '';
+
+                            return {
+                                ocr: typeof ocr === 'string' ? ocr : '',
+                                description: typeInfo ? `[${typeInfo}] ${desc}` : desc
+                            };
+                        };
+
+                        // 标准化结构
+                        if (data.overall !== undefined && Array.isArray(data.details)) {
+                            // 已经有 overall 和 details 结构，只需标准化 details 内容
+                            normalized[tweetId] = {
+                                overall: data.overall,
+                                details: data.details.map(normalizeDetail)
+                            };
+                        } else if (data.overall && data.details) {
+                            // details 不是数组的情况
+                            normalized[tweetId] = {
+                                overall: data.overall,
+                                details: [normalizeDetail(data.details)]
+                            };
+                        } else {
+                            // 转换为标准格式 - 支持多种字段名（英文和中文）
+                            const detail = normalizeDetail(data);
+
+                            normalized[tweetId] = {
+                                overall: detail.description,
+                                details: [detail]
+                            };
+                        }
+                    }
+
+                    console.log('[VisionService] Normalized result:', normalized);
+                    return normalized;
                 } catch (e: any) {
                     console.warn('[VisionService] Failed to parse JSON. Error:', e.message);
 
@@ -352,44 +527,81 @@ export class VisionService {
 
                     console.log('[VisionService] Raw content for debugging:', rawContent);
 
-                    // 最后的挣扎：更加鲁棒的正则恢复 + 终极截断兜底
+                    // 最后的挣扎：更加鲁棒的正则恢复
                     try {
                         console.log('[VisionService] Attempting improved emergency regex recovery...');
-                        const recovered: any = {};
-                        const hasGenericKey = rawContent.includes('"tweet_id"');
 
-                        tweets.forEach(t => {
-                            const key = (hasGenericKey && tweets.length === 1) ? 'tweet_id' : t.id;
+                        // 尝试提取所有顶层 JSON 对象，无论键名是什么
+                        // 匹配模式: "ANY_KEY": { ... } （非贪婪，匹配到下一个顶层对象的开始）
+                        const objectPattern = /"([^"]+)"\s*:\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g;
+                        const extractedObjects: Array<{ key: string; content: string }> = [];
+                        let objMatch;
 
-                            // 尝试抓取 overall
-                            const overallMatch = rawContent.match(new RegExp(`"${key}"\\s*:\\s*{\\s*"overall"\\s*:\\s*"([^"]+)"`, 'i'));
+                        while ((objMatch = objectPattern.exec(rawContent)) !== null) {
+                            const key = objMatch[1];
+                            const content = objMatch[2];
+                            // 过滤掉明显的特殊键
+                            if (!['集成洞察', '多图集成', 'overall_summary'].includes(key)) {
+                                extractedObjects.push({ key, content });
+                            }
+                        }
 
-                            if (overallMatch) {
-                                const details: any[] = [];
-                                // 简单的正则抓取 OCR 和 Description 对
-                                const detailRegex = /\{\s*"ocr"\s*:\s*"([^"]+)"\s*,\s*"description"\s*:\s*"([^"]+)"\s*\}/gi;
-                                let m;
-                                while ((m = detailRegex.exec(rawContent)) !== null) {
-                                    details.push({
-                                        ocr: m[1].replace(/\\n/g, '\n'),
-                                        description: m[2].replace(/\\n/g, '\n')
-                                    });
-                                }
-                                recovered[t.id] = {
-                                    overall: overallMatch[1].replace(/\\n/g, '\n'),
-                                    details: details.length > 0 ? details : []
+                        console.log('[VisionService] Extracted objects:', extractedObjects.length, 'for', tweets.length, 'tweets');
+
+                        if (extractedObjects.length > 0) {
+                            const recovered: any = {};
+
+                            // 如果只有一个推文但多个分析对象，合并为一个
+                            if (tweets.length === 1 && extractedObjects.length >= 1) {
+                                const details = extractedObjects.map(obj => {
+                                    // 提取中文字段
+                                    const descMatch = obj.content.match(/"(?:深度洞察|差异化描述|description)"\s*:\s*"([^"]+)"/);
+                                    const ocrMatch = obj.content.match(/"(?:高精度 OCR|OCR|ocr)"\s*:\s*"([^"]*)"/);
+                                    const typeMatch = obj.content.match(/"(?:类型|type)"\s*:\s*"([^"]+)"/);
+
+                                    const desc = descMatch?.[1]?.replace(/\\n/g, '\n') || '';
+                                    const typeInfo = typeMatch?.[1] || '';
+
+                                    return {
+                                        ocr: ocrMatch?.[1]?.replace(/\\n/g, '\n') || '',
+                                        description: typeInfo ? `[${typeInfo}] ${desc}` : desc
+                                    };
+                                });
+
+                                // 尝试提取集成洞察作为 overall
+                                const overallMatch = rawContent.match(/"(?:集成洞察|多图集成|overall_summary)"\s*:\s*"([^"]+)"/);
+
+                                recovered[tweets[0].id] = {
+                                    overall: overallMatch?.[1]?.replace(/\\n/g, '\n') || details[0]?.description || '',
+                                    details
                                 };
                             } else {
-                                // 最终兜底：如果连正则都抓不到，直接截断原文作为描述
-                                console.warn(`[VisionService] No regex match for ${t.id}, using raw content truncation.`);
-                                recovered[t.id] = {
-                                    overall: rawContent.substring(0, 500).replace(/["{}]/g, '') + '... (解析失败，保留原文片段)',
-                                    details: []
-                                };
-                            }
-                        });
+                                // 多个推文，按顺序映射
+                                extractedObjects.forEach((obj, index) => {
+                                    if (index < tweets.length) {
+                                        const descMatch = obj.content.match(/"(?:深度洞察|差异化描述|description)"\s*:\s*"([^"]+)"/);
+                                        const ocrMatch = obj.content.match(/"(?:高精度 OCR|OCR|ocr)"\s*:\s*"([^"]*)"/);
+                                        const typeMatch = obj.content.match(/"(?:类型|type)"\s*:\s*"([^"]+)"/);
 
-                        if (Object.keys(recovered).length > 0) return recovered;
+                                        const desc = descMatch?.[1]?.replace(/\\n/g, '\n') || '';
+                                        const typeInfo = typeMatch?.[1] || '';
+
+                                        recovered[tweets[index].id] = {
+                                            overall: typeInfo ? `[${typeInfo}] ${desc}` : desc,
+                                            details: [{
+                                                ocr: ocrMatch?.[1]?.replace(/\\n/g, '\n') || '',
+                                                description: desc
+                                            }]
+                                        };
+                                    }
+                                });
+                            }
+
+                            if (Object.keys(recovered).length > 0) {
+                                console.log('[VisionService] Emergency recovery successful:', recovered);
+                                return recovered;
+                            }
+                        }
                     } catch (recoveryError) {
                         console.error('[VisionService] Recovery failed:', recoveryError);
                     }
@@ -424,16 +636,41 @@ export class VisionService {
                 ? `${url}?format=jpg&name=medium`
                 : url;
 
+            console.log(`[VisionService] Fetching image: ${processedUrl.substring(0, 80)}...`);
             const response = await fetch(processedUrl);
-            if (!response.ok) return null;
+            if (!response.ok) {
+                console.warn(`[VisionService] Image fetch failed: ${response.status}`);
+                return null;
+            }
             const blob = await response.blob();
+            console.log(`[VisionService] Image blob: type=${blob.type}, size=${blob.size} bytes`);
+
             return new Promise((resolve) => {
                 const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = () => resolve(null);
+                reader.onloadend = () => {
+                    const result = reader.result as string;
+                    // Validate the data URI format
+                    if (result && result.startsWith('data:')) {
+                        const mimeMatch = result.match(/^data:([^;]+);base64,/);
+                        if (mimeMatch) {
+                            console.log(`[VisionService] Valid data URI: mime=${mimeMatch[1]}, length=${result.length} chars`);
+                        } else {
+                            console.warn(`[VisionService] Invalid data URI format: ${result.substring(0, 50)}`);
+                        }
+                        resolve(result);
+                    } else {
+                        console.warn(`[VisionService] FileReader result is not a data URI`);
+                        resolve(null);
+                    }
+                };
+                reader.onerror = () => {
+                    console.error(`[VisionService] FileReader error`);
+                    resolve(null);
+                };
                 reader.readAsDataURL(blob);
             });
-        } catch {
+        } catch (err) {
+            console.error(`[VisionService] Image fetch error:`, err);
             return null;
         }
     }

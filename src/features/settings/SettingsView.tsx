@@ -4,7 +4,7 @@ import {
     RefreshCw, Search, Settings, Sparkles, Terminal,
     X, Plus, Zap, ChevronDown, Check, ScanFace, BookOpen, AlertCircle, Loader2,
     BrainCircuit, HardDrive, Info, Sliders, PlayCircle, PauseCircle, Fingerprint, FolderOpen,
-    Download, Upload
+    Download, Upload, Save
 } from 'lucide-react';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { cn } from '../../shared/utils/cn';
@@ -55,10 +55,12 @@ export const SettingsView: React.FC = () => {
     const [activeGroup, setActiveGroup] = useState<SettingsGroup>('neural');
     const [status, setStatus] = useState('');
     const [newTag, setNewTag] = useState('');
+    const [isDirty, setIsDirty] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const [includeSettings, setIncludeSettings] = useState(false);
+    const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Initial Load & Migration
     useEffect(() => {
@@ -97,7 +99,23 @@ export const SettingsView: React.FC = () => {
     const handleChange = (key: keyof AISettings, value: any) => {
         const newSettings = { ...settings, [key]: value };
         updateSettings(newSettings);
-        handleSave(newSettings);
+        setIsDirty(true);
+        setStatus('UNSAVED');
+
+        // Auto-save after 5 seconds of inactivity
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
+        autoSaveTimeoutRef.current = setTimeout(() => {
+            handleSave(newSettings);
+        }, 5000);
+    };
+
+    const handleManualSave = () => {
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
+        handleSave(settings);
     };
 
     const handleBrowseFolder = () => {
@@ -179,7 +197,8 @@ export const SettingsView: React.FC = () => {
         setStatus('SAVING...');
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.set({ aiSettings: newSettings }, () => {
-                setTimeout(() => setStatus('SAVED'), 500);
+                setIsDirty(false);
+                setTimeout(() => setStatus('SAVED'), 300);
                 setTimeout(() => setStatus(''), 2000);
             });
         }
@@ -226,10 +245,35 @@ export const SettingsView: React.FC = () => {
                     ))}
                 </nav>
 
-                <div className="p-6">
+                <div className="p-6 space-y-4">
+                    {/* Save Button */}
+                    <button
+                        onClick={handleManualSave}
+                        className={cn(
+                            "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300",
+                            isDirty
+                                ? "bg-white text-black hover:bg-zinc-200 shadow-lg shadow-white/20"
+                                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 border border-white/5"
+                        )}
+                    >
+                        <Save size={14} />
+                        {isDirty ? 'Save Changes' : 'All Saved'}
+                    </button>
+
+                    {/* Status Indicator */}
                     <div className="flex items-center justify-between px-2">
-                        <span className="text-[11px] font-mono text-zinc-600">{status || 'READY'}</span>
-                        <div className={cn("w-1.5 h-1.5 rounded-full", status ? "bg-white animate-pulse" : "bg-zinc-800")} />
+                        <span className={cn(
+                            "text-[11px] font-mono transition-colors",
+                            status === 'UNSAVED' ? "text-amber-500" : status === 'SAVED' ? "text-emerald-500" : "text-zinc-600"
+                        )}>
+                            {status || 'READY'}
+                        </span>
+                        <div className={cn(
+                            "w-1.5 h-1.5 rounded-full transition-colors",
+                            status === 'UNSAVED' ? "bg-amber-500 animate-pulse" :
+                                status === 'SAVING...' ? "bg-white animate-pulse" :
+                                    status === 'SAVED' ? "bg-emerald-500" : "bg-zinc-800"
+                        )} />
                     </div>
                 </div>
             </aside>
