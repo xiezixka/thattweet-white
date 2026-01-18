@@ -8,6 +8,7 @@ import { useUIStore } from '../../shared/store/useUIStore';
 import { Heart, RefreshCw } from 'lucide-react';
 
 import { GraphSettingsPanel, GraphSettings } from './components/GraphSettingsPanel';
+import { GraphSearch } from './components/GraphSearch';
 
 const ConnectionsView: React.FC = () => {
     const { data, loading } = useGraphData();
@@ -425,6 +426,38 @@ const ConnectionsView: React.FC = () => {
                 </div>
             </div>
 
+            {/* 🔍 搜索框 - 左上角，标题下方 */}
+            <div className="absolute top-24 left-8 z-20 pointer-events-auto">
+                <GraphSearch
+                    nodes={filteredData.nodes}
+                    onSelect={(node) => {
+                        // 锁定节点并显示侧边栏
+                        setLockedNode(node);
+                        setHoverNode(node);
+
+                        // 平滑导航到节点（不会闪凸脸）
+                        if (fgRef.current) {
+                            if (settings.is3D) {
+                                // 3D: 使用合适的距离，避免穿过节点
+                                const distance = 400;
+                                const distRatio = 1 + distance / Math.hypot(node.x || 0, node.y || 0, node.z || 0);
+                                fgRef.current.cameraPosition(
+                                    { x: (node.x || 0) * distRatio, y: (node.y || 0) * distRatio, z: (node.z || 0) * distRatio },
+                                    node,
+                                    1000
+                                );
+                            } else {
+                                // 2D: 只居中，不暴力缩放
+                                fgRef.current.centerAt(node.x, node.y, 800);
+                                if (fgRef.current.zoom() < 1.5) {
+                                    fgRef.current.zoom(1.5, 800);
+                                }
+                            }
+                        }
+                    }}
+                />
+            </div>
+
             {/* 控制面板 */}
             <GraphSettingsPanel settings={settings} onUpdate={handleSettingUpdate} />
 
@@ -535,7 +568,15 @@ const ConnectionsView: React.FC = () => {
                                             };
                                         }
 
-                                        const material = new THREE.SpriteMaterial({ map: texture });
+                                        // 🌟 聚焦模式：计算透明度
+                                        const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
+                                        const opacity = (lockedNode && !isHighlighted) ? 0.6 : 1.0;
+
+                                        const material = new THREE.SpriteMaterial({
+                                            map: texture,
+                                            transparent: true,
+                                            opacity: opacity
+                                        });
                                         const sprite = new THREE.Sprite(material);
                                         const size = (Math.sqrt(node.val || 1) * 3) + 10;
                                         sprite.scale.set(size, size, 1);
@@ -573,10 +614,15 @@ const ConnectionsView: React.FC = () => {
                                         glowTextureCache.current.set(color, texture);
                                     }
 
+                                    // 🌟 聚焦模式：计算透明度
+                                    const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
+                                    const focusOpacity = (lockedNode && !isHighlighted) ? 0.6 : 1.0;
+
                                     const material = new THREE.SpriteMaterial({
                                         map: texture,
                                         transparent: true,
-                                        blending: THREE.AdditiveBlending, // 🌟 叠加混合模式，通过缓存重用极大提升性能
+                                        opacity: focusOpacity,
+                                        blending: THREE.AdditiveBlending, // 🌟 叠加混合模式
                                         depthWrite: false // 防止遮挡
                                     });
                                     const sprite = new THREE.Sprite(material);
@@ -666,6 +712,11 @@ const ConnectionsView: React.FC = () => {
                                     let dimFactor = animState?.opacity ?? 1;
                                     const glowIntensity = animState?.glow ?? 0;
 
+                                    // 🌟 聚焦模式：锁定节点后，非关联节点透明度降低
+                                    if (lockedNode && !isHighlighted) {
+                                        dimFactor *= 0.6;
+                                    }
+
                                     // 🌟 时间流光 (Temporal Flow)
                                     let temporalPulse = 0;
                                     if (settings.temporalEvolution && node.type === 'tweet' && node.data?.createdAt) {
@@ -719,8 +770,21 @@ const ConnectionsView: React.FC = () => {
 
                                         ctx.globalAlpha = dimFactor;
 
-                                        // 🌟 强效头像加载逻辑
-                                        if (node.__imgObj !== 'error') {
+                                        // 🌟 LoD 分级显示：根据缩放级别决定渲染方式
+                                        const useSimplified = globalScale < 0.5;
+
+                                        if (useSimplified) {
+                                            // 🌟 简化模式：首字母 + 背景色
+                                            ctx.fillStyle = '#1e3a5f'; // 蓝灰色背景
+                                            ctx.fill();
+                                            ctx.fillStyle = '#60a5fa'; // 蓝色文字
+                                            ctx.font = `bold ${Math.max(8, size * 0.5)}px sans-serif`;
+                                            ctx.textAlign = 'center';
+                                            ctx.textBaseline = 'middle';
+                                            const initial = (node.data?.name || node.label || '?').charAt(0).toUpperCase();
+                                            ctx.fillText(initial, x, y);
+                                        } else if (node.__imgObj !== 'error') {
+                                            // 🌟 完整模式：加载头像
                                             if (!node.__imgObj) {
                                                 const img = new Image();
                                                 img.crossOrigin = "anonymous";

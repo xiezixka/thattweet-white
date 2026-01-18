@@ -70,7 +70,21 @@ export function useGraphData() {
 
             const tweetMap = new Map(tweets.map(t => [t.id, t]));
 
-            // 5. 构建最终节点
+            // 🌟 5. 统计每个用户的推文数和总互动量
+            const userStats = new Map<string, { tweetCount: number; totalEngagement: number }>();
+            tweets.forEach(t => {
+                const authorId = getCanonicalId(t.authorId);
+                if (!authorId) return;
+
+                const existing = userStats.get(authorId) || { tweetCount: 0, totalEngagement: 0 };
+                existing.tweetCount += 1;
+                existing.totalEngagement += Number(t.favoriteCount || 0)
+                    + Number(t.retweetCount || 0) * 2
+                    + Number(t.replyCount || 0) * 3;
+                userStats.set(authorId, existing);
+            });
+
+            // 6. 构建最终节点
             const nodeMap = new Map<string, any>();
 
             // Helper: 添加或更新节点权重
@@ -87,14 +101,19 @@ export function useGraphData() {
                     // 填充数据并计算权重
                     if (type === 'user') {
                         const u = userMap.get(id);
+                        const stats = userStats.get(id) || { tweetCount: 0, totalEngagement: 0 };
+
                         label = u ? (u.name || u.handle) : id;
                         img = u?.avatar;
                         color = '#ffffff';
-                        data = u || {};
+                        data = { ...u, stats }; // 附加统计数据
 
-                        // 🌟 用户权重: 10 + 粉丝量的对数加成
+                        // 🌟 用户权重: 基础 + 粉丝量 + 推文数 + 互动量
                         const followers = Number(u?.followersCount || 0);
-                        val = 10 + (Math.log10(followers + 1) * 5);
+                        val = 8                                           // 基础大小
+                            + (Math.log10(followers + 1) * 2)             // 粉丝量 (对数)
+                            + (Math.sqrt(stats.tweetCount) * 4)           // 推文数 (开方)
+                            + (Math.sqrt(stats.totalEngagement / 100) * 3); // 互动量 (开方, 归一化)
                     } else if (type === 'tweet') {
                         const t = tweetMap.get(id);
                         label = t ? (t.text?.slice(0, 40)) : 'Dead Link';
