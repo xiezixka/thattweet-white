@@ -65,7 +65,7 @@ const ConnectionsView: React.FC = () => {
         showTweets: true,
         showTags: true,
         highlightDepth: 2,     // 高亮层级
-        is3D: false,
+        is3D: true,  // 默认 3D 模式
         clusterByTopic: false,
         temporalEvolution: false,
     });
@@ -540,13 +540,13 @@ const ConnectionsView: React.FC = () => {
                                                 if (ctx) {
                                                     ctx.clearRect(0, 0, 128, 128);
 
-                                                    // 绘制发光光圈
+                                                    // 绘制柔和光圈 (降低亮度)
                                                     ctx.save();
-                                                    ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
-                                                    ctx.shadowBlur = 10;
+                                                    ctx.shadowColor = 'rgba(255, 255, 255, 0.25)'; // 降低发光强度
+                                                    ctx.shadowBlur = 6; // 降低模糊半径
                                                     ctx.beginPath();
                                                     ctx.arc(64, 64, 60, 0, Math.PI * 2);
-                                                    ctx.fillStyle = '#000';
+                                                    ctx.fillStyle = '#0a0a0a'; // 稍亮的黑色底色
                                                     ctx.fill();
                                                     ctx.restore();
 
@@ -557,9 +557,9 @@ const ConnectionsView: React.FC = () => {
                                                     ctx.clip();
                                                     ctx.drawImage(img, 0, 0, 128, 128);
 
-                                                    // 绘制边框
-                                                    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-                                                    ctx.lineWidth = 4;
+                                                    // 绘制边框 (降低亮度)
+                                                    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; // 降低边框亮度
+                                                    ctx.lineWidth = 2; // 细边框
                                                     ctx.stroke();
                                                     ctx.restore();
 
@@ -575,10 +575,16 @@ const ConnectionsView: React.FC = () => {
                                         const material = new THREE.SpriteMaterial({
                                             map: texture,
                                             transparent: true,
-                                            opacity: opacity
+                                            opacity: opacity,
+                                            depthWrite: false, // 🛡️ 防止 Z-fighting 闪烁
+                                            depthTest: true,
+                                            sizeAttenuation: true
                                         });
                                         const sprite = new THREE.Sprite(material);
-                                        const size = (Math.sqrt(node.val || 1) * 3) + 10;
+
+                                        // 🛡️ 限制最大尺寸，避免过大的头像过亮
+                                        const baseSize = (Math.sqrt(node.val || 1) * 3) + 10;
+                                        const size = Math.min(baseSize, 60); // 最大60
                                         sprite.scale.set(size, size, 1);
                                         return sprite;
                                     }
@@ -771,7 +777,8 @@ const ConnectionsView: React.FC = () => {
                                         ctx.globalAlpha = dimFactor;
 
                                         // 🌟 LoD 分级显示：根据缩放级别决定渲染方式
-                                        const useSimplified = globalScale < 0.5;
+                                        // 只在非常缩小的情况下才切换到简化模式
+                                        const useSimplified = globalScale < 0.15;
 
                                         if (useSimplified) {
                                             // 🌟 简化模式：首字母 + 背景色
