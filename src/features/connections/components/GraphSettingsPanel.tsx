@@ -14,6 +14,9 @@ export interface GraphSettings {
     showTweets: boolean;
     showTags: boolean;
     highlightDepth: number; // 高亮时搜索的层级深度
+    is3D: boolean;
+    clusterByTopic: boolean;
+    temporalEvolution: boolean;
 }
 
 interface Props {
@@ -181,6 +184,27 @@ export const GraphSettingsPanel: React.FC<Props> = ({ settings, onUpdate }) => {
                         onChange={(v: number) => onUpdate('highlightDepth', v)}
                     />
                     <div className="text-[10px] text-zinc-500 -mt-2 mb-2">点击节点后高亮显示 {settings.highlightDepth} 层相邻节点</div>
+
+                    <div className="pt-2 border-t border-white/5 space-y-1">
+                        <Toggle
+                            label="3D 空间模式"
+                            checked={settings.is3D}
+                            onChange={(v: boolean) => onUpdate('is3D', v)}
+                            color="bg-indigo-600"
+                        />
+                        <Toggle
+                            label="主题聚类"
+                            checked={settings.clusterByTopic}
+                            onChange={(v: boolean) => onUpdate('clusterByTopic', v)}
+                            color="bg-emerald-600"
+                        />
+                        <Toggle
+                            label="时间流光"
+                            checked={settings.temporalEvolution}
+                            onChange={(v: boolean) => onUpdate('temporalEvolution', v)}
+                            color="bg-orange-600"
+                        />
+                    </div>
                 </Section>
             </div>
         </div>

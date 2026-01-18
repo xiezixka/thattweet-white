@@ -146,7 +146,8 @@ export function useGraphData() {
                 .map(e => ({
                     source: getCanonicalId(e.source),
                     target: getCanonicalId(e.target),
-                    value: e.weight
+                    value: e.weight,
+                    linkType: e.type // 🌟 传递关系类型
                 }))
                 .filter(l => l.source !== l.target); // 再次过滤自环
 
