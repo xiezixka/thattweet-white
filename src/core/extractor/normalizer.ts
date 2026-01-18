@@ -68,6 +68,24 @@ export const Normalizer = {
         const tweetId = tweetNode.rest_id ?? legacy.id_str;
         if (!tweetId) return null;
 
+        // 🛡️ 广告过滤 (API 拦截版)
+        // GraphQL 响应中广告推文通常有这些标记
+        if (
+            tweetNode.promotedMetadata ||
+            tweetNode.promoted_metadata ||
+            node.promotedMetadata ||
+            node.promoted_metadata ||
+            tweetNode.advertiserInfo ||
+            tweetNode.advertiser_info ||
+            node.itemContent?.promotedMetadata ||
+            node.entryId?.startsWith('promoted-') ||
+            node.entryId?.startsWith('promotedTweet-') ||
+            legacy?.promoted_content
+        ) {
+            console.log(`[ThatTweet] Skipped promoted tweet: ${tweetId}`);
+            return null;
+        }
+
         // --- 作者信息提取 (对齐旧版) ---
         const userResult = tweetNode.core?.user_results?.result ?? tweetNode.core?.user;
         const userLegacy = userResult?.legacy ?? userResult;
