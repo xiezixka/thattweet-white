@@ -13,6 +13,7 @@ export interface GraphSettings {
     showUsers: boolean;
     showTweets: boolean;
     showTags: boolean;
+    highlightDepth: number; // 高亮时搜索的层级深度
 }
 
 interface Props {
@@ -105,7 +106,7 @@ export const GraphSettingsPanel: React.FC<Props> = ({ settings, onUpdate }) => {
             <div className="flex items-center justify-between p-3 border-b border-white/10 bg-white/5 rounded-t-xl">
                 <span className="text-xs font-bold text-zinc-300 flex items-center gap-2">
                     <Settings2 size={14} />
-                    GRAPH CONTROLS
+                    图谱控制
                 </span>
                 <button
                     onClick={() => setIsExpanded(false)}
@@ -116,64 +117,70 @@ export const GraphSettingsPanel: React.FC<Props> = ({ settings, onUpdate }) => {
             </div>
 
             <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
-                {/* Filters */}
-                <Section title="Filters" icon={Filter}>
+                {/* 筛选 */}
+                <Section title="筛选" icon={Filter}>
                     <Toggle
-                        label="Users"
+                        label="用户"
                         checked={settings.showUsers}
                         onChange={(v: boolean) => onUpdate('showUsers', v)}
                         color="bg-blue-600"
                     />
                     <Toggle
-                        label="Tweets"
+                        label="推文"
                         checked={settings.showTweets}
                         onChange={(v: boolean) => onUpdate('showTweets', v)}
                         color="bg-zinc-600"
                     />
                     <Toggle
-                        label="Topics / Tags"
+                        label="标签/话题"
                         checked={settings.showTags}
                         onChange={(v: boolean) => onUpdate('showTags', v)}
                         color="bg-purple-600"
                     />
                 </Section>
 
-                {/* Forces */}
-                <Section title="Forces" icon={Activity}>
+                {/* 力场 */}
+                <Section title="力场" icon={Activity}>
                     <Slider
-                        label="Repel Force"
-                        value={settings.repelForce} min={0} max={500} step={10}
+                        label="排斥力"
+                        value={settings.repelForce} min={0} max={200} step={5}
                         onChange={(v: number) => onUpdate('repelForce', v)}
                     />
                     <Slider
-                        label="Link Distance"
-                        value={settings.linkDistance} min={0} max={200} step={5}
+                        label="连接距离"
+                        value={settings.linkDistance} min={5} max={100} step={5}
                         onChange={(v: number) => onUpdate('linkDistance', v)}
                     />
                     <Slider
-                        label="Center Force"
-                        value={settings.centerForce} min={0} max={1} step={0.01}
+                        label="中心引力"
+                        value={settings.centerForce} min={0} max={1} step={0.05}
                         onChange={(v: number) => onUpdate('centerForce', v)}
                     />
                 </Section>
 
-                {/* Display */}
-                <Section title="Display" icon={Eye}>
+                {/* 显示 */}
+                <Section title="显示" icon={Eye}>
                     <Slider
-                        label="Node Scale"
+                        label="节点缩放"
                         value={settings.nodeScale} min={0.1} max={3} step={0.1}
                         onChange={(v: number) => onUpdate('nodeScale', v)}
                     />
                     <Slider
-                        label="Link Thickness"
+                        label="连线粗细"
                         value={settings.linkWidth} min={0} max={5} step={0.1}
                         onChange={(v: number) => onUpdate('linkWidth', v)}
                     />
                     <Slider
-                        label="Particle Size"
+                        label="粒子大小"
                         value={settings.particleWidth} min={0} max={5} step={0.5}
                         onChange={(v: number) => onUpdate('particleWidth', v)}
                     />
+                    <Slider
+                        label="高亮层级"
+                        value={settings.highlightDepth} min={0} max={5} step={1}
+                        onChange={(v: number) => onUpdate('highlightDepth', v)}
+                    />
+                    <div className="text-[10px] text-zinc-500 -mt-2 mb-2">点击节点后高亮显示 {settings.highlightDepth} 层相邻节点</div>
                 </Section>
             </div>
         </div>

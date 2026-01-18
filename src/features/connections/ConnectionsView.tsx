@@ -1,5 +1,6 @@
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { forceX, forceY } from 'd3-force';
 import { useGraphData } from './hooks/useGraphData';
 import { useUIStore } from '../../shared/store/useUIStore';
 import { Heart, RefreshCw } from 'lucide-react';
@@ -20,17 +21,18 @@ const ConnectionsView: React.FC = () => {
     const [refreshCount, setRefreshCount] = useState(0);
     const [showFullText, setShowFullText] = useState(false); // 🌟 全文开关
 
-    // 图谱控制状态
+    // 图谱控制状态 - 用户测试的最佳参数
     const [settings, setSettings] = useState<GraphSettings>({
-        repelForce: 100,
-        linkDistance: 40,
-        centerForce: 0.1,
-        nodeScale: 1.0,
-        linkWidth: 1.0,
-        particleWidth: 2.0,
+        repelForce: 70,        // 排斥力
+        linkDistance: 40,      // 连接距离
+        centerForce: 0.05,     // 中心引力
+        nodeScale: 1.1,        // 节点缩放
+        linkWidth: 0.6,        // 连线粗细
+        particleWidth: 2.5,    // 粒子大小
         showUsers: true,
         showTweets: true,
         showTags: true,
+        highlightDepth: 2,     // 高亮层级
     });
 
     const handleSettingUpdate = (key: keyof GraphSettings, value: number | boolean) => {
@@ -63,6 +65,62 @@ const ConnectionsView: React.FC = () => {
         return { nodes: visibleNodes, links: visibleLinks };
     }, [data, settings.showUsers, settings.showTweets, settings.showTags]);
 
+    // 🌟 BFS 算法：计算高亮的节点和连线 (悬浮或锁定时都生效)
+    const { highlightNodes, highlightLinks } = useMemo(() => {
+        const highlightNodes = new Set<string>();
+        const highlightLinks = new Set<string>();
+
+        // 悬浮或锁定的节点都触发高亮
+        const activeNode = lockedNode || hoverNode;
+        if (!activeNode || settings.highlightDepth === 0) {
+            return { highlightNodes, highlightLinks };
+        }
+
+        // 构建邻接表
+        const adjacencyMap = new Map<string, { neighbors: Set<string>, links: Set<string> }>();
+
+        filteredData.nodes.forEach((n: any) => {
+            adjacencyMap.set(n.id, { neighbors: new Set(), links: new Set() });
+        });
+
+        filteredData.links.forEach((l: any) => {
+            const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+            const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+            const linkKey = `${sourceId}-${targetId}`;
+
+            adjacencyMap.get(sourceId)?.neighbors.add(targetId);
+            adjacencyMap.get(sourceId)?.links.add(linkKey);
+            adjacencyMap.get(targetId)?.neighbors.add(sourceId);
+            adjacencyMap.get(targetId)?.links.add(linkKey);
+        });
+
+        // BFS 遍历
+        const visited = new Set<string>();
+        const queue: { id: string; depth: number }[] = [{ id: activeNode.id, depth: 0 }];
+
+        while (queue.length > 0) {
+            const { id, depth } = queue.shift()!;
+
+            if (visited.has(id)) continue;
+            visited.add(id);
+            highlightNodes.add(id);
+
+            if (depth < settings.highlightDepth) {
+                const nodeData = adjacencyMap.get(id);
+                if (nodeData) {
+                    nodeData.neighbors.forEach(neighborId => {
+                        if (!visited.has(neighborId)) {
+                            queue.push({ id: neighborId, depth: depth + 1 });
+                        }
+                    });
+                    nodeData.links.forEach(linkKey => highlightLinks.add(linkKey));
+                }
+            }
+        }
+
+        return { highlightNodes, highlightLinks };
+    }, [lockedNode, hoverNode, filteredData, settings.highlightDepth]);
+
     // 物理引擎配置 (实时)
     useEffect(() => {
         if (fgRef.current) {
@@ -73,13 +131,29 @@ const ConnectionsView: React.FC = () => {
             fgRef.current.d3Force('charge').strength(-settings.repelForce);
             fgRef.current.d3Force('link').distance(settings.linkDistance);
 
-            if (fgRef.current.d3Force('center')) {
-                fgRef.current.d3Force('center').strength(settings.centerForce);
+            // 🌟 正确的中心引力实现：使用 forceX 和 forceY
+            // d3.forceCenter 没有 strength 方法，它只是移动质心
+            // forceX/forceY 才能真正把节点拉向中心
+            const centerX = dimensions.w / 2;
+            const centerY = dimensions.h / 2;
+
+            // 如果还没有 forceX/forceY，创建它们
+            if (!fgRef.current.d3Force('centerX')) {
+                fgRef.current.d3Force('centerX', forceX(centerX));
+                fgRef.current.d3Force('centerY', forceY(centerY));
             }
+
+            // 更新中心引力强度
+            fgRef.current.d3Force('centerX')?.strength(settings.centerForce);
+            fgRef.current.d3Force('centerY')?.strength(settings.centerForce);
+
+            // 更新中心点位置（响应窗口大小变化）
+            fgRef.current.d3Force('centerX')?.x(centerX);
+            fgRef.current.d3Force('centerY')?.y(centerY);
 
             fgRef.current.d3ReheatSimulation();
         }
-    }, [filteredData, settings.repelForce, settings.linkDistance, settings.centerForce]);
+    }, [filteredData, settings.repelForce, settings.linkDistance, settings.centerForce, dimensions]);
 
     useEffect(() => {
         const updateSize = () => {
@@ -144,7 +218,11 @@ const ConnectionsView: React.FC = () => {
                             const x = node.x!;
                             const y = node.y!;
                             const isHover = hoverNode === node;
+                            const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
                             const s = settings.nodeScale;
+
+                            // 如果有高亮节点且本节点不在高亮范围内，降低透明度
+                            const dimFactor = (highlightNodes.size > 0 && !isHighlighted) ? 0.15 : 1;
 
                             // 1. User 节点: 绘制头像
                             if (node.type === 'user') {
@@ -156,10 +234,12 @@ const ConnectionsView: React.FC = () => {
                                 ctx.beginPath();
                                 ctx.arc(x, y, r, 0, 2 * Math.PI);
 
-                                if (isHover) {
-                                    ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-                                    ctx.shadowBlur = 20 / globalScale;
+                                if (isHover || (isHighlighted && highlightNodes.size > 0)) {
+                                    ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                                    ctx.shadowBlur = (isHover ? 25 : 18) / globalScale;
                                 }
+
+                                ctx.globalAlpha = dimFactor;
 
                                 // 🌟 强效头像加载逻辑
                                 if (node.__imgObj !== 'error') {
@@ -201,42 +281,64 @@ const ConnectionsView: React.FC = () => {
                                 }
                                 ctx.restore();
 
+                                ctx.globalAlpha = dimFactor;
+
                                 ctx.beginPath();
                                 ctx.arc(x, y, r, 0, 2 * Math.PI);
-                                ctx.strokeStyle = isHover ? '#fff' : 'rgba(255,255,255,0.2)';
-                                ctx.lineWidth = (isHover ? 3 : 1) / globalScale;
+                                const ringColor = isHighlighted && highlightNodes.size > 0
+                                    ? 'rgba(255, 255, 255, 0.8)'
+                                    : (isHover ? '#fff' : 'rgba(255,255,255,0.2)');
+                                ctx.strokeStyle = ringColor;
+                                ctx.lineWidth = ((isHover || (isHighlighted && highlightNodes.size > 0)) ? 3 : 1) / globalScale;
                                 ctx.stroke();
+                                ctx.globalAlpha = 1;
                                 return;
                             }
 
                             // 2. Tag / Topic 节点
                             if (node.type === 'tag') {
+                                ctx.globalAlpha = dimFactor;
                                 const fontSize = (14 * s) / globalScale;
                                 if (globalScale > 2 || isHover) {
                                     ctx.font = `${isHover ? '900' : '400'} ${fontSize}px 'Outfit', sans-serif`;
                                     ctx.textAlign = 'center';
                                     ctx.textBaseline = 'middle';
-                                    ctx.fillStyle = isHover ? '#fff' : 'rgba(161, 161, 170, 0.7)';
+                                    const textColor = isHighlighted && highlightNodes.size > 0
+                                        ? 'rgba(255, 255, 255, 0.95)'
+                                        : (isHover ? '#fff' : 'rgba(161, 161, 170, 0.7)');
+                                    ctx.fillStyle = textColor;
                                     ctx.fillText(node.label, x, y);
                                 } else {
                                     ctx.beginPath();
-                                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                                    ctx.fillStyle = isHighlighted ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';;
                                     ctx.arc(x, y, (3 * s) / globalScale, 0, 2 * Math.PI);
                                     ctx.fill();
                                 }
+                                ctx.globalAlpha = 1;
                                 return;
                             }
 
                             // 3. Tweet 节点
+                            ctx.globalAlpha = dimFactor;
                             const r = (Math.min(5, Math.max(1.5, Math.sqrt(node.val || 1) + 1))) * s;
                             ctx.beginPath();
                             ctx.arc(x, y, r, 0, 2 * Math.PI);
-                            ctx.fillStyle = isHover ? '#fff' : (node.color || '#404040');
+
+                            let fillColor = node.color || '#404040';
                             if (isHover) {
-                                ctx.shadowColor = '#fff';
-                                ctx.shadowBlur = 15 / globalScale;
+                                fillColor = '#fff';
+                            } else if (isHighlighted && highlightNodes.size > 0) {
+                                fillColor = 'rgba(255, 255, 255, 0.9)';
+                            }
+                            ctx.fillStyle = fillColor;
+
+                            if (isHover || (isHighlighted && highlightNodes.size > 0)) {
+                                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+                                ctx.shadowBlur = (isHover ? 15 : 12) / globalScale;
                             }
                             ctx.fill();
+                            ctx.shadowBlur = 0;
+                            ctx.globalAlpha = 1;
                         }}
 
                         // 点击区域
@@ -256,7 +358,15 @@ const ConnectionsView: React.FC = () => {
                             ctx.fill();
                         }}
 
-                        linkColor={() => "rgba(255,255,255,0.05)"}
+                        linkColor={(link: any) => {
+                            if (highlightNodes.size === 0) return "rgba(255,255,255,0.05)";
+                            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+                            const linkKey = `${sourceId}-${targetId}`;
+                            const reverseLinkKey = `${targetId}-${sourceId}`;
+                            const isLinkHighlighted = highlightLinks.has(linkKey) || highlightLinks.has(reverseLinkKey);
+                            return isLinkHighlighted ? "rgba(255, 255, 255, 0.4)" : "rgba(255,255,255,0.02)";
+                        }}
                         linkWidth={settings.linkWidth}
                         linkDirectionalParticles={hoverNode ? 2 : 0}
                         linkDirectionalParticleSpeed={0.005}
@@ -283,6 +393,13 @@ const ConnectionsView: React.FC = () => {
                             } else {
                                 setLockedNode(node);
                                 setHoverNode(node);
+                            }
+                        }}
+                        onBackgroundClick={() => {
+                            // 点击空白处关闭锁定的卡片
+                            if (lockedNode) {
+                                setLockedNode(null);
+                                setHoverNode(null);
                             }
                         }}
                     />
