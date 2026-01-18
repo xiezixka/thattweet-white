@@ -166,72 +166,7 @@ const ConnectionsView: React.FC = () => {
         return times.length > 0 ? Math.max(...times) : Date.now();
     }, [filteredData]);
 
-    // 🌟 聚类标签计算 (Heuristic Clustering)
-    const clusters = useMemo(() => {
-        if (!filteredData.nodes.length) return [];
-        const groups = new Map<string, { nodes: any[], name: string, color?: string }>();
-
-        filteredData.nodes.forEach((node: any) => {
-            if (node.type === 'tweet') {
-                let groupId = node.data?.authorId;
-                let groupName = node.data?.author?.name || node.data?.author || 'Unknown';
-
-                // 如果开启了主题聚类，尝试使用标签
-                if (settings.clusterByTopic && node.data?.tags && node.data.tags.length > 0) {
-                    groupId = `tag-${node.data.tags[0]}`;
-                    groupName = `#${node.data.tags[0]}`;
-                }
-
-                if (groupId) {
-                    if (!groups.has(groupId)) {
-                        groups.set(groupId, { nodes: [], name: groupName });
-                    }
-                    groups.get(groupId)!.nodes.push(node);
-                }
-            }
-        });
-
-        const colorPalette = [
-            'rgba(59, 130, 246, 0.4)', // blue
-            'rgba(16, 185, 129, 0.4)', // emerald
-            'rgba(245, 158, 11, 0.4)', // amber
-            'rgba(139, 92, 246, 0.4)', // violet
-            'rgba(236, 72, 153, 0.4)', // pink
-            'rgba(6, 182, 212, 0.4)',  // cyan
-        ];
-
-        return Array.from(groups.values())
-            .filter(g => g.nodes.length >= 3)
-            .map((g, i) => {
-                const avgX = g.nodes.reduce((sum, n) => sum + (n.x || 0), 0) / g.nodes.length;
-                const avgY = g.nodes.reduce((sum, n) => sum + (n.y || 0), 0) / g.nodes.length;
-                const avgZ = g.nodes.reduce((sum, n) => sum + (n.z || 0), 0) / g.nodes.length;
-                return {
-                    name: g.name,
-                    x: avgX,
-                    y: avgY,
-                    z: avgZ || 0,
-                    count: g.nodes.length,
-                    color: colorPalette[i % colorPalette.length]
-                };
-            });
-    }, [filteredData, refreshCount, settings.clusterByTopic]); // refreshCount 触发力导向稳定后的位置更新
-
-    const drawClusterLabels = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
-        if (globalScale < 0.5) return; // 只有放大到一定程度才显示
-        ctx.save();
-        clusters.forEach(c => {
-            const fontSize = 16 / globalScale;
-            ctx.font = `bold ${fontSize}px 'Outfit', sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-
-            // 绘制带有微光背景的文字
-            const text = `${c.name} (${c.count} posts)`;
-            ctx.fillText(text.toUpperCase(), c.x, c.y - 40 / globalScale);
-        });
-        ctx.restore();
-    }, [clusters]);
+    // 🌟 聚类标签功能已移除
 
     // 🌟 BFS 算法：计算高亮的节点和连线 (悬浮或锁定时都生效)
     const { highlightNodes, highlightLinks } = useMemo(() => {
@@ -523,6 +458,8 @@ const ConnectionsView: React.FC = () => {
                                 graphData={filteredData}
                                 backgroundColor="#09090b"
                                 showNavInfo={false}
+                                enableNodeDrag={false}
+                                enableNavigationControls={true}
 
                                 nodeRelSize={4}
                                 nodeVal={d => d.val}
@@ -671,21 +608,18 @@ const ConnectionsView: React.FC = () => {
                                 }}
 
                                 onNodeHover={node => {
-                                    if (!lockedNode) {
+                                    // 当鼠标移开节点时，node为null
+                                    // 只有在没有锁定节点时才清空hoverNode
+                                    if (!node && !lockedNode) {
+                                        setHoverNode(null);
+                                    } else if (node) {
                                         setHoverNode(node);
                                         setShowFullText(false);
                                     }
                                 }}
                                 onNodeClick={node => {
-                                    if (fgRef.current) {
-                                        const distance = 200;
-                                        const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
-                                        fgRef.current.cameraPosition(
-                                            { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new pos
-                                            node, // lookAt property
-                                            1500  // ms transition duration
-                                        );
-                                    }
+                                    // 🌟 3D模式：只锁定侧边栏，不移动相机
+                                    // 这样避免了节点突然变大的闪烁效果
                                     if (lockedNode === node) {
                                         setLockedNode(null);
                                         setHoverNode(null);
@@ -709,7 +643,6 @@ const ConnectionsView: React.FC = () => {
                                 graphData={filteredData}
                                 onRenderFramePre={(ctx, globalScale) => {
                                     drawStarfield(ctx, globalScale);
-                                    drawClusterLabels(ctx, globalScale);
                                 }}
 
                                 // --- 视觉风格: 纯粹 ---
@@ -945,15 +878,26 @@ const ConnectionsView: React.FC = () => {
                                 cooldownTicks={500}
 
                                 onNodeHover={(node) => {
-                                    if (!lockedNode) {
+                                    // 当鼠标移开节点时，node为null
+                                    // 只有在没有锁定节点时才清空hoverNode
+                                    if (!node && !lockedNode) {
+                                        setHoverNode(null);
+                                    } else if (node) {
                                         setHoverNode(node);
                                         setShowFullText(false);
                                     }
                                 }}
                                 onNodeClick={(node) => {
                                     if (fgRef.current) {
-                                        fgRef.current.centerAt(node.x, node.y, 400);
-                                        fgRef.current.zoom(4, 400);
+                                        // 🌟 智能缩放：只居中节点，不强制放大
+                                        // 这样可以避免节点突然占满屏幕的闪烁效果
+                                        fgRef.current.centerAt(node.x, node.y, 600);
+
+                                        // 只在当前缩放级别小于2时才轻微放大
+                                        const currentZoom = fgRef.current.zoom();
+                                        if (currentZoom < 2) {
+                                            fgRef.current.zoom(2, 600); // 最多放大到2倍，而不是4倍
+                                        }
                                     }
                                     if (lockedNode === node) {
                                         setLockedNode(null);
@@ -1043,203 +987,387 @@ const ConnectionsView: React.FC = () => {
                         );
                     })()}
 
-                    {/* 🌟 节点展开卡片 (Pinned Popover) */}
-                    {(hoverNode || lockedNode) && fgRef.current && (() => {
-                        const activeNode = lockedNode || hoverNode;
-                        const coords = fgRef.current.graph2ScreenCoords(activeNode.x, activeNode.y);
-                        if (!coords) return null;
+                    {/* 🌟 左侧详情面板 (Left Sidebar) - Hover 自动显示 */}
+                    <div
+                        className={`fixed left-0 top-0 h-full w-[420px] bg-zinc-950/98 backdrop-blur-2xl border-r border-white/10 
+                                    transform transition-all duration-500 ease-out z-50 overflow-y-auto overflow-x-hidden
+                                    ${(lockedNode || hoverNode) ? 'translate-x-0 shadow-[0_0_80px_rgba(0,0,0,0.5)]' : '-translate-x-full'}`}
+                        style={{
+                            scrollbarWidth: 'none',
+                            msOverflowStyle: 'none',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* 隐藏滚动条 */}
+                        <style>{`
+                            .fixed::-webkit-scrollbar { display: none; }
+                        `}</style>
 
-                        const isLocked = !!lockedNode;
-                        const cardWidth = 320;
-                        const cardHeight = isLocked ? 250 : 200;
-
-                        let top = coords.y - 40;
-                        let left = coords.x;
-                        let transform = 'translate(-50%, -100%)';
-
-                        if (coords.y < cardHeight + 100) {
-                            top = coords.y + 40;
-                            transform = 'translate(-50%, 0%)';
-                        }
-
-                        if (left < cardWidth / 2 + 20) left = cardWidth / 2 + 20;
-                        if (left > dimensions.w - cardWidth / 2 - 20) left = dimensions.w - cardWidth / 2 - 20;
-
-                        return (
-                            <div
-                                className={`absolute z-50 transition-all duration-200 ${isLocked ? 'pointer-events-auto' : 'pointer-events-none'}`}
-                                style={{ top, left, transform }}
-                            >
-                                <div className={`w-80 bg-zinc-950/95 backdrop-blur-2xl border ${isLocked ? 'border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.2)]' : 'border-white/20 shadow-2xl'} rounded-2xl p-5 animate-in zoom-in-90 fade-in duration-200`}>
+                        {(lockedNode || hoverNode) && (() => {
+                            const activeNode = lockedNode || hoverNode;
+                            const isLocked = !!lockedNode;
+                            return (
+                                <>
+                                    {/* 关闭按钮 - 只在锁定时显示 */}
                                     {isLocked && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); setLockedNode(null); setHoverNode(null); }}
-                                            className="absolute -top-2 -right-2 w-6 h-6 bg-zinc-800 border border-white/10 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors pointer-events-auto"
+                                            onClick={() => { setLockedNode(null); setHoverNode(null); }}
+                                            className="absolute top-6 right-6 w-8 h-8 bg-zinc-900/80 hover:bg-zinc-800 border border-white/10 
+                                                   rounded-full flex items-center justify-center text-zinc-400 hover:text-white 
+                                                   transition-all duration-200 z-10 group"
                                         >
-                                            ✕
+                                            <span className="text-sm group-hover:scale-110 transition-transform">✕</span>
                                         </button>
                                     )}
 
-                                    {activeNode.type === 'user' && (
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-14 h-14 rounded-full border-2 border-white/20 overflow-hidden bg-zinc-900 shrink-0">
-                                                    <img
-                                                        src={`https://unavatar.io/x/${activeNode.data?.handle || activeNode.id}?fallback=https://wsrv.nl/?url=${encodeURIComponent(activeNode.img || '')}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
+                                    <div className="p-8 pb-16">
+                                        {/* User 节点详情 */}
+                                        {activeNode.type === 'user' && (
+                                            <div className="space-y-6">
+                                                {/* 用户头部 */}
+                                                <div className="flex items-start gap-5">
+                                                    <div className="w-20 h-20 rounded-2xl border-2 border-blue-500/30 overflow-hidden bg-zinc-900 shrink-0 
+                                                                shadow-[0_0_30px_rgba(59,130,246,0.2)]">
+                                                        <img
+                                                            src={`https://unavatar.io/x/${activeNode.data?.handle || activeNode.id}?fallback=https://wsrv.nl/?url=${encodeURIComponent(activeNode.img || '')}`}
+                                                            className="w-full h-full object-cover"
+                                                            alt={activeNode.label}
+                                                        />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1 pt-1">
+                                                        <h2 className="font-black text-white text-2xl mb-1 tracking-tight">{activeNode.label}</h2>
+                                                        <a
+                                                            href={activeNode.data?.handle ? `https://x.com/${activeNode.data.handle}` : '#'}
+                                                            target="_blank"
+                                                            className="text-sm text-blue-400 font-mono hover:text-blue-300 transition-colors inline-flex items-center gap-1.5"
+                                                        >
+                                                            @{activeNode.data?.handle || activeNode.id}
+                                                            <span className="text-xs opacity-60">↗</span>
+                                                        </a>
+                                                    </div>
                                                 </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="font-black text-white text-xl truncate tracking-tight">{activeNode.label}</div>
-                                                    <div className="text-xs text-blue-400 font-mono flex items-center gap-1">
-                                                        @{activeNode.data?.handle || activeNode.id}
-                                                        {isLocked && (
-                                                            <a
-                                                                href={activeNode.data?.handle ? `https://x.com/${activeNode.data.handle}` : '#'}
-                                                                target="_blank"
-                                                                className="ml-1 opacity-50 hover:opacity-100 transition-opacity"
-                                                            >
-                                                                ↗
-                                                            </a>
-                                                        )}
+
+                                                {/* 用户简介 */}
+                                                {activeNode.data?.description && (
+                                                    <div className="bg-zinc-900/50 rounded-xl p-4 border border-white/5">
+                                                        <p className="text-sm text-zinc-300 leading-relaxed italic font-serif">
+                                                            "{activeNode.data.description}"
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {/* 统计数据 */}
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-zinc-900/50 rounded-xl p-4 border border-white/5">
+                                                        <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black mb-2">粉丝数</div>
+                                                        <div className="text-2xl font-black text-white">{(activeNode.data?.followersCount || 0).toLocaleString()}</div>
+                                                    </div>
+                                                    <div className="bg-zinc-900/50 rounded-xl p-4 border border-white/5">
+                                                        <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black mb-2">节点权重</div>
+                                                        <div className="text-2xl font-black text-blue-400">{Math.round(activeNode.val || 0)}</div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            {activeNode.data?.description && (
-                                                <p className="text-xs text-zinc-400 leading-relaxed italic font-serif opacity-80 line-clamp-3">
-                                                    "{activeNode.data.description}"
-                                                </p>
-                                            )}
-                                            <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                                                <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">核心画像</div>
-                                                <div className="text-xs font-mono text-zinc-400">粉丝: {activeNode.data?.followersCount || 0}</div>
-                                            </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {activeNode.type === 'tweet' && (
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-2 h-2 rounded-full ${isLocked ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]' : 'bg-zinc-600'} animate-pulse`} />
-                                                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">{isLocked ? '锁定视图' : '推文节点'}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    {isLocked && activeNode.data?.tweetUrl && (
+                                        {/* Tweet 节点详情 */}
+                                        {activeNode.type === 'tweet' && (
+                                            <div className="space-y-6">
+                                                {/* 推文头部状态 */}
+                                                <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] animate-pulse" />
+                                                        <span className="text-xs font-black text-blue-500 uppercase tracking-[0.15em]">推文详情</span>
+                                                    </div>
+                                                    {activeNode.data?.tweetUrl && (
                                                         <a
                                                             href={activeNode.data.tweetUrl}
                                                             target="_blank"
-                                                            className="text-xs text-zinc-500 hover:text-white transition-colors"
+                                                            className="text-xs text-zinc-500 hover:text-blue-400 transition-colors font-medium"
                                                         >
-                                                            原文 ↗
+                                                            查看原文 ↗
                                                         </a>
                                                     )}
-                                                    <span className="text-[10px] font-mono text-zinc-600">
-                                                        {new Date(activeNode.data?.createdAt || 0).toLocaleTimeString()}
-                                                    </span>
                                                 </div>
-                                            </div>
-                                            <div className="group relative">
-                                                <div className={`text-sm text-zinc-200 leading-relaxed font-light ${showFullText ? '' : 'line-clamp-4'} selection:bg-blue-500/30 whitespace-pre-wrap`}>
-                                                    {activeNode.data?.text || activeNode.label}
-                                                </div>
-                                                {(activeNode.data?.text?.length > 100 || (activeNode.data?.text?.split('\n').length > 4)) && isLocked && (
-                                                    <button
-                                                        onClick={() => setShowFullText(!showFullText)}
-                                                        className="mt-2 text-[10px] font-black text-zinc-500 hover:text-blue-400 uppercase tracking-widest transition-colors pointer-events-auto"
-                                                    >
-                                                        {showFullText ? '收起全文 ↑' : '点击展开全文 ↓'}
-                                                    </button>
-                                                )}
-                                            </div>
 
-                                            {/* 🌟 媒体展示区域 */}
-                                            {activeNode.data?.media && activeNode.data.media.length > 0 && (
-                                                <div className={`grid gap-1.5 rounded-lg overflow-hidden ${activeNode.data.media.length === 1 ? 'grid-cols-1' :
-                                                    activeNode.data.media.length === 2 ? 'grid-cols-2' :
-                                                        activeNode.data.media.length === 3 ? 'grid-cols-2' :
-                                                            'grid-cols-2'
-                                                    }`}>
-                                                    {activeNode.data.media.slice(0, 4).map((item: any, idx: number) => (
-                                                        <div
-                                                            key={idx}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                useUIStore.getState().openLightbox(
-                                                                    activeNode.data.media,
-                                                                    idx,
-                                                                    activeNode.data.mediaAnalysis,
-                                                                    activeNode.data.visionDescription
-                                                                );
-                                                            }}
-                                                            className={`relative bg-zinc-900 overflow-hidden cursor-zoom-in group/media ${activeNode.data.media.length === 1 ? 'aspect-video' :
-                                                                activeNode.data.media.length === 3 && idx === 0 ? 'row-span-2 aspect-[3/4]' :
-                                                                    'aspect-square'
-                                                                }`}
+                                                {/* 作者信息与操作 */}
+                                                <div className="flex items-center justify-between bg-zinc-900/30 rounded-xl p-3 border border-white/5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-12 h-12 rounded-full border border-white/10 overflow-hidden bg-zinc-900 shrink-0">
+                                                            <img
+                                                                src={activeNode.data?.author?.avatar ||
+                                                                    activeNode.data?.authorAvatarUrl ||
+                                                                    `https://unavatar.io/x/${activeNode.data?.author?.handle || activeNode.data?.authorId}?size=80`}
+                                                                className="w-full h-full object-cover"
+                                                                alt={activeNode.data?.author?.name || 'Author'}
+                                                                onError={(e: any) => {
+                                                                    e.target.src = 'https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="font-bold text-white text-sm truncate">
+                                                                {activeNode.data?.author?.name || activeNode.data?.authorName || 'Unknown'}
+                                                            </div>
+                                                            <div className="text-xs text-zinc-500 font-mono">
+                                                                @{activeNode.data?.author?.handle || activeNode.data?.authorId}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 💡 实用操作：跳转到作者主页 */}
+                                                    {activeNode.data?.author?.handle && (
+                                                        <a
+                                                            href={`https://x.com/${activeNode.data.author.handle}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg text-[10px] font-black text-blue-400 transition-all uppercase tracking-wider"
                                                         >
-                                                            {item.type === 'video' || item.type === 'gif' ? (
-                                                                <>
-                                                                    <img
-                                                                        src={item.previewUrl || item.url}
-                                                                        alt=""
-                                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover/media:scale-110"
-                                                                    />
-                                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover/media:bg-black/10 transition-colors">
-                                                                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                                                                            <div className="w-0 h-0 border-l-[12px] border-l-white border-y-[7px] border-y-transparent ml-1" />
-                                                                        </div>
-                                                                    </div>
-                                                                    <span className="absolute bottom-1 right-1 text-[9px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded uppercase">
-                                                                        {item.type}
-                                                                    </span>
-                                                                </>
-                                                            ) : (
-                                                                <img
-                                                                    src={item.url}
-                                                                    alt=""
-                                                                    className="w-full h-full object-cover transition-transform duration-500 group-hover/media:scale-110"
-                                                                />
-                                                            )}
-                                                            <div className="absolute inset-0 bg-white/0 group-hover/media:bg-white/10 transition-colors pointer-events-none" />
-                                                        </div>
-                                                    ))}
-                                                    {activeNode.data.media.length > 4 && (
-                                                        <div className="absolute bottom-2 right-2 text-xs text-white bg-black/60 px-2 py-1 rounded-full">
-                                                            +{activeNode.data.media.length - 4}
-                                                        </div>
+                                                            查看主页
+                                                        </a>
                                                     )}
                                                 </div>
-                                            )}
 
-                                            <div className="flex items-center gap-4 pt-3 border-t border-white/10 text-xs text-zinc-500">
-                                                <span className="flex items-center gap-1.5"><Heart size={12} className="text-zinc-600" /> {activeNode.data?.favoriteCount || 0}</span>
-                                                <span className="flex items-center gap-1.5"><RefreshCw size={12} className="text-zinc-600" /> {activeNode.data?.retweetCount || 0}</span>
-                                                <span className="ml-auto text-[10px] text-zinc-700 font-mono">热度: {Math.round(activeNode.val)}</span>
-                                            </div>
-                                        </div>
-                                    )}
+                                                {/* 推文内容 */}
+                                                <div className="space-y-3">
+                                                    <div className={`text-base text-zinc-100 leading-relaxed font-light ${showFullText ? '' : 'line-clamp-6'} 
+                                                                     selection:bg-blue-500/30 whitespace-pre-wrap`}>
+                                                        {activeNode.data?.text || activeNode.label}
+                                                    </div>
+                                                    {(activeNode.data?.text?.length > 150 || (activeNode.data?.text?.split('\n').length > 6)) && (
+                                                        <button
+                                                            onClick={() => setShowFullText(!showFullText)}
+                                                            className="text-xs font-black text-zinc-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
+                                                        >
+                                                            {showFullText ? '收起 ↑' : '展开全文 ↓'}
+                                                        </button>
+                                                    )}
+                                                </div>
 
-                                    {activeNode.type === 'tag' && (
-                                        <div className="flex items-center gap-4 py-2">
-                                            <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-white/10 flex items-center justify-center text-2xl font-black text-zinc-600">#</div>
-                                            <div>
-                                                <div className="font-black text-2xl text-white tracking-tighter uppercase">{activeNode.label.replace('#', '')}</div>
-                                                <div className="text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-medium mt-1">关联标签</div>
+                                                {/* 媒体展示区域 - 带 AI 描述预览 */}
+                                                {activeNode.data?.media && activeNode.data.media.length > 0 && (
+                                                    <div className="space-y-4">
+                                                        <div className="space-y-2">
+                                                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">媒体内容</div>
+                                                            <div className={`grid gap-2 rounded-xl overflow-hidden ${activeNode.data.media.length === 1 ? 'grid-cols-1' :
+                                                                activeNode.data.media.length === 2 ? 'grid-cols-2' :
+                                                                    activeNode.data.media.length === 3 ? 'grid-cols-2' :
+                                                                        'grid-cols-2'
+                                                                }`}>
+                                                                {activeNode.data.media.slice(0, 4).map((item: any, idx: number) => (
+                                                                    <div
+                                                                        key={idx}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            useUIStore.getState().openLightbox(
+                                                                                activeNode.data.media,
+                                                                                idx,
+                                                                                activeNode.data.mediaAnalysis,
+                                                                                activeNode.data.visionDescription
+                                                                            );
+                                                                        }}
+                                                                        className={`relative bg-zinc-900 rounded-lg overflow-hidden cursor-zoom-in group/media 
+                                                                                border border-white/5 hover:border-blue-500/30 transition-all duration-300
+                                                                                ${activeNode.data.media.length === 1 ? 'aspect-video' :
+                                                                                activeNode.data.media.length === 3 && idx === 0 ? 'row-span-2 aspect-[3/4]' :
+                                                                                    'aspect-square'}`}
+                                                                    >
+                                                                        {item.type === 'video' || item.type === 'gif' ? (
+                                                                            <>
+                                                                                <img
+                                                                                    src={item.previewUrl || item.url}
+                                                                                    alt=""
+                                                                                    className="w-full h-full object-cover transition-transform duration-500 group-hover/media:scale-105"
+                                                                                />
+                                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover/media:bg-black/10 transition-colors">
+                                                                                    <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                                                                        <div className="w-0 h-0 border-l-[14px] border-l-white border-y-[8px] border-y-transparent ml-1" />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <img
+                                                                                src={item.url}
+                                                                                alt=""
+                                                                                className="w-full h-full object-cover transition-transform duration-500 group-hover/media:scale-105"
+                                                                            />
+                                                                        )}
+                                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover/media:opacity-100 transition-opacity pointer-events-none" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 🧠 AI 洞察摘要 (可以直接在侧边栏看到，不用点击) */}
+                                                        {(activeNode.data.visionDescription || activeNode.data.mediaAnalysis) && (
+                                                            <div className="bg-blue-500/5 rounded-xl p-4 border border-blue-500/10 space-y-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                                                    <div className="text-[10px] text-blue-400 uppercase tracking-widest font-black">AI 视觉描述</div>
+                                                                </div>
+                                                                <p className="text-xs text-zinc-400 leading-relaxed font-light">
+                                                                    {activeNode.data.visionDescription || activeNode.data.mediaAnalysis}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* 互动数据 */}
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div className="bg-zinc-900/50 rounded-xl p-3 border border-white/5 text-center">
+                                                        <Heart size={16} className="text-rose-500 mx-auto mb-1.5" />
+                                                        <div className="text-xs font-mono text-zinc-400">{(activeNode.data?.favoriteCount || 0).toLocaleString()}</div>
+                                                    </div>
+                                                    <div className="bg-zinc-900/50 rounded-xl p-3 border border-white/5 text-center">
+                                                        <RefreshCw size={16} className="text-emerald-500 mx-auto mb-1.5" />
+                                                        <div className="text-xs font-mono text-zinc-400">{(activeNode.data?.retweetCount || 0).toLocaleString()}</div>
+                                                    </div>
+                                                    <div className="bg-zinc-900/50 rounded-xl p-3 border border-white/5 text-center">
+                                                        <div className="text-lg font-black text-blue-400 mb-0.5">{Math.round(activeNode.val || 0)}</div>
+                                                        <div className="text-[9px] text-zinc-600 uppercase tracking-wider">热度</div>
+                                                    </div>
+                                                </div>
+
+                                                {/* 时间戳 */}
+                                                <div className="text-xs text-zinc-600 font-mono text-center pt-2 border-t border-white/5">
+                                                    {new Date(activeNode.data?.createdAt || 0).toLocaleString('zh-CN', {
+                                                        year: 'numeric',
+                                                        month: 'long',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })()}
+                                        )}
+
+                                        {/* Tag 节点详情 */}
+                                        {activeNode.type === 'tag' && (
+                                            <div className="space-y-6">
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-20 h-20 rounded-2xl bg-zinc-900 border-2 border-blue-500/20 flex items-center justify-center 
+                                                                text-4xl font-black text-blue-500/60 shadow-[0_0_30px_rgba(59,130,246,0.1)]">
+                                                        #
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h2 className="font-black text-3xl text-white tracking-tighter uppercase mb-1">
+                                                            {activeNode.label.replace('#', '')}
+                                                        </h2>
+                                                        <div className="text-xs text-zinc-500 uppercase tracking-[0.2em] font-medium">话题标签</div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-zinc-900/50 rounded-xl p-4 border border-white/5">
+                                                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black mb-2">节点权重</div>
+                                                    <div className="text-2xl font-black text-blue-400">{Math.round(activeNode.val || 0)}</div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 🔗 关联关系探索 (Side Navigation) */}
+                                        {(() => {
+                                            // 找出与当前节点相连的所有节点 (利用 memo 里的 highlightNodes)
+                                            const neighbors = Array.from(highlightNodes)
+                                                .filter(id => id !== activeNode.id)
+                                                .map(id => filteredData.nodes.find(n => n.id === id))
+                                                .filter(Boolean)
+                                                .slice(0, 6);
+
+                                            if (neighbors.length === 0) return null;
+
+                                            return (
+                                                <div className="mt-8 pt-8 border-t border-white/5 space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">关联节点</div>
+                                                        <div className="text-[9px] text-zinc-600 font-mono">最近联系</div>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {neighbors.map((n: any) => (
+                                                            <div
+                                                                key={n.id}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setLockedNode(n);
+                                                                    setHoverNode(n);
+
+                                                                    // 🌟 智能导航：平滑移动到选中的关联节点
+                                                                    if (fgRef.current) {
+                                                                        if (settings.is3D) {
+                                                                            const distance = 400;
+                                                                            const distRatio = 1 + distance / Math.hypot(n.x, n.y, n.z);
+                                                                            fgRef.current.cameraPosition(
+                                                                                { x: n.x * distRatio, y: n.y * distRatio, z: n.z * distRatio },
+                                                                                n,
+                                                                                1000
+                                                                            );
+                                                                        } else {
+                                                                            fgRef.current.centerAt(n.x, n.y, 800);
+                                                                            if (fgRef.current.zoom() < 1.5) {
+                                                                                fgRef.current.zoom(1.5, 800);
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }}
+                                                                className="flex items-center gap-3 p-2 bg-zinc-900/30 border border-white/5 rounded-xl hover:bg-blue-500/10 hover:border-blue-500/20 transition-all cursor-pointer group/item"
+                                                            >
+                                                                <div className={`w-10 h-10 rounded-lg overflow-hidden shrink-0 border flex items-center justify-center
+                                                                    ${n.type === 'user' ? 'bg-blue-500/10 border-blue-500/20' :
+                                                                        n.type === 'tweet' ? 'bg-emerald-500/10 border-emerald-500/20' :
+                                                                            'bg-amber-500/10 border-amber-500/20'}`}>
+                                                                    {n.type === 'tag' ? (
+                                                                        <span className="text-amber-500 font-black text-lg">#</span>
+                                                                    ) : (
+                                                                        <img
+                                                                            src={n.type === 'user'
+                                                                                ? `https://unavatar.io/x/${n.data?.handle || n.id}?size=40`
+                                                                                : n.data?.author?.handle
+                                                                                    ? `https://unavatar.io/x/${n.data.author.handle}?size=40`
+                                                                                    : n.img || `https://unavatar.io/x/${n.id}?size=40`
+                                                                            }
+                                                                            className="w-full h-full object-cover transition-all duration-300"
+                                                                            onError={(e: any) => {
+                                                                                e.target.style.display = 'none';
+                                                                                e.target.parentNode.innerHTML = `<span class="text-[10px] font-bold text-zinc-500 uppercase">${n.label?.substring(0, 1)}</span>`;
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="text-[11px] font-bold text-zinc-300 truncate group-hover/item:text-white transition-colors">
+                                                                        {n.label}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className={`text-[9px] uppercase font-black tracking-tighter
+                                                                            ${n.type === 'user' ? 'text-blue-500/60' :
+                                                                                n.type === 'tweet' ? 'text-emerald-500/60' :
+                                                                                    'text-amber-500/60'}`}>
+                                                                            {n.type === 'tweet' ? '相关推文' : n.type === 'user' ? '相关人物' : '话题'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="w-6 h-6 rounded-full bg-zinc-800 group-hover/item:bg-blue-500/20 flex items-center justify-center transition-all">
+                                                                    <span className="text-[10px] text-zinc-500 group-hover/item:text-blue-500">→</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div >
+                                </>
+                            );
+                        })()}
+                    </div>
                 </>
             ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-zinc-700 pointer-events-none">
                     <p className="font-light tracking-widest text-sm opacity-50">WAITING FOR SIGNAL...</p>
                 </div>
-            )}
-
-        </div>
+            )
+            }
+        </div >
     );
 };
 

@@ -99,7 +99,24 @@ export function useGraphData() {
                         const t = tweetMap.get(id);
                         label = t ? (t.text?.slice(0, 40)) : 'Dead Link';
                         color = '#404040';
-                        data = t || {};
+
+                        // 🌟 丰富作者信息：从 userMap 中查找完整的用户对象
+                        let enrichedAuthor = null;
+                        if (t?.authorId) {
+                            const canonicalAuthorId = getCanonicalId(t.authorId);
+                            enrichedAuthor = userMap.get(canonicalAuthorId);
+                        }
+
+                        data = {
+                            ...t,
+                            // 覆盖 author 字段为完整的用户对象
+                            author: enrichedAuthor || t?.author || {
+                                id: t?.authorId,
+                                handle: typeof t?.author === 'string' ? t.author : t?.authorId,
+                                name: t?.authorName || t?.authorId,
+                                avatar: t?.authorAvatarUrl
+                            }
+                        };
 
                         // 🌟 推文权重: 2 + 互动量的开方加成
                         const likes = Number(t?.favoriteCount || 0);
