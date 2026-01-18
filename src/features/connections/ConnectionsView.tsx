@@ -13,6 +13,10 @@ const ConnectionsView: React.FC = () => {
     const fgRef = useRef<any>(null);
     const hasInitialZoomRef = useRef(false);
 
+    // 🌟 节点动画状态追踪
+    const nodeAnimStateRef = useRef<Map<string, { opacity: number; glow: number }>>(new Map());
+    const animFrameRef = useRef<number>(0);
+
     // 动态调整画布大小
     const [dimensions, setDimensions] = useState({ w: window.innerWidth, h: window.innerHeight });
 
@@ -20,6 +24,13 @@ const ConnectionsView: React.FC = () => {
     const [lockedNode, setLockedNode] = useState<any>(null); // 🌟 锁定节点
     const [refreshCount, setRefreshCount] = useState(0);
     const [showFullText, setShowFullText] = useState(false); // 🌟 全文开关
+
+    // lerp 函数：平滑插值
+    const lerp = (current: number, target: number, speed: number) => {
+        const diff = target - current;
+        if (Math.abs(diff) < 0.01) return target;
+        return current + diff * speed;
+    };
 
     // 图谱控制状态 - 用户测试的最佳参数
     const [settings, setSettings] = useState<GraphSettings>({
@@ -172,6 +183,59 @@ const ConnectionsView: React.FC = () => {
         return () => ro.disconnect();
     }, []);
 
+    // 🌟 动画循环：平滑更新节点状态
+    useEffect(() => {
+        let isRunning = true;
+
+        const animate = () => {
+            if (!isRunning) return;
+
+            let needsUpdate = false;
+            const animState = nodeAnimStateRef.current;
+
+            // 遍历所有节点，更新动画状态
+            filteredData.nodes.forEach((node: any) => {
+                const nodeId = node.id;
+                const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(nodeId);
+
+                // 目标值
+                const targetOpacity = (highlightNodes.size > 0 && !isHighlighted) ? 0.15 : 1;
+                const targetGlow = isHighlighted && highlightNodes.size > 0 ? 1 : 0;
+
+                // 获取或初始化当前状态
+                let state = animState.get(nodeId);
+                if (!state) {
+                    state = { opacity: targetOpacity, glow: targetGlow };
+                    animState.set(nodeId, state);
+                }
+
+                // 平滑插值 (speed = 0.15, 较柔和的过渡)
+                const newOpacity = lerp(state.opacity, targetOpacity, 0.12);
+                const newGlow = lerp(state.glow, targetGlow, 0.12);
+
+                if (newOpacity !== state.opacity || newGlow !== state.glow) {
+                    state.opacity = newOpacity;
+                    state.glow = newGlow;
+                    needsUpdate = true;
+                }
+            });
+
+            // 如果有变化，触发重绘
+            if (needsUpdate && fgRef.current) {
+                setRefreshCount(c => c + 1);
+            }
+
+            animFrameRef.current = requestAnimationFrame(animate);
+        };
+
+        animFrameRef.current = requestAnimationFrame(animate);
+
+        return () => {
+            isRunning = false;
+            cancelAnimationFrame(animFrameRef.current);
+        };
+    }, [filteredData.nodes, highlightNodes, lerp]);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full text-zinc-500 bg-[#050505]">
@@ -221,8 +285,10 @@ const ConnectionsView: React.FC = () => {
                             const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
                             const s = settings.nodeScale;
 
-                            // 如果有高亮节点且本节点不在高亮范围内，降低透明度
-                            const dimFactor = (highlightNodes.size > 0 && !isHighlighted) ? 0.15 : 1;
+                            // 🌟 使用动画状态值实现平滑过渡
+                            const animState = nodeAnimStateRef.current.get(node.id);
+                            const dimFactor = animState?.opacity ?? 1;
+                            const glowIntensity = animState?.glow ?? 0;
 
                             // 1. User 节点: 绘制头像
                             if (node.type === 'user') {
@@ -234,9 +300,10 @@ const ConnectionsView: React.FC = () => {
                                 ctx.beginPath();
                                 ctx.arc(x, y, r, 0, 2 * Math.PI);
 
-                                if (isHover || (isHighlighted && highlightNodes.size > 0)) {
+                                // 发光效果使用动画插值
+                                if (isHover || glowIntensity > 0.01) {
                                     ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
-                                    ctx.shadowBlur = (isHover ? 25 : 18) / globalScale;
+                                    ctx.shadowBlur = ((isHover ? 25 : 18 * glowIntensity)) / globalScale;
                                 }
 
                                 ctx.globalAlpha = dimFactor;
@@ -285,11 +352,11 @@ const ConnectionsView: React.FC = () => {
 
                                 ctx.beginPath();
                                 ctx.arc(x, y, r, 0, 2 * Math.PI);
-                                const ringColor = isHighlighted && highlightNodes.size > 0
-                                    ? 'rgba(255, 255, 255, 0.8)'
-                                    : (isHover ? '#fff' : 'rgba(255,255,255,0.2)');
+                                // 使用动画插值的边框透明度
+                                const ringAlpha = 0.2 + glowIntensity * 0.6;
+                                const ringColor = isHover ? '#fff' : `rgba(255, 255, 255, ${ringAlpha})`;
                                 ctx.strokeStyle = ringColor;
-                                ctx.lineWidth = ((isHover || (isHighlighted && highlightNodes.size > 0)) ? 3 : 1) / globalScale;
+                                ctx.lineWidth = ((isHover || glowIntensity > 0.1) ? (1 + glowIntensity * 2) : 1) / globalScale;
                                 ctx.stroke();
                                 ctx.globalAlpha = 1;
                                 return;
@@ -303,14 +370,15 @@ const ConnectionsView: React.FC = () => {
                                     ctx.font = `${isHover ? '900' : '400'} ${fontSize}px 'Outfit', sans-serif`;
                                     ctx.textAlign = 'center';
                                     ctx.textBaseline = 'middle';
-                                    const textColor = isHighlighted && highlightNodes.size > 0
-                                        ? 'rgba(255, 255, 255, 0.95)'
-                                        : (isHover ? '#fff' : 'rgba(161, 161, 170, 0.7)');
+                                    // 使用动画插值的文字透明度
+                                    const textAlpha = 0.7 + glowIntensity * 0.25;
+                                    const textColor = isHover ? '#fff' : `rgba(255, 255, 255, ${textAlpha})`;
                                     ctx.fillStyle = textColor;
                                     ctx.fillText(node.label, x, y);
                                 } else {
                                     ctx.beginPath();
-                                    ctx.fillStyle = isHighlighted ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';;
+                                    const dotAlpha = 0.1 + glowIntensity * 0.2;
+                                    ctx.fillStyle = `rgba(255,255,255,${dotAlpha})`;
                                     ctx.arc(x, y, (3 * s) / globalScale, 0, 2 * Math.PI);
                                     ctx.fill();
                                 }
@@ -324,17 +392,22 @@ const ConnectionsView: React.FC = () => {
                             ctx.beginPath();
                             ctx.arc(x, y, r, 0, 2 * Math.PI);
 
+                            // 使用动画插值的填充色
                             let fillColor = node.color || '#404040';
                             if (isHover) {
                                 fillColor = '#fff';
-                            } else if (isHighlighted && highlightNodes.size > 0) {
-                                fillColor = 'rgba(255, 255, 255, 0.9)';
+                            } else if (glowIntensity > 0.01) {
+                                // 渐变到白色
+                                const r = Math.round(64 + glowIntensity * (255 - 64));
+                                const g = Math.round(64 + glowIntensity * (255 - 64));
+                                const b = Math.round(64 + glowIntensity * (255 - 64));
+                                fillColor = `rgb(${r}, ${g}, ${b})`;
                             }
                             ctx.fillStyle = fillColor;
 
-                            if (isHover || (isHighlighted && highlightNodes.size > 0)) {
+                            if (isHover || glowIntensity > 0.01) {
                                 ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-                                ctx.shadowBlur = (isHover ? 15 : 12) / globalScale;
+                                ctx.shadowBlur = ((isHover ? 15 : 12 * glowIntensity)) / globalScale;
                             }
                             ctx.fill();
                             ctx.shadowBlur = 0;
@@ -513,6 +586,55 @@ const ConnectionsView: React.FC = () => {
                                                     </button>
                                                 )}
                                             </div>
+
+                                            {/* 🌟 媒体展示区域 */}
+                                            {activeNode.data?.media && activeNode.data.media.length > 0 && (
+                                                <div className={`grid gap-1.5 rounded-lg overflow-hidden ${activeNode.data.media.length === 1 ? 'grid-cols-1' :
+                                                    activeNode.data.media.length === 2 ? 'grid-cols-2' :
+                                                        activeNode.data.media.length === 3 ? 'grid-cols-2' :
+                                                            'grid-cols-2'
+                                                    }`}>
+                                                    {activeNode.data.media.slice(0, 4).map((item: any, idx: number) => (
+                                                        <div
+                                                            key={idx}
+                                                            className={`relative bg-zinc-900 overflow-hidden ${activeNode.data.media.length === 1 ? 'aspect-video' :
+                                                                activeNode.data.media.length === 3 && idx === 0 ? 'row-span-2 aspect-[3/4]' :
+                                                                    'aspect-square'
+                                                                }`}
+                                                        >
+                                                            {item.type === 'video' || item.type === 'gif' ? (
+                                                                <>
+                                                                    <img
+                                                                        src={item.previewUrl || item.url}
+                                                                        alt=""
+                                                                        className="w-full h-full object-cover"
+                                                                    />
+                                                                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                                                            <div className="w-0 h-0 border-l-[12px] border-l-white border-y-[7px] border-y-transparent ml-1" />
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="absolute bottom-1 right-1 text-[9px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded uppercase">
+                                                                        {item.type}
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <img
+                                                                    src={item.url}
+                                                                    alt=""
+                                                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    {activeNode.data.media.length > 4 && (
+                                                        <div className="absolute bottom-2 right-2 text-xs text-white bg-black/60 px-2 py-1 rounded-full">
+                                                            +{activeNode.data.media.length - 4}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
                                             <div className="flex items-center gap-4 pt-3 border-t border-white/10 text-xs text-zinc-500">
                                                 <span className="flex items-center gap-1.5"><Heart size={12} className="text-zinc-600" /> {activeNode.data?.favoriteCount || 0}</span>
                                                 <span className="flex items-center gap-1.5"><RefreshCw size={12} className="text-zinc-600" /> {activeNode.data?.retweetCount || 0}</span>

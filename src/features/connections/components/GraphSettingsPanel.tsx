@@ -87,7 +87,7 @@ const Section = ({ title, icon: Icon, children, defaultOpen = true }: any) => {
 };
 
 export const GraphSettingsPanel: React.FC<Props> = ({ settings, onUpdate }) => {
-    const [isExpanded, setIsExpanded] = React.useState(true);
+    const [isExpanded, setIsExpanded] = React.useState(false); // 默认关闭
 
     if (!isExpanded) {
         return (
