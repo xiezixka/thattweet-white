@@ -93,11 +93,25 @@ export const Normalizer = {
 
         if (!authorId && !authorHandle) return null;
 
-        // --- 推文正文 (处理长推文) ---
-        const noteText = tweetNode.note_tweet?.note_tweet_results?.result?.text;
-        const fullText = (noteText && noteText.length > (legacy.full_text || '').length)
+        // --- 推文正文 (处理长推文 & X Article) ---
+        // 🌟 尝试多个可能的路径获取长推文/文章内容
+        const noteText =
+            tweetNode.article?.content?.text ||
+            tweetNode.note_tweet?.note_tweet_results?.result?.text ||
+            tweetNode.note_tweet?.text ||
+            tweetNode.noteTweet?.noteTweetResults?.result?.text ||
+            tweetNode.noteTweet?.text ||
+            legacy.note_tweet?.note_tweet_results?.result?.text ||
+            null;
+
+        // 检查是否有截断标记（如果 legacy.full_text 以 "..." 结尾且 noteText 存在）
+        const legacyText = legacy.full_text || legacy.text || '';
+        const isTruncated = legacyText.endsWith('…') || legacyText.endsWith('...');
+
+        // 优先使用 noteText/articleText（如果存在且更长），否则使用 legacy 文本
+        const fullText = (noteText && (noteText.length > legacyText.length || isTruncated))
             ? noteText
-            : (legacy.full_text || legacy.text || '');
+            : legacyText;
 
         const media = this.extractMedia(legacy);
         if (!fullText && media.length === 0) return null;

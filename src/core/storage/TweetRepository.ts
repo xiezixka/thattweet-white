@@ -43,7 +43,16 @@ export const TweetRepository = {
             if (existingTweet) {
                 // 已存在的推文：更新互动数据，保留 AI 结果和用户标记
                 // 采用 Math.max 确保计数只会增长 (或者至少不会被 0 覆盖)
+
+                // 🌟 智能保留更长的文本（避免 DOM 抓取的截断文本覆盖 API 获取的完整长文）
+                const keepLongerText = (existingTweet.text?.length || 0) >= (tweet.text?.length || 0)
+                    ? existingTweet.text
+                    : tweet.text;
+
                 await db.tweets.update(tweet.id, {
+                    // 保留更长的文本
+                    text: keepLongerText,
+
                     favoriteCount: Math.max(tweet.favoriteCount || 0, existingTweet.favoriteCount || 0),
                     retweetCount: Math.max(tweet.retweetCount || 0, existingTweet.retweetCount || 0),
                     replyCount: Math.max(tweet.replyCount || 0, existingTweet.replyCount || 0),
@@ -55,7 +64,7 @@ export const TweetRepository = {
                     // 媒体可能有更完整的数据 (比如从封面图更新到了视频源)
                     media: (tweet.media?.length > (existingTweet.media?.length || 0)) ? tweet.media : existingTweet.media,
                 });
-                console.log(`[ThatTweet] Tweet ${tweet.id} stats updated`);
+                console.log(`[ThatTweet] Tweet ${tweet.id} stats updated (text: ${keepLongerText === existingTweet.text ? 'kept existing' : 'updated'})`);
             } else {
                 // 新推文：完整写入
                 await db.tweets.put({

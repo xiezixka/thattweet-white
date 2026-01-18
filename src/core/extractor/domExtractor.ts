@@ -78,10 +78,63 @@ export class DomExtractor {
 
         // 2. 提取文本
         let text = "";
-        const tweetTextElement = articleElement.querySelector('[data-testid="tweetText"]');
-        if (tweetTextElement) {
-            // 移除 hidden 辅助文本，提取纯净内容
-            text = tweetTextElement.textContent || "";
+
+        // 🌟 优先尝试长文解析 (X Article / Longform)
+        // 方法1: longformRichTextComponent (文章正文)
+        const articleTextElement = articleElement.querySelector('[data-testid="longformRichTextComponent"]');
+        if (articleTextElement) {
+            // 获取所有段落和文本块并拼接
+            const fragments = Array.from(articleTextElement.querySelectorAll('[data-text="true"]'));
+            if (fragments.length > 0) {
+                text = fragments.map(f => f.textContent).join('\n\n');
+                console.log(`[ThatTweet DOM] Found ${fragments.length} text fragments in article`);
+            } else {
+                // 回退: 直接取容器文本
+                text = articleTextElement.textContent || "";
+            }
+        }
+
+        // 方法2: 如果方法1没拿到，尝试从 twitterArticleReadView 获取
+        if (!text) {
+            const articleReadView = articleElement.querySelector('[data-testid="twitterArticleReadView"]');
+            if (articleReadView) {
+                // 尝试获取标题
+                const titleEl = articleReadView.querySelector('[data-testid="twitter-article-title"]');
+                const title = titleEl?.textContent || '';
+
+                // 获取所有文本块
+                const allTextBlocks = Array.from(articleReadView.querySelectorAll('[data-text="true"]'));
+                if (allTextBlocks.length > 0) {
+                    const bodyText = allTextBlocks.map(f => f.textContent).join('\n\n');
+                    text = title ? `${title}\n\n${bodyText}` : bodyText;
+                    console.log(`[ThatTweet DOM] Found article via articleReadView: ${allTextBlocks.length} blocks, title: ${title.substring(0, 50)}`);
+                }
+            }
+        }
+
+        // 方法3: 直接寻找 DraftJS 编辑器内容 (X 文章使用 DraftJS)
+        if (!text) {
+            const draftContent = articleElement.querySelector('.public-DraftEditor-content');
+            if (draftContent) {
+                const fragments = Array.from(draftContent.querySelectorAll('[data-text="true"]'));
+                if (fragments.length > 0) {
+                    text = fragments.map(f => f.textContent).join('\n\n');
+                    console.log(`[ThatTweet DOM] Found ${fragments.length} fragments via DraftJS`);
+                }
+            }
+        }
+
+        // 如果没拿到长文，或者是普通推文，用标准选择器
+        if (!text) {
+            const tweetTextElement = articleElement.querySelector('[data-testid="tweetText"]');
+            if (tweetTextElement) {
+                text = tweetTextElement.textContent || "";
+            }
+        }
+
+        // Debug: 输出最终结果
+        if (text && text.length > 100) {
+            console.log(`[ThatTweet DOM] Extracted text (${text.length} chars): ${text.substring(0, 100)}...`);
         }
 
         // 3. 提取作者信息

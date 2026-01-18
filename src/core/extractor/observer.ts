@@ -119,14 +119,23 @@ export class DomObserver {
                 }
 
                 // 3. 检查是否已处理
-                if (this.processedIds.has(tweet.id)) {
-                    // 已处理 -> 标记视觉高亮
+                const isAlreadyProcessed = this.processedIds.has(tweet.id);
+
+                // 🌟 对于长文章，即使已处理过也发送更新请求，让后端智能合并
+                const isLongformArticle = tweet.text && tweet.text.length > 1000;
+
+                if (isAlreadyProcessed && !isLongformArticle) {
+                    // 已处理的普通推文 -> 只标记视觉高亮
                     if (article.getAttribute('data-thattweet-saved') !== 'true') {
                         article.setAttribute('data-thattweet-saved', 'true');
                     }
                 } else if (tweet.id) {
-                    // 未处理 -> 加入保存队列
-                    console.log('[ThatTweet] DOM found fallback tweet:', tweet.id);
+                    // 未处理 OR 长文章需要更新 -> 加入保存队列
+                    if (!isAlreadyProcessed) {
+                        console.log('[ThatTweet] DOM found fallback tweet:', tweet.id);
+                    } else {
+                        console.log('[ThatTweet] DOM updating longform article:', tweet.id, `(${tweet.text?.length} chars)`);
+                    }
                     newTweets.push(tweet);
 
                     // 标记为已处理
