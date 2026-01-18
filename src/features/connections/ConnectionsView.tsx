@@ -292,24 +292,54 @@ const ConnectionsView: React.FC = () => {
     // 物理引擎配置 (实时) - 仅对 2D 模式生效
     // 3D 模式使用 react-force-graph-3d 的默认物理引擎，避免访问未初始化的 simulation
     useEffect(() => {
-        // 🌟 3D 模式下添加星空背景
+        // 🌟 3D 模式下添加星空背景 (增强版)
         if (settings.is3D && fgRef.current) {
             const scene = fgRef.current.scene();
             if (scene && !scene.getObjectByName('starfield')) {
                 const geometry = new THREE.BufferGeometry();
-                const count = 2000;
+                // 🌟 超巨型宇宙生成：解决“缩放露馅”问题
+                // 策略：创建一个半径极大（100,000）的球体，把玩家包裹在中间
+                const count = 30000;
                 const positions = new Float32Array(count * 3);
-                for (let i = 0; i < count * 3; i++) {
-                    positions[i] = (Math.random() - 0.5) * 3000;
+                const sizes = new Float32Array(count);
+
+                for (let i = 0; i < count; i++) {
+                    // 1. 距离分布：使用三次方根分布，让星星在远处更密集，构成“背景墙”
+                    // 同时保留一部分在近处（4000以内）作为“飞掠尘埃”
+                    const isBackground = Math.random() > 0.2; // 80% 是背景星
+                    let r;
+                    if (isBackground) {
+                        r = 10000 + Math.random() * 90000; // 1w - 10w
+                    } else {
+                        r = 4000 + Math.random() * 6000;   // 4k - 10k
+                    }
+
+                    // 2. 球坐标随机
+                    const theta = 2 * Math.PI * Math.random();
+                    const phi = Math.acos(2 * Math.random() - 1);
+
+                    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                    positions[i * 3 + 2] = r * Math.cos(phi);
+
+                    // 3. 大小修正：远处的星星要稍微大一点点才能在 sizeAttenuation 下可见
+                    // 近处的星星作为尘埃要小
+                    sizes[i] = isBackground ? 4.0 : 2.0;
                 }
+
+
                 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1)); // 传递给 shader 或 sizeAttenuation
+
+                // 使用 shader material 或者简单的 points material
                 const material = new THREE.PointsMaterial({
-                    size: 2,
+                    size: 1.5,
                     color: 0xffffff,
                     transparent: true,
                     opacity: 0.6,
-                    sizeAttenuation: true
+                    sizeAttenuation: true // 关键：允许近大远小
                 });
+
                 const stars = new THREE.Points(geometry, material);
                 stars.name = 'starfield';
                 scene.add(stars);
@@ -446,7 +476,8 @@ const ConnectionsView: React.FC = () => {
     }
 
     return (
-        <div ref={containerRef} className="w-full h-full bg-[#09090b] relative overflow-hidden group">
+        <div ref={containerRef} className="w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#18181b] via-[#09090b] to-[#000000] relative overflow-hidden group">
+
             {/* 极简顶栏 - 悬浮在 Canvas 之上 */}
             <div className="absolute top-6 left-8 z-10 pointer-events-none select-none transition-opacity duration-500 opacity-60">
                 <h1 className="text-3xl font-thin text-white tracking-widest font-[Outfit,sans-serif]">
