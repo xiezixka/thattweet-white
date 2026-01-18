@@ -15,9 +15,9 @@ interface ChatMessageProps {
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ msg, isGenerating, statusMessage, insertToNote, t }) => {
-    // Default collapsed if it has content, expanded if specifically looking at it or user preference?
-    // Let's default to collapsed to "not occupy too much space"
-    const [isThinkingOpen, setIsThinkingOpen] = useState(false);
+    // 🌟 如果有引用来源，默认展开以便用户看到
+    const hasCitationsInitially = msg.citations && msg.citations.length > 0;
+    const [isThinkingOpen, setIsThinkingOpen] = useState(hasCitationsInitially);
 
     // Parse <think> tags if present (for DeepSeek R1 style models)
     const thinkMatch = msg.content?.match(/<think>([\s\S]*?)<\/think>/);
@@ -108,9 +108,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ msg, isGenerating, sta
                                             {t('int_sources')}
                                             <div className="h-px bg-white/5 flex-1" />
                                         </div>
-                                        <div className="flex overflow-x-auto pb-6 gap-4 scroll-smooth touch-pan-x px-6 no-scrollbar overscroll-x-contain">
+                                        <div className="flex overflow-x-auto pb-6 gap-4 scroll-smooth touch-pan-x px-6 no-scrollbar overscroll-x-contain snap-x snap-mandatory">
                                             {msg.citations?.map((tweet) => (
-                                                <div key={tweet.id} className="relative group/citation shrink-0 w-[280px] md:w-[320px]">
+                                                <div key={tweet.id} className="relative group/citation shrink-0 w-[280px] md:w-[320px] snap-center">
                                                     <TweetCard
                                                         tweet={{
                                                             ...tweet,

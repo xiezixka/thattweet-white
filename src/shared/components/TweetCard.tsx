@@ -83,6 +83,18 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                 "animate-in fade-in zoom-in-[0.98] slide-in-from-bottom-2 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
                 "will-change-transform"
             )}
+            draggable="true"
+            onDragStart={(e) => {
+                e.dataTransfer.setData('tweet', JSON.stringify(tweet));
+                e.dataTransfer.effectAllowed = 'copy';
+                // 某些浏览器需要这行来显示拖拽图像
+                const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
+                dragImage.style.position = 'absolute';
+                dragImage.style.top = '-1000px';
+                document.body.appendChild(dragImage);
+                // e.dataTransfer.setDragImage(dragImage, 0, 0); // 可选：自定义拖拽图像
+                setTimeout(() => document.body.removeChild(dragImage), 0);
+            }}
             style={{
                 contentVisibility: 'auto',
                 containIntrinsicSize: '1px 400px',

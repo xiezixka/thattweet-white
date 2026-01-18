@@ -217,64 +217,62 @@ export const useChatStore = create<ChatState>((set, get) => ({
             let contextCitations: Tweet[] = [];
             let lastSearchMethod: ChatMessage['searchMethod'] = 'none';
 
-            if (content.trim().length > 0 || citations.length > 0) {
-                if (content.trim().length > 0) {
-                    // 1.5 进阶：AI 关键词提取 (Query Analysis)
-                    let aiKeywords: string[] | undefined;
-                    try {
-                        get().setStatusMessage('正在提取搜索关键线索...');
-                        const analysisResult = await llmService.generateJSON('queryAnalysis', { query: content });
-                        if (Array.isArray(analysisResult)) {
-                            aiKeywords = analysisResult;
-                        } else if (analysisResult && Array.isArray(analysisResult.keywords)) {
-                            aiKeywords = analysisResult.keywords;
-                        }
-
-                        if (aiKeywords && aiKeywords.length > 0) {
-                            get().setStatusMessage(`搜索关键词: ${aiKeywords.join(', ')}`);
-                        }
-                    } catch (e) {
-                        console.warn('[ChatStore] Query analysis failed, falling back to basic split:', e);
-                    }
-
-                    // 根据模式显示不同状态
-                    const statusText = mode === 'rag' ? '正在进行语义向量检索...' :
-                        mode === 'structured' ? '正在进行精确关键词检索...' :
-                            '正在进行智能混合检索...';
-                    get().setStatusMessage(statusText);
-
-                    // 调用 ragService，可选传递 AI 提取的关键词
-                    const searchResults = await ragService.search(content, 12, mode, aiKeywords);
-                    console.log(`[ChatStore] Search results found: ${searchResults.length}`);
-
-                    if (searchResults.length > 0) {
-                        get().setStatusMessage(`找到 ${searchResults.length} 条相关推文，正在分析内容...`);
-                    } else {
-                        get().setStatusMessage('未在推文库中找到直接相关内容，将尝试基于通用知识回答...');
-                    }
-
-                    contextCitations = searchResults.map(r => {
-                        const t = r.tweet as any;
-                        t.relevanceScore = Math.min(Math.round(r.score), 100);
-                        return t;
-                    });
-
-                    // 确定最终使用的搜索方法
-                    if (searchResults.length > 0) {
-                        const hasStructured = searchResults.some(r => r.method === 'structured');
-                        const hasRag = searchResults.some(r => r.method === 'rag');
-                        if (hasStructured && hasRag) lastSearchMethod = 'structured'; // 混合模式标记为 structured
-                        else if (hasStructured) lastSearchMethod = 'structured';
-                        else lastSearchMethod = 'rag';
-                    }
-                }
-            }
-
-            // 如果有自带引用（比如用户拖进来的），合并它们
+            // 🌟 如果用户已经附加了推文，直接使用它们，跳过搜索
             if (citations.length > 0) {
-                const existingIds = new Set(contextCitations.map(t => t.id));
-                const uniqueCitations = citations.filter(t => !existingIds.has(t.id));
-                contextCitations = [...contextCitations, ...uniqueCitations];
+                get().setStatusMessage('正在分析附加的推文...');
+                contextCitations = [...citations];
+                lastSearchMethod = 'none'; // 用户手动附加，不是搜索结果
+                console.log(`[ChatStore] Using ${citations.length} user-attached citations, skipping search.`);
+            } else if (content.trim().length > 0) {
+                // 没有附加推文时，才执行搜索
+                // 1.5 进阶：AI 关键词提取 (Query Analysis)
+                let aiKeywords: string[] | undefined;
+                try {
+                    get().setStatusMessage('正在提取搜索关键线索...');
+                    const analysisResult = await llmService.generateJSON('queryAnalysis', { query: content });
+                    if (Array.isArray(analysisResult)) {
+                        aiKeywords = analysisResult;
+                    } else if (analysisResult && Array.isArray(analysisResult.keywords)) {
+                        aiKeywords = analysisResult.keywords;
+                    }
+
+                    if (aiKeywords && aiKeywords.length > 0) {
+                        get().setStatusMessage(`搜索关键词: ${aiKeywords.join(', ')}`);
+                    }
+                } catch (e) {
+                    console.warn('[ChatStore] Query analysis failed, falling back to basic split:', e);
+                }
+
+                // 根据模式显示不同状态
+                const statusText = mode === 'rag' ? '正在进行语义向量检索...' :
+                    mode === 'structured' ? '正在进行精确关键词检索...' :
+                        '正在进行智能混合检索...';
+                get().setStatusMessage(statusText);
+
+                // 调用 ragService，可选传递 AI 提取的关键词
+                const searchResults = await ragService.search(content, 12, mode, aiKeywords);
+                console.log(`[ChatStore] Search results found: ${searchResults.length}`);
+
+                if (searchResults.length > 0) {
+                    get().setStatusMessage(`找到 ${searchResults.length} 条相关推文，正在分析内容...`);
+                } else {
+                    get().setStatusMessage('未在推文库中找到直接相关内容，将尝试基于通用知识回答...');
+                }
+
+                contextCitations = searchResults.map(r => {
+                    const t = r.tweet as any;
+                    t.relevanceScore = Math.min(Math.round(r.score), 100);
+                    return t;
+                });
+
+                // 确定最终使用的搜索方法
+                if (searchResults.length > 0) {
+                    const hasStructured = searchResults.some(r => r.method === 'structured');
+                    const hasRag = searchResults.some(r => r.method === 'rag');
+                    if (hasStructured && hasRag) lastSearchMethod = 'structured';
+                    else if (hasStructured) lastSearchMethod = 'structured';
+                    else lastSearchMethod = 'rag';
+                }
             }
 
             // 3. 开启 AI 初始消息 (带引用)
