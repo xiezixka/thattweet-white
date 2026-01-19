@@ -314,17 +314,8 @@ const ConnectionsView: React.FC = () => {
                     fg.d3Force('charge')?.strength((node: any) => -settings.repelForce * 0.8);
                 }
 
-
-
-                // 🌟 触发力场重启，让改动立即生效
-                if (typeof fg.d3AlphaTarget === 'function') {
-                    fg.d3AlphaTarget(0.3);
-                    setTimeout(() => {
-                        if (typeof fg.d3AlphaTarget === 'function') fg.d3AlphaTarget(0);
-                    }, 1000);
-                } else if (typeof fg.d3ReheatSimulation === 'function') {
-                    fg.d3ReheatSimulation();
-                }
+                // 🛡️ 只有在首次渲染或手动刷新时才重启物理模拟
+                // 移除了之前的频繁 reheat，防止节点抖动
 
             } catch (err) {
                 console.warn('[ConnectionsView] Physics update failed:', err);
@@ -483,6 +474,10 @@ const ConnectionsView: React.FC = () => {
                                 enableNodeDrag={false}
                                 enableNavigationControls={true}
 
+                                // 🛡️ 物理模拟稳定化参数
+                                cooldownTime={3000} // 3秒后停止物理模拟
+                                warmupTicks={50}    // 初始化时快速稳定
+
                                 nodeRelSize={4}
                                 nodeVal={d => d.val}
                                 nodeThreeObject={(node: any) => {
@@ -636,28 +631,56 @@ const ConnectionsView: React.FC = () => {
                                 }}
                                 nodeThreeObjectExtend={false}
 
-                                linkColor={link => {
-                                    const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
-                                    const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
-                                    const isLinkHighlighted = highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`);
+                                linkCurvature={l => {
+                                    // 🌟 如果是特殊的社交/语义连线，给一点弧度美感，防止双向互动时重叠
+                                    const type = (l as any).linkType;
+                                    return (type === 'social' || type === 'semantic') ? 0.15 : 0;
+                                }}
+                                linkDirectionalArrowLength={2.5}
+                                linkDirectionalArrowRelPos={1} // 箭头在末端
 
-                                    // 🌟 抛弃普通蓝色，改用更高级的半透明白色/浅灰色
-                                    // 高亮时呈现柔和的亮白色，非高亮时极度透明
-                                    return isLinkHighlighted ? "rgba(255, 255, 255, 0.45)" : "rgba(255, 255, 255, 0.03)";
+                                linkColor={link => {
+                                    const l = link as any;
+                                    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                                    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                                    const isHighlighted = highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`);
+
+                                    // 🌟 社交互动 (回复/转发): 亮粉红
+                                    if (l.linkType === 'social') return isHighlighted ? "#ff758f" : "rgba(255, 117, 143, 0.12)";
+                                    // 🌟 语义/同好: 青绿色
+                                    if (l.linkType === 'semantic') return isHighlighted ? "#00f5d4" : "rgba(0, 245, 212, 0.08)";
+
+                                    return isHighlighted ? "rgba(255, 255, 255, 0.45)" : "rgba(255, 255, 255, 0.03)";
                                 }}
                                 linkWidth={link => {
-                                    const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
-                                    const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
-                                    return (highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`)) ? 0.8 : 0.2;
+                                    const l = link as any;
+                                    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+                                    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+                                    const isHighlighted = highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`);
+
+                                    if (l.linkType === 'social' || l.linkType === 'semantic') return isHighlighted ? 1.0 : 0.3;
+                                    return isHighlighted ? 0.6 : 0.15;
                                 }}
                                 linkDirectionalParticles={l => {
-                                    // 🌟 始终保持微弱的流动感，高亮时加速
                                     const sourceId = typeof l.source === 'object' ? (l.source as any).id : l.source;
                                     const targetId = typeof l.target === 'object' ? (l.target as any).id : l.target;
-                                    return (highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`)) ? 6 : 1;
+                                    const isHighlighted = highlightNodes.has(sourceId) || highlightNodes.has(targetId);
+
+                                    // 🌟 只有在相关联或者高亮时才展示流光粒子，避免全局太乱
+                                    if (!isHighlighted && (l as any).linkType !== 'social') return 0;
+
+                                    const base = (l as any).linkType === 'social' ? 2 : 1;
+                                    return isHighlighted ? base + 2 : base;
                                 }}
-                                linkDirectionalParticleWidth={1.5}
-                                linkDirectionalParticleSpeed={0.005}
+                                linkDirectionalParticleWidth={l => {
+                                    if ((l as any).linkType === 'social') return 2.5;
+                                    return 1.2;
+                                }}
+                                linkDirectionalParticleSpeed={l => {
+                                    const baseSpeed = 0.004;
+                                    if ((l as any).linkType === 'social') return baseSpeed * 2.5;
+                                    return baseSpeed;
+                                }}
 
                                 onNodeHover={node => {
                                     // 当鼠标移开节点时，node为null

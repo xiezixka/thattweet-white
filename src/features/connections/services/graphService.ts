@@ -26,14 +26,38 @@ export const GraphService = {
             createdAt: NOW
         });
 
-        // 2. 回复连结 (Reply Edge)
-        // 权重: 0.8 (强相关)
+        // 2. 推文关联 (Reply / Retweet / Quote Edges)
+        // 🌟 直接使用 normalizer 提取好的标准字段
+
+        // A. 回复
         if (tweet.replyToId) {
             edges.push({
                 source: tweet.id,
                 target: tweet.replyToId,
                 type: 'reply',
                 weight: 0.8,
+                createdAt: NOW
+            });
+        }
+
+        // B. 转发 (Retweet)
+        if ((tweet as any).retweetFromId) {
+            edges.push({
+                source: tweet.id,
+                target: (tweet as any).retweetFromId,
+                type: 'retweet',
+                weight: 0.7,
+                createdAt: NOW
+            });
+        }
+
+        // C. 引用 (Quote)
+        if ((tweet as any).quoteFromId) {
+            edges.push({
+                source: tweet.id,
+                target: (tweet as any).quoteFromId,
+                type: 'quote',
+                weight: 0.7,
                 createdAt: NOW
             });
         }
@@ -46,10 +70,7 @@ export const GraphService = {
             ...(tweet.aiTags || [])
         ]);
 
-        // 还没处理 TagMapping，先存原始标签，读取时再映射
         allTags.forEach(tag => {
-            // 确保标签格式统一 (比如转小写或去除#)
-            // 这里暂且保留原始格式，依靠 TagMapping 清洗
             edges.push({
                 source: tweet.id,
                 target: tag,
@@ -58,34 +79,6 @@ export const GraphService = {
                 createdAt: NOW
             });
         });
-
-        // 4. 尝试解析引用 (Quote Edge)
-        // 权重: 0.7 (转发也是强关联)
-        // 由于 Tweet 接口暂时没有 quotedId，尝试从 rawZip 解析
-        if (tweet.rawZip) {
-            try {
-                const rawJson = JSON.parse(LZString.decompressFromUTF16(tweet.rawZip) || '{}');
-                // 推特 API 结构通常是: legacy.retweeted_status_id_str 或 quoted_status_id_str
-                // 或者是 result.legacy...
-                // 深度防御式读取
-                const legacy = rawJson.legacy || rawJson.result?.legacy || rawJson.tweet?.legacy;
-
-                const quotedId = rawJson.quoted_status_id_str
-                    || legacy?.quoted_status_id_str;
-
-                if (quotedId) {
-                    edges.push({
-                        source: tweet.id,
-                        target: quotedId,
-                        type: 'quote',
-                        weight: 0.7,
-                        createdAt: NOW
-                    });
-                }
-            } catch (e) {
-                // 忽略解析错误，不阻碍主流程
-            }
-        }
 
         // 批量写入
         // 使用 put 来覆盖旧的相同 source+target+type 组合

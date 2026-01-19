@@ -201,6 +201,40 @@ export class DomExtractor {
         // 7. 确定最终的 authorId（优先使用数字 ID）
         const finalAuthorId = numericAuthorId || authorHandle;
 
+        // 8. 🌟 提取回复关系 (Reply-to)
+        let replyToUser: string | null = null;
+
+        // 方法1: 查找 "Replying to @xxx" 文本
+        const replyingToElement = articleElement.querySelector('[data-testid="reply"]')?.closest('div')?.parentElement;
+        const socialContext = articleElement.querySelector('[data-testid="socialContext"]');
+
+        // 也可以查找包含 "Replying to" 的 span
+        const allSpans = articleElement.querySelectorAll('span');
+        for (const span of allSpans) {
+            const text = span.textContent || '';
+            // 匹配 "Replying to @handle" 或 "回复 @handle"
+            const match = text.match(/(?:Replying to|回复)\s*@(\w+)/i);
+            if (match) {
+                replyToUser = match[1];
+                console.log(`[ThatTweet DOM] Found reply-to: @${replyToUser}`);
+                break;
+            }
+        }
+
+        // 方法2: 查找 socialContext 里的回复链接
+        if (!replyToUser && socialContext) {
+            const replyLinks = socialContext.querySelectorAll('a[href*="/"]');
+            for (const link of replyLinks) {
+                const href = link.getAttribute('href') || '';
+                const handleMatch = href.match(/^\/(\w+)$/);
+                if (handleMatch && !['home', 'explore', 'notifications', 'messages', 'i'].includes(handleMatch[1])) {
+                    replyToUser = handleMatch[1];
+                    console.log(`[ThatTweet DOM] Found reply-to via socialContext: @${replyToUser}`);
+                    break;
+                }
+            }
+        }
+
         return {
             id: tweetId,
             authorId: finalAuthorId, // 优先使用数字 ID，无法获取时回退到 Handle
@@ -221,6 +255,10 @@ export class DomExtractor {
             replyCount: replyCount || 0,
             viewCount: viewCount || 0,
             media: media,
+
+            // 🌟 社交关系字段
+            replyToUser: replyToUser,
+
             aiStatus: ProcessStatus.Pending,
             imageProcessStatus: ProcessStatus.Pending
         } as Tweet;

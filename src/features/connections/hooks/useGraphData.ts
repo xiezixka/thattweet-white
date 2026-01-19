@@ -11,76 +11,51 @@ export function useGraphData() {
     // 只要 graphEdges, users, tweets 任何一个表发生变动，这个查询就会重新执行
     const data = useLiveQuery(async () => {
         try {
-            // 1. 获取所有的边
-            const edges = await db.graphEdges.toArray();
-
-            // 2. 也是最重要的：通过边的关系来推断节点类型
-            const userIds = new Set<string>();
-            const tweetIds = new Set<string>();
-            const tags = new Set<string>();
-
-            edges.forEach(e => {
-                // 推断 Source (通常都是 Tweet)
-                if (e.type !== 'tag') tweetIds.add(e.source);
-
-                // 推断 Target
-                if (e.type === 'author') userIds.add(e.target);
-                else if (e.type === 'reply' || e.type === 'quote') tweetIds.add(e.target);
-                else if (e.type === 'tag') {
-                    tweetIds.add(e.source);
-                    tags.add(e.target);
-                }
-            });
-
-            // 3. 批量查询元数据 (Rich Data Fetching)
-            const [users, tweets] = await Promise.all([
-                db.users.where('id').anyOf([...userIds]).toArray(),
-                db.tweets.where('id').anyOf([...tweetIds]).toArray()
+            // 🌟 1. 改为直接拉取所有数据，不再依赖 edges 作为入口
+            // 这样即使旧数据没有 Edge，我们也能在内存中通过逻辑把它们连起来
+            const [allUsers, allTweets, edges] = await Promise.all([
+                db.users.toArray(),
+                db.tweets.toArray(),
+                db.graphEdges.toArray()
             ]);
 
-            // 4. 用户融合 (Entity Resolution): 基于 handle 合并重复用户
-            const userRedirectMap = new Map<string, string>(); // duplicateId -> canonicalId
-            const handleMap = new Map<string, any>(); // handle -> User Object
+            const userIds = new Set(allUsers.map(u => u.id));
+            const tweetIds = new Set(allTweets.map(t => t.id));
 
-            users.forEach(u => {
+            // 2. 建立重定向 Map
+            const userRedirectMap = new Map<string, string>();
+            const handleMap = new Map<string, any>();
+
+            allUsers.forEach(u => {
                 if (!u.handle) return;
-                const existing = handleMap.get(u.handle);
+                const normalizedHandle = u.handle.toLowerCase(); // 统一小写处理防止匹配失败
+                const existing = handleMap.get(normalizedHandle);
                 if (existing) {
-                    // 发现重复！保留那个有头像的，或者 ID 更大的
                     const keepExisting = !!existing.avatar && !u.avatar;
-
-                    if (keepExisting) {
-                        userRedirectMap.set(u.id, existing.id);
-                    } else {
-                        //由此 ID 篡位成为正统
+                    if (keepExisting) userRedirectMap.set(u.id, existing.id);
+                    else {
                         userRedirectMap.set(existing.id, u.id);
-                        handleMap.set(u.handle, u);
+                        handleMap.set(normalizedHandle, u);
                     }
                 } else {
-                    handleMap.set(u.handle, u);
+                    handleMap.set(normalizedHandle, u);
                 }
             });
 
-            // 4.1 重建 User Map (只保留 Canonical Users)
             const userMap = new Map<string, any>();
             handleMap.forEach((u) => userMap.set(u.id, u));
 
-            // 4.2 Helper:以此获取最终 ID
             const getCanonicalId = (id: string) => userRedirectMap.get(id) || id;
+            const tweetMap = new Map(allTweets.map(t => [t.id, t]));
 
-            const tweetMap = new Map(tweets.map(t => [t.id, t]));
-
-            // 🌟 5. 统计每个用户的推文数和总互动量
+            // 3. 统计
             const userStats = new Map<string, { tweetCount: number; totalEngagement: number }>();
-            tweets.forEach(t => {
+            allTweets.forEach(t => {
                 const authorId = getCanonicalId(t.authorId);
                 if (!authorId) return;
-
                 const existing = userStats.get(authorId) || { tweetCount: 0, totalEngagement: 0 };
                 existing.tweetCount += 1;
-                existing.totalEngagement += Number(t.favoriteCount || 0)
-                    + Number(t.retweetCount || 0) * 2
-                    + Number(t.replyCount || 0) * 3;
+                existing.totalEngagement += (t.favoriteCount || 0) + (t.retweetCount || 0) * 2;
                 userStats.set(authorId, existing);
             });
 
@@ -110,16 +85,16 @@ export function useGraphData() {
 
                         // 🌟 用户权重: 基础 + 粉丝量 + 推文数 + 互动量
                         const followers = Number(u?.followersCount || 0);
-                        val = 8                                           // 基础大小
+                        val = 12                                          // 基础大小增加
                             + (Math.log10(followers + 1) * 2)             // 粉丝量 (对数)
                             + (Math.sqrt(stats.tweetCount) * 4)           // 推文数 (开方)
-                            + (Math.sqrt(stats.totalEngagement / 100) * 3); // 互动量 (开方, 归一化)
+                            + (Math.sqrt(stats.totalEngagement / 100) * 3); // 互动量 (开方)
                     } else if (type === 'tweet') {
                         const t = tweetMap.get(id);
                         label = t ? (t.text?.slice(0, 40)) : 'Dead Link';
                         color = '#404040';
 
-                        // 🌟 丰富作者信息：从 userMap 中查找完整的用户对象
+                        // 🌟 丰富作者信息
                         let enrichedAuthor = null;
                         if (t?.authorId) {
                             const canonicalAuthorId = getCanonicalId(t.authorId);
@@ -128,66 +103,187 @@ export function useGraphData() {
 
                         data = {
                             ...t,
-                            // 覆盖 author 字段为完整的用户对象
-                            author: enrichedAuthor || t?.author || {
-                                id: t?.authorId,
-                                handle: typeof t?.author === 'string' ? t.author : t?.authorId,
-                                name: t?.authorName || t?.authorId,
-                                avatar: t?.authorAvatarUrl
-                            }
+                            author: enrichedAuthor || t?.author || { id: t?.authorId }
                         };
 
-                        // 🌟 推文权重: 2 + 互动量的开方加成
                         const likes = Number(t?.favoriteCount || 0);
-                        const retweets = Number(t?.retweetCount || 0);
-                        const replies = Number(t?.replyCount || 0);
-                        const score = likes + (retweets * 2) + (replies * 3);
-                        val = 2 + (Math.sqrt(score) * 1.5);
+                        const score = likes + (Number(t?.retweetCount || 0) * 2);
+                        val = 3 + (Math.sqrt(score) * 1.5);
                     } else if (type === 'tag') {
                         label = id;
                         color = '#a1a1aa';
-                        val = 5; // 标签固定大小
+                        val = 5;
                     }
 
                     nodeMap.set(id, { id, type, label, img, color, val, data });
                 } else if (valDelta > 0) {
-                    // 如果是重复节点，仅微调权重
                     const node = nodeMap.get(id);
                     node.val += valDelta;
                 }
             };
 
-            // 遍历边来生成节点
+            // 🌟 7. 派生更深层的连线 (Social & Semantic)
+            const derivedLinks: any[] = [];
+
+            // 7.1 社交互动边 (User -> User): 基于回复/引用/转发
+            allTweets.forEach((t: any) => {
+                const sourceUser = getCanonicalId(t.authorId);
+                const targets = new Set<string>(); // 一个推文可能关联多个目标用户
+
+                // A. 处理回复 (Reply) - replyToUser 是用户 Handle
+                if (t.replyToUser) {
+                    const normalizedReplyHandle = t.replyToUser.toLowerCase();
+                    const target = Array.from(userMap.values()).find((u: any) => u.handle?.toLowerCase() === normalizedReplyHandle);
+
+                    if (target) targets.add(getCanonicalId(target.id));
+                    else targets.add(`phantom-${t.replyToUser}`);
+                }
+
+                // B. 处理转发 (Retweet) - retweetFromId 是推文 ID，需要找到其作者
+                if ((t as any).retweetFromId) {
+                    const originalTweet = tweetMap.get((t as any).retweetFromId);
+                    if (originalTweet) {
+                        const originalAuthor = getCanonicalId(originalTweet.authorId);
+                        if (originalAuthor && originalAuthor !== sourceUser) {
+                            targets.add(originalAuthor);
+                        }
+                    }
+                    // 如果找不到原推文，不创建虚假的用户节点
+                }
+
+                // C. 处理引用 (Quote) - quoteFromId 也是推文 ID
+                if ((t as any).quoteFromId) {
+                    const quotedTweet = tweetMap.get((t as any).quoteFromId);
+                    if (quotedTweet) {
+                        const quotedAuthor = getCanonicalId(quotedTweet.authorId);
+                        if (quotedAuthor && quotedAuthor !== sourceUser) {
+                            targets.add(quotedAuthor);
+                        }
+                    }
+                }
+
+                // D. 🌟 处理推文到推文的直接关联 (Thread/Reply/Retweet)
+                // 如果目标推文不在数据库里，我们创建一个幻影推文节点（不是用户节点）
+                const tweetLineage = [
+                    { id: t.replyToId, type: 'reply' },
+                    { id: (t as any).retweetFromId, type: 'retweet' },
+                    { id: (t as any).quoteFromId, type: 'quote' }
+                ];
+
+                tweetLineage.forEach(link => {
+                    if (!link.id) return;
+                    const canonicalTarget = link.id; // 不要 getCanonicalId，这是推文 ID
+
+                    // 如果这个推文不在数据库里，创建幻影推文节点
+                    if (!tweetMap.has(canonicalTarget) && !nodeMap.has(canonicalTarget)) {
+                        nodeMap.set(canonicalTarget, {
+                            id: canonicalTarget,
+                            type: 'tweet',
+                            label: link.type === 'reply' ? '原帖' : (link.type === 'retweet' ? '被转发' : '被引用'),
+                            color: '#333',
+                            val: 3,
+                            data: {
+                                isPhantom: true,
+                                tweetUrl: `https://x.com/i/status/${canonicalTarget}` // 提供跳转链接
+                            }
+                        });
+                    }
+                });
+
+                // 建立 User -> User 的强关联 (维持原有逻辑)
+                targets.forEach(targetId => {
+                    if (sourceUser && targetId && sourceUser !== targetId) {
+                        derivedLinks.push({
+                            source: sourceUser,
+                            target: targetId,
+                            value: 5,
+                            linkType: 'social',
+                            label: '社交互动'
+                        });
+
+                        // 确保 source 节点存在
+                        addNode(sourceUser, 'user');
+
+                        // 确保 target 节点存在
+                        if (targetId.startsWith('phantom-')) {
+                            const handle = targetId.replace('phantom-', '');
+                            if (!nodeMap.has(targetId)) {
+                                nodeMap.set(targetId, {
+                                    id: targetId,
+                                    type: 'user',
+                                    label: `@${handle}`,
+                                    img: `https://unavatar.io/x/${handle}`,
+                                    color: '#444', // 幻影节点用深灰色
+                                    val: 10,
+                                    data: { handle, isPhantom: true }
+                                });
+                            }
+                        } else {
+                            addNode(targetId, 'user');
+                        }
+                    }
+                });
+            });
+
+            // 7.2 语义/同好边 (User -> User): 基于 AI 关键词重合
+            const usersList = Array.from(userMap.values());
+            for (let i = 0; i < usersList.length; i++) {
+                for (let j = i + 1; j < usersList.length; j++) {
+                    const u1 = usersList[i];
+                    const u2 = usersList[j];
+
+                    const k1 = new Set(u1.aiProfile?.keywords || []);
+                    const k2 = new Set(u2.aiProfile?.keywords || []);
+
+                    if (k1.size === 0 || k2.size === 0) continue;
+
+                    // 计算交集
+                    const intersection = Array.from(k1).filter(k => k2.has(k));
+                    if (intersection.length >= 2) { // 至少有2个共同关键词
+                        const id1 = getCanonicalId(u1.id);
+                        const id2 = getCanonicalId(u2.id);
+                        derivedLinks.push({
+                            source: id1,
+                            target: id2,
+                            value: 2,
+                            linkType: 'semantic', // 🌟 语义/同好连线
+                            label: `共同关注: ${intersection.slice(0, 2).join(', ')}`
+                        });
+                        addNode(id1, 'user');
+                        addNode(id2, 'user');
+                    }
+                }
+            }
+
+            // 8. 遍历原有边来生成节点
             edges.forEach(e => {
                 const source = getCanonicalId(e.source);
                 const target = getCanonicalId(e.target);
-
-                // 只有当 source != target 时才添加边 (避免自环)
                 if (source === target) return;
 
-                // Source 是 tweet (Tag除外)
                 if (e.type !== 'tag') addNode(source, 'tweet', 0.5);
-                else addNode(source, 'tweet', 0.0); // tag 的 source 也是 tweet，但不增加额外权重
+                else addNode(source, 'tweet', 0.0);
 
-                // Target 根据类型
                 if (e.type === 'author') addNode(target, 'user', 1.5);
                 else if (e.type === 'tag') addNode(target, 'tag', 0.8);
                 else if (e.type === 'reply' || e.type === 'quote') addNode(target, 'tweet', 0.5);
             });
 
-            const nodes = Array.from(nodeMap.values());
-
-            // 6. 连线 (也需要重定向)
-            const links = edges
+            // 9. 汇总连线
+            const originalLinks = edges
                 .map(e => ({
                     source: getCanonicalId(e.source),
                     target: getCanonicalId(e.target),
-                    value: e.weight,
-                    linkType: e.type // 🌟 传递关系类型
+                    value: e.weight || 1,
+                    linkType: e.type
                 }))
-                .filter(l => l.source !== l.target); // 再次过滤自环
+                .filter(l => l.source !== l.target);
 
-            return { nodes, links };
+
+            return {
+                nodes: Array.from(nodeMap.values()),
+                links: [...originalLinks, ...derivedLinks]
+            };
         } catch (e) {
             console.error("Failed to load graph", e);
             return { nodes: [], links: [] };

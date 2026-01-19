@@ -134,6 +134,19 @@ export const Normalizer = {
         const media = this.extractMedia(legacy);
         if (!fullText && media.length === 0) return null;
 
+        // --- 🌟 社交关系提取 (新增) ---
+        // 1. 回复关系
+        const replyToId = legacy.in_reply_to_status_id_str || null;
+        const replyToUser = legacy.in_reply_to_screen_name || null;
+
+        // 2. 转发关系
+        const retweetedStatus = tweetNode.retweeted_status_result?.result ?? tweetNode.retweeted_status;
+        const retweetFromId = retweetedStatus?.rest_id ?? retweetedStatus?.id_str ?? null;
+
+        // 3. 引用关系
+        const quotedStatus = tweetNode.quoted_status_result?.result ?? tweetNode.quoted_status;
+        const quoteFromId = quotedStatus?.rest_id ?? quotedStatus?.id_str ?? null;
+
         return {
             id: tweetId,
             authorId: authorId || authorHandle, // 优先用 ID，兜底用 Handle
@@ -153,11 +166,15 @@ export const Normalizer = {
             favoriteCount: legacy.favorite_count || 0,
             retweetCount: legacy.retweet_count || 0,
             replyCount: legacy.reply_count || 0,
-            viewCount: this.parseViewCount(tweetNode.views?.count || tweetNode.views?.viewCount),
+            viewCount: parseInt(tweetNode.views?.count || "0"),
             media: media,
+
+            // 🌟 注入社交元数据
             conversationId: legacy.conversation_id_str,
-            replyToId: legacy.in_reply_to_status_id_str,
-            replyToUser: legacy.in_reply_to_screen_name,
+            replyToId: replyToId,
+            replyToUser: replyToUser,
+            retweetFromId: retweetFromId, // 🆕 新增字段
+            quoteFromId: quoteFromId,      // 🆕 新增字段
             aiStatus: ProcessStatus.Pending,
             imageProcessStatus: ProcessStatus.Pending
         } as Tweet;

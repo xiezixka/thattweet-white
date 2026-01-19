@@ -55,7 +55,7 @@ export interface GraphEdge {
     id?: number;
     source: string;       // 起点ID (tweetId, userId, tag)
     target: string;       // 终点ID
-    type: 'reply' | 'quote' | 'author' | 'tag' | 'mention' | 'similarity';
+    type: 'reply' | 'quote' | 'retweet' | 'author' | 'tag' | 'mention' | 'similarity' | 'social';
     weight: number;       // 边的权重/引力
     createdAt: number;    // 创建时间，用于计算时间衰减
 }
