@@ -23,10 +23,21 @@ const ConnectionsView: React.FC = () => {
     // 🌟 3D 纹理缓存 (防止闪烁和内存爆炸)
     const userTextureCache = useRef<Map<string, THREE.Texture>>(new Map());
     const glowTextureCache = useRef<Map<string, THREE.Texture>>(new Map());
+    const userSpriteCache = useRef<Map<string, THREE.Sprite>>(new Map());
+    const nodeSpriteCache = useRef<Map<string, THREE.Sprite>>(new Map());
+    const glowMaterialCache = useRef<Map<string, THREE.SpriteMaterial>>(new Map());
 
     // 组件卸载时清理纹理
     useEffect(() => {
         return () => {
+            userSpriteCache.current.forEach(sprite => {
+                const material = sprite.material as THREE.SpriteMaterial;
+                material?.dispose();
+            });
+            userSpriteCache.current.clear();
+            nodeSpriteCache.current.clear();
+            glowMaterialCache.current.forEach(material => material.dispose());
+            glowMaterialCache.current.clear();
             userTextureCache.current.forEach(t => t.dispose());
             userTextureCache.current.clear();
             glowTextureCache.current.forEach(t => t.dispose());
@@ -122,6 +133,54 @@ const ConnectionsView: React.FC = () => {
 
         ctx.restore();
     }, [starPattern, dimensions]);
+
+    const getUserCacheKey = useCallback((node: any) => {
+        return (node.data?.handle || node.id || 'unknown') as string;
+    }, []);
+
+    const getGlowMaterial = useCallback((color: string, opacity: number, nodeType: 'tweet' | 'tag') => {
+        let texture = glowTextureCache.current.get(color);
+        if (!texture) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                const r = 30;
+                const x = 32;
+                const y = 32;
+                const gradient = ctx.createRadialGradient(x, y, 4, x, y, r);
+                gradient.addColorStop(0, '#ffffff');
+                gradient.addColorStop(0.3, color);
+                gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.generateMipmaps = false;
+            texture.minFilter = THREE.LinearFilter;
+            glowTextureCache.current.set(color, texture);
+        }
+
+        const materialKey = `${nodeType}_${color}_${opacity}`;
+        let material = glowMaterialCache.current.get(materialKey);
+        if (!material) {
+            material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                opacity,
+                blending: nodeType === 'tweet' ? THREE.NormalBlending : THREE.AdditiveBlending,
+                depthWrite: false,
+                depthTest: true
+            });
+            glowMaterialCache.current.set(materialKey, material);
+        }
+        return material;
+    }, []);
 
 
 
@@ -340,27 +399,49 @@ const ConnectionsView: React.FC = () => {
 
         return () => {
             ro.disconnect();
-
-            // 🛡️ 终极地毯式清理：卸载时释放所有 GPU 资源
-            console.log('[ConnectionsView] Disposing GPU resources...');
-
-            userTextureCache.current.forEach(t => t.dispose());
-            userTextureCache.current.clear();
-
-            glowTextureCache.current.forEach(t => t.dispose());
-            glowTextureCache.current.clear();
-
-            filteredData.nodes.forEach((n: any) => {
-                if (n._materialCache) {
-                    Object.values(n._materialCache).forEach((m: any) => m.dispose());
-                    delete n._materialCache;
-                }
-            });
         };
-    }, [filteredData.nodes]);
+    }, []);
+
+    useEffect(() => {
+        const activeNodeIds = new Set(filteredData.nodes.map((n: any) => n.id));
+        const activeUserKeys = new Set(
+            filteredData.nodes
+                .filter((n: any) => n.type === 'user')
+                .map((n: any) => getUserCacheKey(n))
+        );
+
+        const animState = nodeAnimStateRef.current;
+        for (const key of animState.keys()) {
+            if (!activeNodeIds.has(key)) {
+                animState.delete(key);
+            }
+        }
+
+        userSpriteCache.current.forEach((sprite, key) => {
+            if (!activeUserKeys.has(key)) {
+                const material = sprite.material as THREE.SpriteMaterial;
+                material?.dispose();
+                userSpriteCache.current.delete(key);
+            }
+        });
+
+        userTextureCache.current.forEach((texture, key) => {
+            if (!activeUserKeys.has(key)) {
+                texture.dispose();
+                userTextureCache.current.delete(key);
+            }
+        });
+
+        nodeSpriteCache.current.forEach((sprite, key) => {
+            if (!activeNodeIds.has(key)) {
+                nodeSpriteCache.current.delete(key);
+            }
+        });
+    }, [filteredData.nodes, getUserCacheKey]);
 
     // 🌟 动画循环：平滑更新节点状态
     useEffect(() => {
+        if (settings.is3D) return;
         let isRunning = true;
 
         const animate = () => {
@@ -410,7 +491,61 @@ const ConnectionsView: React.FC = () => {
             isRunning = false;
             cancelAnimationFrame(animFrameRef.current);
         };
-    }, [filteredData.nodes, highlightNodes, lerp]);
+    }, [filteredData.nodes, highlightNodes, lerp, settings.is3D]);
+
+    useEffect(() => {
+        if (!settings.is3D || !fgRef.current) return;
+
+        let needsRefresh = false;
+
+        filteredData.nodes.forEach((node: any) => {
+            const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
+            const focusOpacity = (lockedNode && !isHighlighted) ? 0.6 : 1.0;
+
+            if (node.type === 'user') {
+                const cacheKey = getUserCacheKey(node);
+                const sprite = userSpriteCache.current.get(cacheKey);
+                if (sprite) {
+                    const material = sprite.material as THREE.SpriteMaterial;
+                    if (material.opacity !== focusOpacity) {
+                        material.opacity = focusOpacity;
+                        needsRefresh = true;
+                    }
+
+                    const baseSize = (Math.sqrt(node.val || 1) * 6) + 20;
+                    const size = Math.min(baseSize, 120);
+                    if (sprite.scale.x !== size || sprite.scale.y !== size) {
+                        sprite.scale.set(size, size, 1);
+                        needsRefresh = true;
+                    }
+                }
+                return;
+            }
+
+            const nodeType = node.type === 'tweet' ? 'tweet' : 'tag';
+            const color = node.color || '#60a5fa';
+            const material = getGlowMaterial(color, focusOpacity, nodeType);
+            const sprite = nodeSpriteCache.current.get(node.id);
+            if (sprite) {
+                if (sprite.material !== material) {
+                    sprite.material = material;
+                    needsRefresh = true;
+                }
+
+                const val = node.val || 1;
+                let baseSize = node.type === 'tweet' ? (Math.sqrt(val) * 2.5) + 6 : 8;
+                const size = node.type === 'tweet' ? Math.min(baseSize, 40) : baseSize;
+                if (sprite.scale.x !== size || sprite.scale.y !== size) {
+                    sprite.scale.set(size, size, 1);
+                    needsRefresh = true;
+                }
+            }
+        });
+
+        if (needsRefresh && fgRef.current) {
+            fgRef.current.refresh();
+        }
+    }, [filteredData.nodes, highlightNodes, lockedNode, settings.is3D, getGlowMaterial, getUserCacheKey]);
 
     if (loading) {
         return (
@@ -500,28 +635,28 @@ const ConnectionsView: React.FC = () => {
                                 nodeThreeObject={(node: any) => {
                                     // 3D 节点定制 - 纯 Sprite 方案 (高性能 + 2D 视觉一致性)
 
-                                    // 1. User 节点: 圆形头像 + 光圈 (带缓存)
+                                    // 1. User ??: ???? + ?? (???)
                                     if (node.type === 'user') {
-                                        const imgUrl = `https://unavatar.io/x/${node.data?.handle || node.id}?fallback=https://wsrv.nl/?url=${encodeURIComponent(node.img || '')}`;
-                                        const cacheKey = node.data?.handle || node.id;
+                                        const cacheKey = getUserCacheKey(node);
+                                        const imgUrl = `https://unavatar.io/x/${cacheKey}?size=128&fallback=https://wsrv.nl/?url=${encodeURIComponent(node.img || '')}`;
 
-                                        // 尝试从缓存获取
+                                        // ???????
                                         let texture = userTextureCache.current.get(cacheKey);
 
                                         if (!texture) {
-                                            // 预创建一个 Canvas 纹理作为占位符
+                                            // ????? Canvas ???????
                                             const canvas = document.createElement('canvas');
                                             canvas.width = 128;
                                             canvas.height = 128;
                                             const ctx = canvas.getContext('2d');
                                             if (ctx) {
-                                                // 绘制底色圆形
+                                                // ??????
                                                 ctx.fillStyle = '#18181b';
                                                 ctx.beginPath();
                                                 ctx.arc(64, 64, 60, 0, Math.PI * 2);
                                                 ctx.fill();
 
-                                                // 绘制文字初始
+                                                // ??????
                                                 ctx.fillStyle = '#a1a1aa';
                                                 ctx.font = 'bold 40px Arial';
                                                 ctx.textAlign = 'center';
@@ -531,9 +666,11 @@ const ConnectionsView: React.FC = () => {
 
                                             texture = new THREE.CanvasTexture(canvas);
                                             texture.colorSpace = THREE.SRGBColorSpace;
-                                            userTextureCache.current.set(cacheKey, texture); // 存入缓存
+                                            texture.generateMipmaps = false;
+                                            texture.minFilter = THREE.LinearFilter;
+                                            userTextureCache.current.set(cacheKey, texture); // ????
 
-                                            // 异步加载真实头像覆盖 Canvas
+                                            // ?????????? Canvas
                                             const img = new Image();
                                             img.crossOrigin = "Anonymous";
                                             img.src = imgUrl;
@@ -541,43 +678,42 @@ const ConnectionsView: React.FC = () => {
                                                 if (ctx) {
                                                     ctx.clearRect(0, 0, 128, 128);
 
-                                                    // 绘制柔和光圈 (降低亮度)
+                                                    // ?????? (????)
                                                     ctx.save();
-                                                    ctx.shadowColor = 'rgba(255, 255, 255, 0.25)'; // 降低发光强度
-                                                    ctx.shadowBlur = 6; // 降低模糊半径
+                                                    ctx.shadowColor = 'rgba(255, 255, 255, 0.25)'; // ??????
+                                                    ctx.shadowBlur = 6; // ??????
                                                     ctx.beginPath();
                                                     ctx.arc(64, 64, 60, 0, Math.PI * 2);
-                                                    ctx.fillStyle = '#0a0a0a'; // 稍亮的黑色底色
+                                                    ctx.fillStyle = '#0a0a0a'; // ???????
                                                     ctx.fill();
                                                     ctx.restore();
 
-                                                    // 绘制圆形剪裁的头像
+                                                    // ?????????
                                                     ctx.save();
                                                     ctx.beginPath();
                                                     ctx.arc(64, 64, 60, 0, Math.PI * 2);
                                                     ctx.clip();
                                                     ctx.drawImage(img, 0, 0, 128, 128);
 
-                                                    // 绘制边框 (降低亮度)
-                                                    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; // 降低边框亮度
-                                                    ctx.lineWidth = 2; // 细边框
+                                                    // ???? (????)
+                                                    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; // ??????
+                                                    ctx.lineWidth = 2; // ???
                                                     ctx.stroke();
                                                     ctx.restore();
 
                                                     if (texture) texture.needsUpdate = true;
+                                                    if (fgRef.current) fgRef.current.refresh();
                                                 }
                                             };
                                         }
 
-                                        // 🌟 性能：复用材质。Three.js 中 Material 的创建是非常昂贵的，且必须手动 dispose。
+                                        // ?? ????? Sprite & Material???????
                                         const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
                                         const opacity = (lockedNode && !isHighlighted) ? 0.6 : 1.0;
-                                        const materialKey = `${cacheKey}_${opacity}`;
 
-                                        // 尝试从材质缓存获取
-                                        let material = (node as any)._materialCache?.[opacity];
-                                        if (!material) {
-                                            material = new THREE.SpriteMaterial({
+                                        let sprite = userSpriteCache.current.get(cacheKey);
+                                        if (!sprite) {
+                                            const material = new THREE.SpriteMaterial({
                                                 map: texture,
                                                 transparent: true,
                                                 opacity: opacity,
@@ -585,20 +721,15 @@ const ConnectionsView: React.FC = () => {
                                                 depthTest: true,
                                                 sizeAttenuation: true
                                             });
-                                            if (!(node as any)._materialCache) (node as any)._materialCache = {};
-                                            (node as any)._materialCache[opacity] = material;
-                                        }
-
-                                        const sprite = new THREE.Sprite(material);
-
-                                        // 🛡️ 强制缓存控制：如果缓存太大，执行简单清理
-                                        if (userTextureCache.current.size > 200) {
-                                            const firstKey = userTextureCache.current.keys().next().value;
-                                            if (firstKey) {
-                                                const oldTexture = userTextureCache.current.get(firstKey);
-                                                oldTexture?.dispose();
-                                                userTextureCache.current.delete(firstKey);
+                                            sprite = new THREE.Sprite(material);
+                                            userSpriteCache.current.set(cacheKey, sprite);
+                                        } else {
+                                            const material = sprite.material as THREE.SpriteMaterial;
+                                            if (material.map !== texture) {
+                                                material.map = texture;
+                                                material.needsUpdate = true;
                                             }
+                                            material.opacity = opacity;
                                         }
 
                                         const baseSize = (Math.sqrt(node.val || 1) * 6) + 20;
@@ -607,57 +738,30 @@ const ConnectionsView: React.FC = () => {
                                         return sprite;
                                     }
 
-                                    // 2. Tweet/Tag 节点: 发光光点 Canvas Sprite (带缓存)
+                                    // 2. Tweet/Tag ??: ???? Canvas Sprite (???)
                                     const color = node.color || '#60a5fa';
-                                    let texture = glowTextureCache.current.get(color);
 
-                                    if (!texture) {
-                                        const canvas = document.createElement('canvas');
-                                        canvas.width = 64;
-                                        canvas.height = 64;
-                                        const ctx = canvas.getContext('2d');
-                                        if (ctx) {
-                                            const r = 30;
-                                            const x = 32;
-                                            const y = 32;
-
-                                            // 径向渐变模拟 Bloom
-                                            const gradient = ctx.createRadialGradient(x, y, 4, x, y, r);
-                                            gradient.addColorStop(0, '#ffffff'); // 核心亮白
-                                            gradient.addColorStop(0.3, color);
-                                            gradient.addColorStop(1, 'rgba(0,0,0,0)'); // 边缘透明
-
-                                            ctx.fillStyle = gradient;
-                                            ctx.beginPath();
-                                            ctx.arc(x, y, r, 0, Math.PI * 2);
-                                            ctx.fill();
-                                        }
-
-                                        texture = new THREE.CanvasTexture(canvas);
-                                        texture.colorSpace = THREE.SRGBColorSpace;
-                                        glowTextureCache.current.set(color, texture);
-                                    }
-
-                                    // 🌟 聚焦模式：计算透明度
+                                    // ?? ??????????
                                     const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
                                     const focusOpacity = (lockedNode && !isHighlighted) ? 0.6 : 1.0;
+                                    const nodeType = node.type === 'tweet' ? 'tweet' : 'tag';
 
-                                    const material = new THREE.SpriteMaterial({
-                                        map: texture,
-                                        transparent: true,
-                                        opacity: focusOpacity,
-                                        // 🛡️ 普通推文改用 NormalBlending 避免亮度爆炸，Tag 可以保留 Additive
-                                        blending: node.type === 'tweet' ? THREE.NormalBlending : THREE.AdditiveBlending,
-                                        depthWrite: false,
-                                        depthTest: true
-                                    });
-                                    const sprite = new THREE.Sprite(material);
+                                    const material = getGlowMaterial(color, focusOpacity, nodeType);
+                                    const spriteKey = node.id;
 
-                                    // 尺寸调整
+                                    let sprite = nodeSpriteCache.current.get(spriteKey);
+                                    if (!sprite) {
+                                        sprite = new THREE.Sprite(material);
+                                        nodeSpriteCache.current.set(spriteKey, sprite);
+                                    } else if (sprite.material !== material) {
+                                        sprite.material = material;
+                                    }
+
+                                    // ????
                                     const val = node.val || 1;
-                                    // 🌟 优化缩放逻辑：使用更温和的开根号 + 封顶限制
+                                    // ?? ???????????????? + ????
                                     let baseSize = node.type === 'tweet' ? (Math.sqrt(val) * 2.5) + 6 : 8;
-                                    const size = node.type === 'tweet' ? Math.min(baseSize, 40) : baseSize; // 推文最高限制在 40
+                                    const size = node.type === 'tweet' ? Math.min(baseSize, 40) : baseSize; // ??????? 40
 
                                     sprite.scale.set(size, size, 1);
 
@@ -720,10 +824,14 @@ const ConnectionsView: React.FC = () => {
                                     // 当鼠标移开节点时，node为null
                                     // 只有在没有锁定节点时才清空hoverNode
                                     if (!node && !lockedNode) {
-                                        setHoverNode(null);
+                                        if (hoverNode) {
+                                            setHoverNode(null);
+                                        }
                                     } else if (node) {
-                                        setHoverNode(node);
-                                        setShowFullText(false);
+                                        if (hoverNode?.id !== node.id) {
+                                            setHoverNode(node);
+                                            setShowFullText(false);
+                                        }
                                     }
                                 }}
                                 onNodeClick={node => {
@@ -800,7 +908,7 @@ const ConnectionsView: React.FC = () => {
                                     if (node.type === 'tag') auraColor = 'rgba(255, 255, 255, 0.05)';
                                     if (node.data?.aiScore > 80) auraColor = 'rgba(234, 179, 8, 0.15)'; // 优质内容金光
 
-                                    // 1. User 节点: 绘制头像
+                                    // 1. User ??: ???? + ?? (???)
                                     if (node.type === 'user') {
                                         const rawSize = (Math.sqrt(node.val || 1) * 6) + 12;
                                         const size = Math.min(64, Math.max(24, rawSize)) * s;
@@ -855,7 +963,7 @@ const ConnectionsView: React.FC = () => {
 
                                                 // 使用 handle 查 unavatar
                                                 const handle = node.data?.handle || node.id;
-                                                img.src = `https://unavatar.io/x/${handle}?fallback=https://wsrv.nl/?url=${encodeURIComponent(node.img || '')}`;
+                                                img.src = `https://unavatar.io/x/${handle}?size=64&fallback=https://wsrv.nl/?url=${encodeURIComponent(node.img || '')}`;
 
                                                 img.onload = () => {
                                                     node.__imgObj = img;
@@ -1009,10 +1117,14 @@ const ConnectionsView: React.FC = () => {
                                     // 当鼠标移开节点时，node为null
                                     // 只有在没有锁定节点时才清空hoverNode
                                     if (!node && !lockedNode) {
-                                        setHoverNode(null);
+                                        if (hoverNode) {
+                                            setHoverNode(null);
+                                        }
                                     } else if (node) {
-                                        setHoverNode(node);
-                                        setShowFullText(false);
+                                        if (hoverNode?.id !== node.id) {
+                                            setHoverNode(node);
+                                            setShowFullText(false);
+                                        }
                                     }
                                 }}
                                 onNodeClick={(node) => {
