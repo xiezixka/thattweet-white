@@ -42,9 +42,7 @@ const ConnectionsView: React.FC = () => {
     const [refreshCount, setRefreshCount] = useState(0);
     const [showFullText, setShowFullText] = useState(false); // 🌟 全文开关
 
-    // 🌟 交互手势状态
-    const [isGravityActive, setIsGravityActive] = useState(false);
-    const [gravityCenter, setGravityCenter] = useState<{ x: number, y: number } | null>(null);
+
 
     // lerp 函数：平滑插值
     const lerp = (current: number, target: number, speed: number) => {
@@ -225,108 +223,116 @@ const ConnectionsView: React.FC = () => {
         return { highlightNodes, highlightLinks };
     }, [lockedNode, hoverNode, filteredData, settings.highlightDepth]);
 
-    // 物理引擎配置 (实时) - 仅对 2D 模式生效
-    // 3D 模式使用 react-force-graph-3d 的默认物理引擎，避免访问未初始化的 simulation
+    // 物理引擎配置 (实时)
     useEffect(() => {
-        // 🌟 3D 模式下添加星空背景 (增强版)
+        // 1. 🌟 3D 模式下添加星空背景 (增强版)
         if (settings.is3D && fgRef.current) {
             const scene = fgRef.current.scene();
             if (scene && !scene.getObjectByName('starfield')) {
                 const geometry = new THREE.BufferGeometry();
-                // 🌟 超巨型宇宙生成：解决“缩放露馅”问题
-                // 策略：创建一个半径极大（100,000）的球体，把玩家包裹在中间
                 const count = 30000;
                 const positions = new Float32Array(count * 3);
                 const sizes = new Float32Array(count);
 
                 for (let i = 0; i < count; i++) {
-                    // 1. 距离分布：使用三次方根分布，让星星在远处更密集，构成“背景墙”
-                    // 同时保留一部分在近处（4000以内）作为“飞掠尘埃”
-                    const isBackground = Math.random() > 0.2; // 80% 是背景星
-                    let r;
-                    if (isBackground) {
-                        r = 10000 + Math.random() * 90000; // 1w - 10w
-                    } else {
-                        r = 4000 + Math.random() * 6000;   // 4k - 10k
-                    }
-
-                    // 2. 球坐标随机
+                    const isBackground = Math.random() > 0.2;
+                    let r = isBackground ? 10000 + Math.random() * 90000 : 4000 + Math.random() * 6000;
                     const theta = 2 * Math.PI * Math.random();
                     const phi = Math.acos(2 * Math.random() - 1);
-
                     positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
                     positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
                     positions[i * 3 + 2] = r * Math.cos(phi);
-
-                    // 3. 大小修正：远处的星星要稍微大一点点才能在 sizeAttenuation 下可见
-                    // 近处的星星作为尘埃要小
                     sizes[i] = isBackground ? 4.0 : 2.0;
                 }
 
-
                 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1)); // 传递给 shader 或 sizeAttenuation
+                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
-                // 使用 shader material 或者简单的 points material
                 const material = new THREE.PointsMaterial({
                     size: 1.5,
                     color: 0xffffff,
                     transparent: true,
                     opacity: 0.6,
-                    sizeAttenuation: true // 关键：允许近大远小
+                    sizeAttenuation: true
                 });
 
                 const stars = new THREE.Points(geometry, material);
                 stars.name = 'starfield';
                 scene.add(stars);
             }
-            return;
         }
 
-        // 延迟执行，确保组件完全挂载
+        // 2. 🌟 实时动力学参数调整 (覆盖 2D & 3D)
         const timeoutId = setTimeout(() => {
             const fg = fgRef.current;
             if (!fg || typeof fg.d3Force !== 'function') return;
 
             try {
-                // 重置自动缩放标记
-                hasInitialZoomRef.current = false;
+                // 重置自动缩放标记 (仅在数据大变或初次加载时)
+                // hasInitialZoomRef.current = false;
 
-                // 2D 模式力场配置
-                fg.d3Force('charge')?.strength(-settings.repelForce);
-                fg.d3Force('link')?.distance(settings.linkDistance);
+                // 🌟 基础斥力与连接距离
+                fg.d3Force('charge')?.strength((node: any) => {
+                    // 用户节点需要更强的斥力来推开周围的推文
+                    const baseRepel = -settings.repelForce * (settings.is3D ? 4 : 1);
+                    return node.type === 'user' ? baseRepel * 2.5 : baseRepel;
+                });
 
-                const centerX = dimensions.w / 2;
-                const centerY = dimensions.h / 2;
+                fg.d3Force('link')?.distance((link: any) => {
+                    // 连接用户和推文的线稍微拉长一点，防止重叠
+                    const baseDist = settings.linkDistance * (settings.is3D ? 1.5 : 1);
+                    return (link.source.type === 'user' || link.target.type === 'user') ? baseDist * 1.5 : baseDist;
+                });
 
-                if (!fg.d3Force('centerX')) {
-                    fg.d3Force('centerX', forceX(centerX));
-                    fg.d3Force('centerY', forceY(centerY));
+                // 🌟 增加碰撞检测 (防止节点物理重叠)
+                if (!fg.d3Force('collision')) {
+                    fg.d3Force('collision', (node: any) => {
+                        const radius = node.type === 'user' ? 25 : 15;
+                        return radius * settings.nodeScale;
+                    });
                 }
 
-                fg.d3Force('centerX')?.strength(settings.centerForce);
-                fg.d3Force('centerY')?.strength(settings.centerForce);
-                fg.d3Force('centerX')?.x(centerX);
-                fg.d3Force('centerY')?.y(centerY);
+                // 🌟 中心引力控制 (3D 模式下需要更弱的引力，否则会缩成一个球)
+                const centerAlpha = settings.is3D ? settings.centerForce * 0.2 : settings.centerForce;
 
-                if (settings.clusterByTopic) {
-                    fg.d3Force('charge')?.strength(-settings.repelForce * 0.5);
-                }
-
-                if (isGravityActive && gravityCenter) {
-                    fg.d3Force('gravity', forceRadial(10, gravityCenter.x, gravityCenter.y).strength(2));
+                if (!settings.is3D) {
+                    const centerX = dimensions.w / 2;
+                    const centerY = dimensions.h / 2;
+                    if (!fg.d3Force('centerX')) {
+                        fg.d3Force('centerX', forceX(centerX));
+                        fg.d3Force('centerY', forceY(centerY));
+                    }
+                    fg.d3Force('centerX')?.strength(centerAlpha);
+                    fg.d3Force('centerY')?.strength(centerAlpha);
                 } else {
-                    fg.d3Force('gravity', null);
+                    // 3D 模式使用原点作为重心
+                    fg.d3Force('center')?.strength(centerAlpha);
                 }
 
-                fg.d3ReheatSimulation?.();
-            } catch (e) {
-                console.warn('[Graph] Force configuration skipped:', e);
+                // 🌟 聚类力场优化
+                if (settings.clusterByTopic) {
+                    fg.d3Force('charge')?.strength((node: any) => -settings.repelForce * 0.8);
+                }
+
+
+
+                // 🌟 触发力场重启，让改动立即生效
+                if (typeof fg.d3AlphaTarget === 'function') {
+                    fg.d3AlphaTarget(0.3);
+                    setTimeout(() => {
+                        if (typeof fg.d3AlphaTarget === 'function') fg.d3AlphaTarget(0);
+                    }, 1000);
+                } else if (typeof fg.d3ReheatSimulation === 'function') {
+                    fg.d3ReheatSimulation();
+                }
+
+            } catch (err) {
+                console.warn('[ConnectionsView] Physics update failed:', err);
             }
         }, 100);
 
         return () => clearTimeout(timeoutId);
-    }, [filteredData, settings.repelForce, settings.linkDistance, settings.centerForce, dimensions, isGravityActive, gravityCenter, settings.clusterByTopic, settings.is3D]);
+    }, [filteredData, settings, dimensions]);
 
     useEffect(() => {
         const updateSize = () => {
@@ -464,24 +470,7 @@ const ConnectionsView: React.FC = () => {
             {filteredData.nodes.length > 0 ? (
                 <>
                     {/* 🌟 核心图谱组件容器 */}
-                    <div
-                        className="w-full h-full"
-                        onMouseDown={(e) => {
-                            if (e.button === 0 && !hoverNode) { // 左键长按背景
-                                setIsGravityActive(true);
-                                const { x, y } = fgRef.current.screen2GraphCoords(e.clientX, e.clientY);
-                                setGravityCenter({ x, y });
-                            }
-                        }}
-                        onMouseMove={(e) => {
-                            if (isGravityActive) {
-                                const { x, y } = fgRef.current.screen2GraphCoords(e.clientX, e.clientY);
-                                setGravityCenter({ x, y });
-                            }
-                        }}
-                        onMouseUp={() => setIsGravityActive(false)}
-                        onMouseLeave={() => setIsGravityActive(false)}
-                    >
+                    <div className="w-full h-full">
                         {settings.is3D ? (
                             <ForceGraph3D
                                 key="graph-3d" // 🌟 强制重新挂载，避免状态冲突
@@ -582,9 +571,9 @@ const ConnectionsView: React.FC = () => {
                                         });
                                         const sprite = new THREE.Sprite(material);
 
-                                        // 🛡️ 限制最大尺寸，避免过大的头像过亮
-                                        const baseSize = (Math.sqrt(node.val || 1) * 3) + 10;
-                                        const size = Math.min(baseSize, 60); // 最大60
+                                        // 🛡️ 放大头像尺寸，更易于识别
+                                        const baseSize = (Math.sqrt(node.val || 1) * 6) + 20; // 这里的倍数从 3 调到 6
+                                        const size = Math.min(baseSize, 120); // 最大尺寸从 60 调到 120
                                         sprite.scale.set(size, size, 1);
                                         return sprite;
                                     }
@@ -628,14 +617,19 @@ const ConnectionsView: React.FC = () => {
                                         map: texture,
                                         transparent: true,
                                         opacity: focusOpacity,
-                                        blending: THREE.AdditiveBlending, // 🌟 叠加混合模式
-                                        depthWrite: false // 防止遮挡
+                                        // 🛡️ 普通推文改用 NormalBlending 避免亮度爆炸，Tag 可以保留 Additive
+                                        blending: node.type === 'tweet' ? THREE.NormalBlending : THREE.AdditiveBlending,
+                                        depthWrite: false,
+                                        depthTest: true
                                     });
                                     const sprite = new THREE.Sprite(material);
 
                                     // 尺寸调整
                                     const val = node.val || 1;
-                                    const size = node.type === 'tweet' ? (Math.sqrt(val) * 3) + 6 : 8;
+                                    // 🌟 优化缩放逻辑：使用更温和的开根号 + 封顶限制
+                                    let baseSize = node.type === 'tweet' ? (Math.sqrt(val) * 2.5) + 6 : 8;
+                                    const size = node.type === 'tweet' ? Math.min(baseSize, 40) : baseSize; // 推文最高限制在 40
+
                                     sprite.scale.set(size, size, 1);
 
                                     return sprite;
@@ -646,18 +640,24 @@ const ConnectionsView: React.FC = () => {
                                     const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
                                     const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
                                     const isLinkHighlighted = highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`);
-                                    return isLinkHighlighted ? "#60a5fa" : "rgba(255, 255, 255, 0.08)";
+
+                                    // 🌟 抛弃普通蓝色，改用更高级的半透明白色/浅灰色
+                                    // 高亮时呈现柔和的亮白色，非高亮时极度透明
+                                    return isLinkHighlighted ? "rgba(255, 255, 255, 0.45)" : "rgba(255, 255, 255, 0.03)";
                                 }}
                                 linkWidth={link => {
                                     const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
                                     const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
-                                    return (highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`)) ? 1.5 : 0.5;
+                                    return (highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`)) ? 0.8 : 0.2;
                                 }}
                                 linkDirectionalParticles={l => {
+                                    // 🌟 始终保持微弱的流动感，高亮时加速
                                     const sourceId = typeof l.source === 'object' ? (l.source as any).id : l.source;
                                     const targetId = typeof l.target === 'object' ? (l.target as any).id : l.target;
-                                    return (highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`)) ? 4 : 0;
+                                    return (highlightLinks.has(`${sourceId}-${targetId}`) || highlightLinks.has(`${targetId}-${sourceId}`)) ? 6 : 1;
                                 }}
+                                linkDirectionalParticleWidth={1.5}
+                                linkDirectionalParticleSpeed={0.005}
 
                                 onNodeHover={node => {
                                     // 当鼠标移开节点时，node为null
