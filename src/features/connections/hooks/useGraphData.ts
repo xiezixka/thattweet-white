@@ -11,40 +11,76 @@ export function useGraphData() {
     // 只要 graphEdges, users, tweets 任何一个表发生变动，这个查询就会重新执行
     const data = useLiveQuery(async () => {
         try {
-            // 🌟 1. 内存优化：只拉取画图所需的极简字段，丢弃沉重的 rawZip
+            // 🌟 1. 内存优化：只拉取画图所需的字段，丢弃沉重的 rawZip
             // 设置 2000 条上限，防止万级数据直接撑爆浏览器
-            const [allUsers, allTweets, edges] = await Promise.all([
-                db.users.toArray(), // 用户通常不多（几千个），可以全量
-                db.tweets
-                    .orderBy('savedAt')
-                    .reverse()
-                    .limit(2000) // 🛡️ 窗口化加载：只看最近的 2000 条
-                    .toArray(),
-                db.graphEdges.toArray() // 边表本身就很轻量
-            ]);
+            const allTweets = await db.tweets
+                .orderBy('savedAt')
+                .reverse()
+                .limit(2000) // 🛡️ 窗口化加载：只看最近的 2000 条
+                .toArray();
 
             // 提取极简推文列表 (脱水处理)
-            const leanTweets = allTweets.map(t => ({
-                id: t.id,
-                authorId: t.authorId,
-                replyToId: t.replyToId,
-                replyToUser: t.replyToUser,
-                retweetFromId: (t as any).retweetFromId,
-                quoteFromId: (t as any).quoteFromId,
-                favoriteCount: t.favoriteCount,
-                retweetCount: t.retweetCount,
-                text: t.text, // 🌟 补上文本，用于标签显示
-                aiProfile: t.aiTags // 语义分析用
-            }));
+            const leanTweets = allTweets.map((t: any) => {
+                const { rawZip, ...rest } = t;
+                return {
+                    id: rest.id,
+                    authorId: rest.authorId,
+                    replyToId: rest.replyToId,
+                    replyToUser: rest.replyToUser,
+                    retweetFromId: rest.retweetFromId,
+                    quoteFromId: rest.quoteFromId,
+                    favoriteCount: rest.favoriteCount,
+                    retweetCount: rest.retweetCount,
+                    text: rest.text, // 🌟 补上文本，用于标签显示
+                    createdAt: rest.createdAt,
+                    tweetUrl: rest.tweetUrl,
+                    authorName: rest.authorName,
+                    authorAvatarUrl: rest.authorAvatarUrl,
+                    aiScore: rest.aiScore,
+                    aiSummary: rest.aiSummary,
+                    ocrText: rest.ocrText,
+                    visionDescription: rest.visionDescription,
+                    mediaAnalysis: rest.mediaAnalysis,
+                    media: rest.media
+                };
+            });
+            allTweets.length = 0;
 
-            const userIds = new Set(allUsers.map(u => u.id));
-            const tweetIds = new Set(allTweets.map(t => t.id));
+            const tweetIdList = leanTweets.map(t => t.id);
+            const authorIdList = Array.from(new Set(leanTweets.map(t => t.authorId).filter(Boolean)));
+            const replyHandleList = Array.from(new Set(leanTweets.map(t => t.replyToUser).filter(Boolean)));
+            const replyHandleQueries = Array.from(new Set(replyHandleList.flatMap(h => h ? [h, h.toLowerCase()] : [])));
+
+            const [authorUsers, replyUsers, edges] = await Promise.all([
+                authorIdList.length ? db.users.where('id').anyOf(authorIdList).toArray() : [],
+                replyHandleQueries.length ? db.users.where('handle').anyOf(replyHandleQueries).toArray() : [],
+                tweetIdList.length ? db.graphEdges.where('source').anyOf(tweetIdList).toArray() : []
+            ]);
+
+            const userMapById = new Map<string, any>();
+            [...authorUsers, ...replyUsers].forEach(u => {
+                if (u && !userMapById.has(u.id)) {
+                    userMapById.set(u.id, u);
+                }
+            });
+            const allUsers = Array.from(userMapById.values());
+            const leanUsers = allUsers.map((u: any) => ({
+                id: u.id,
+                handle: u.handle,
+                name: u.name,
+                avatar: u.avatar,
+                description: u.description,
+                followersCount: u.followersCount,
+                verified: u.verified,
+                updatedAt: u.updatedAt,
+                aiProfile: u.aiProfile?.keywords ? { keywords: u.aiProfile.keywords } : undefined
+            }));
 
             // 2. 建立重定向 Map
             const userRedirectMap = new Map<string, string>();
             const handleMap = new Map<string, any>();
 
-            allUsers.forEach(u => {
+            leanUsers.forEach(u => {
                 if (!u.handle) return;
                 const normalizedHandle = u.handle.toLowerCase(); // 统一小写处理防止匹配失败
                 const existing = handleMap.get(normalizedHandle);

@@ -13,14 +13,23 @@ export function useTweets() {
             await db.users.limit(1).toArray();
 
             const allTweets = await db.tweets.orderBy('savedAt').reverse().toArray();
+            const leanTweets = allTweets.map((t: any) => {
+                const { rawZip, ...rest } = t;
+                return rest;
+            });
+            allTweets.length = 0;
 
-            const tweetsWithUsers = await Promise.all(allTweets.map(async (t: any) => {
+            const authorIds = Array.from(new Set(leanTweets.map(t => t.authorId).filter(Boolean)));
+            const users = authorIds.length ? await db.users.where('id').anyOf(authorIds).toArray() : [];
+            const userMap = new Map(users.map(u => [u.id, u]));
+
+            const tweetsWithUsers = await Promise.all(leanTweets.map(async (t: any) => {
                 // 🛠️ 兼容旧版与新版数据结构
                 let author: UserCache | undefined;
 
                 // 新版：用 authorId 关联 users 表
                 if (t.authorId) {
-                    author = await db.users.get(t.authorId);
+                    author = userMap.get(t.authorId);
                 }
 
                 // 🔧 关键修复：即使从 users 表查到了用户，如果 avatar 是空的，也要从推文里补上！

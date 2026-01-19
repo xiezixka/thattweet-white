@@ -26,6 +26,8 @@ const ConnectionsView: React.FC = () => {
     const userSpriteCache = useRef<Map<string, THREE.Sprite>>(new Map());
     const nodeSpriteCache = useRef<Map<string, THREE.Sprite>>(new Map());
     const glowMaterialCache = useRef<Map<string, THREE.SpriteMaterial>>(new Map());
+    const nodeImageCache = useRef<Map<string, HTMLImageElement | 'error'>>(new Map());
+    const MAX_NODE_IMAGE_CACHE = 200;
 
     // 组件卸载时清理纹理
     useEffect(() => {
@@ -38,6 +40,7 @@ const ConnectionsView: React.FC = () => {
             nodeSpriteCache.current.clear();
             glowMaterialCache.current.forEach(material => material.dispose());
             glowMaterialCache.current.clear();
+            nodeImageCache.current.clear();
             userTextureCache.current.forEach(t => t.dispose());
             userTextureCache.current.clear();
             glowTextureCache.current.forEach(t => t.dispose());
@@ -180,6 +183,40 @@ const ConnectionsView: React.FC = () => {
             glowMaterialCache.current.set(materialKey, material);
         }
         return material;
+    }, []);
+
+    const getNodeImage = useCallback((cacheKey: string, src: string) => {
+        const cache = nodeImageCache.current;
+        const cached = cache.get(cacheKey);
+        if (cached) {
+            cache.delete(cacheKey);
+            cache.set(cacheKey, cached);
+            return cached;
+        }
+
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = src;
+        cache.set(cacheKey, img);
+
+        if (cache.size > MAX_NODE_IMAGE_CACHE) {
+            const firstKey = cache.keys().next().value;
+            if (firstKey) cache.delete(firstKey);
+        }
+
+        img.onload = () => {
+            if (cache.get(cacheKey) === img) {
+                setRefreshCount(c => c + 1);
+            }
+        };
+        img.onerror = () => {
+            if (cache.get(cacheKey) === img) {
+                cache.set(cacheKey, 'error');
+                setRefreshCount(c => c + 1);
+            }
+        };
+
+        return img;
     }, []);
 
 
@@ -955,43 +992,28 @@ const ConnectionsView: React.FC = () => {
                                             ctx.textBaseline = 'middle';
                                             const initial = (node.data?.name || node.label || '?').charAt(0).toUpperCase();
                                             ctx.fillText(initial, x, y);
-                                        } else if (node.__imgObj !== 'error') {
-                                            // 🌟 完整模式：加载头像
-                                            if (!node.__imgObj) {
-                                                const img = new Image();
-                                                img.crossOrigin = "anonymous";
+                                        } else {
+                                            const handle = node.data?.handle || node.id;
+                                            const cacheKey = String(handle || node.id);
+                                            const imgUrl = `https://unavatar.io/x/${handle}?size=64&fallback=https://wsrv.nl/?url=${encodeURIComponent(node.img || '')}`;
+                                            const cachedImg = getNodeImage(cacheKey, imgUrl);
 
-                                                // 使用 handle 查 unavatar
-                                                const handle = node.data?.handle || node.id;
-                                                img.src = `https://unavatar.io/x/${handle}?size=64&fallback=https://wsrv.nl/?url=${encodeURIComponent(node.img || '')}`;
-
-                                                img.onload = () => {
-                                                    node.__imgObj = img;
-                                                    setRefreshCount(c => c + 1); // 触发重绘
-                                                };
-                                                img.onerror = () => {
-                                                    node.__imgObj = 'error';
-                                                    setRefreshCount(c => c + 1);
-                                                };
-                                                node.__imgObj = 'loading';
-                                            }
-
-                                            if (node.__imgObj instanceof HTMLImageElement) {
+                                            if (cachedImg instanceof HTMLImageElement && cachedImg.complete && cachedImg.naturalWidth > 0) {
                                                 ctx.clip();
-                                                ctx.drawImage(node.__imgObj, x - r, y - r, size, size);
+                                                ctx.drawImage(cachedImg, x - r, y - r, size, size);
+                                            } else if (cachedImg === 'error') {
+                                                ctx.fillStyle = '#18181b';
+                                                ctx.fill();
+                                                ctx.fillStyle = '#a1a1aa';
+                                                ctx.font = `bold ${Math.max(10, size * 0.4)}px sans-serif`;
+                                                ctx.textAlign = 'center';
+                                                ctx.textBaseline = 'middle';
+                                                const initial = (node.label || '?').charAt(0).toUpperCase();
+                                                ctx.fillText(initial, x, y);
                                             } else {
                                                 ctx.fillStyle = '#18181b';
                                                 ctx.fill();
                                             }
-                                        } else {
-                                            ctx.fillStyle = '#18181b';
-                                            ctx.fill();
-                                            ctx.fillStyle = '#a1a1aa';
-                                            ctx.font = `bold ${Math.max(10, size * 0.4)}px sans-serif`;
-                                            ctx.textAlign = 'center';
-                                            ctx.textBaseline = 'middle';
-                                            const initial = (node.label || '?').charAt(0).toUpperCase();
-                                            ctx.fillText(initial, x, y);
                                         }
                                         ctx.restore();
 
