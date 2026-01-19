@@ -16,23 +16,28 @@ export class AIJobQueue {
         if (this.isProcessing) return;
         if (Date.now() < this.BUSY_COOLDOWN_UNTIL) return;
 
-        const settings = await this.getSettings();
-        const node = settings.workflowNodes.textAnalysis;
-
-        // Check if enabled and has a valid default or node provider
-        const providerId = node.providerId || settings.defaultProviderId;
-        const provider = settings.providers.find(p => p.id === providerId);
-
-        if (!settings.autoAnalyze || !provider || !provider.apiKey) {
-            return;
-        }
-
+        // 🚀 立即上锁，防止 race condition
         this.isProcessing = true;
-        // this.isProcessing = true; (already set above)
+
         try {
+            const settings = await this.getSettings();
+            const node = settings.workflowNodes.textAnalysis;
+
+            // Check if enabled and has a valid default or node provider
+            const providerId = node.providerId || settings.defaultProviderId;
+            const provider = settings.providers.find(p => p.id === providerId);
+
+            if (!settings.autoAnalyze || !provider || !provider.apiKey) {
+                this.isProcessing = false;
+                return;
+            }
+
             // 1. 获取待处理的推文 ID
             const pendingIds = await TweetRepository.getPendingAITweets();
-            if (pendingIds.length === 0) return;
+            if (pendingIds.length === 0) {
+                this.isProcessing = false;
+                return;
+            }
 
             // 2. 加载这些推文实体进行精确筛选
             const candidateTweets = await db.tweets.bulkGet(pendingIds as string[]);
@@ -53,6 +58,7 @@ export class AIJobQueue {
 
             // 队列积压逻辑：必须满一整批才处理，节省 API 限额
             if (toProcess.length < settings.batchSize) {
+                this.isProcessing = false;
                 return;
             }
 
@@ -102,6 +108,8 @@ export class AIJobQueue {
                     }
                 }
             }
+        } catch (err) {
+            console.error(`[AIJobQueue] processNextBatch failed:`, err);
         } finally {
             this.isProcessing = false;
         }

@@ -57,20 +57,31 @@ export class VisionService {
     static async processQueue(): Promise<void> {
         if (this.isProcessing || Date.now() < this.BUSY_COOLDOWN_UNTIL) return;
 
-        const settings = await this.getSettings();
-        const node = settings.workflowNodes.perception;
-        if (!node.enabled) return;
-
-        const { provider, apiKey } = this.resolveProvider(settings, node.providerId);
-        if (!provider || !apiKey || this.activeKeys.has(apiKey)) return;
-
-        console.log(`[VisionService] Starting perception process using provider: ${provider.name}`);
-
-        const eligibleTweets = await this.fetchEligibleTweets(settings);
-        if (eligibleTweets.length === 0) return;
-
+        // 🚀 立即上锁，防止 race condition
         this.isProcessing = true;
+
         try {
+            const settings = await this.getSettings();
+            const node = settings.workflowNodes.perception;
+            if (!node.enabled) {
+                this.isProcessing = false;
+                return;
+            }
+
+            const { provider, apiKey } = this.resolveProvider(settings, node.providerId);
+            if (!provider || !apiKey || this.activeKeys.has(apiKey)) {
+                this.isProcessing = false;
+                return;
+            }
+
+            console.log(`[VisionService] Starting perception process using provider: ${provider.name}`);
+
+            const eligibleTweets = await this.fetchEligibleTweets(settings);
+            if (eligibleTweets.length === 0) {
+                this.isProcessing = false;
+                return;
+            }
+
             const batchSize = settings.visionBatchSize || 3;
             const tweetsToProcess = eligibleTweets.slice(0, batchSize);
 
@@ -78,6 +89,8 @@ export class VisionService {
                 await this.updateTweetsStatus(tweetsToProcess, ProcessStatus.Processing);
                 await this.processBatch(tweetsToProcess, apiKey, settings);
             }
+        } catch (err) {
+            console.error(`[VisionService] processQueue failed:`, err);
         } finally {
             this.isProcessing = false;
         }
@@ -364,10 +377,11 @@ export class VisionService {
     }
 
     /**
-     * 拉取图片转 Base64
+     * 拉取图片转 Base64 (带压缩优化)
      */
     private static async fetchImageAsBase64(url: string): Promise<string | null> {
         try {
+            // 🚀 性能优化：优先取 medium 版本，已经足够 AI 分析，节省流量和内存
             const processedUrl = url.includes('pbs.twimg.com') && !url.includes('?')
                 ? `${url}?format=jpg&name=medium`
                 : url;
@@ -381,29 +395,67 @@ export class VisionService {
             }
 
             const blob = await response.blob();
-            console.log(`[VisionService] Image blob: type=${blob.type}, size=${blob.size} bytes`);
 
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const result = reader.result as string;
-                    if (result?.startsWith('data:')) {
-                        resolve(result);
-                    } else {
-                        console.warn(`[VisionService] FileReader result is not a data URI`);
-                        resolve(null);
-                    }
-                };
-                reader.onerror = () => {
-                    console.error(`[VisionService] FileReader error`);
-                    resolve(null);
-                };
-                reader.readAsDataURL(blob);
-            });
+            // 🚀 核心优化：在客户端进行二次缩放压缩，极致节省内存
+            return await this.resizeImage(blob, 1024);
         } catch (err) {
             console.error(`[VisionService] Image fetch error:`, err);
             return null;
         }
+    }
+
+    /**
+     * 使用 Canvas 调整图片尺寸并压缩
+     * @param blob 原始图片 Blob
+     * @param maxDim 最大边长
+     */
+    private static async resizeImage(blob: Blob, maxDim: number): Promise<string | null> {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const url = URL.createObjectURL(blob);
+
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+
+                let width = img.width;
+                let height = img.height;
+
+                // 计算缩放比例
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = (height / width) * maxDim;
+                        width = maxDim;
+                    } else {
+                        width = (width / height) * maxDim;
+                        height = maxDim;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+
+                if (!ctx) {
+                    resolve(null);
+                    return;
+                }
+
+                ctx.drawImage(img, 0, 0, width, height);
+                // 压缩质量 0.8，既保证清晰度又能大幅减小体积
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+                console.log(`[VisionService] Image resized: ${img.width}x${img.height} -> ${Math.round(width)}x${Math.round(height)}`);
+                resolve(dataUrl);
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve(null);
+            };
+
+            img.src = url;
+        });
     }
 
     // ==================== VLM API 调用 ====================

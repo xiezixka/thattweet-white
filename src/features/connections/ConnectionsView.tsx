@@ -80,6 +80,7 @@ const ConnectionsView: React.FC = () => {
         is3D: true,  // 默认 3D 模式
         clusterByTopic: false,
         temporalEvolution: false,
+        showPanelOnHover: false, // 🚀 默认关闭：悬浮时不弹出面板，必须点击锁定才弹出
     });
 
     // 🌟 预渲染离屏星空贴图，极大提升性能
@@ -1253,7 +1254,7 @@ const ConnectionsView: React.FC = () => {
                     <div
                         className={`fixed left-0 top-0 h-full w-[420px] bg-zinc-950/98 backdrop-blur-2xl border-r border-white/10 
                                     transform transition-all duration-500 ease-out z-50 overflow-y-auto overflow-x-hidden
-                                    ${(lockedNode || hoverNode) ? 'translate-x-0 shadow-[0_0_80px_rgba(0,0,0,0.5)]' : '-translate-x-full'}`}
+                                    ${(lockedNode || (settings.showPanelOnHover && hoverNode)) ? 'translate-x-0 shadow-[0_0_80px_rgba(0,0,0,0.5)]' : '-translate-x-full'}`}
                         style={{
                             scrollbarWidth: 'none',
                             msOverflowStyle: 'none',
@@ -1265,7 +1266,7 @@ const ConnectionsView: React.FC = () => {
                             .fixed::-webkit-scrollbar { display: none; }
                         `}</style>
 
-                        {(lockedNode || hoverNode) && (() => {
+                        {(lockedNode || (settings.showPanelOnHover && hoverNode)) && (() => {
                             const activeNode = lockedNode || hoverNode;
                             const isLocked = !!lockedNode;
                             return (

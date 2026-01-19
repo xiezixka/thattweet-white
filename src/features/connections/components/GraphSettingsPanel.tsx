@@ -17,6 +17,7 @@ export interface GraphSettings {
     is3D: boolean;
     clusterByTopic: boolean;
     temporalEvolution: boolean;
+    showPanelOnHover: boolean; // 悬浮时是否显示侧边面板
 }
 
 interface Props {
@@ -203,6 +204,12 @@ export const GraphSettingsPanel: React.FC<Props> = ({ settings, onUpdate }) => {
                             checked={settings.temporalEvolution}
                             onChange={(v: boolean) => onUpdate('temporalEvolution', v)}
                             color="bg-orange-600"
+                        />
+                        <Toggle
+                            label="悬浮显示详情"
+                            checked={settings.showPanelOnHover}
+                            onChange={(v: boolean) => onUpdate('showPanelOnHover', v)}
+                            color="bg-pink-600"
                         />
                     </div>
                 </Section>

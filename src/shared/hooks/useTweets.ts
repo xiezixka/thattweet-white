@@ -8,47 +8,42 @@ export function useTweets() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let timer: any;
         const subscription = liveQuery(async () => {
-            // 依赖追踪：虽然我们不需要直接用这个结果，但查询它能让 liveQuery 监听到 users 表的变化
-            await db.users.limit(1).toArray();
+            // 🚀 性能优化 1：限制读取数量，防止海量数据撑爆内存
+            // 大多数视图只需要最近的 1000 条，如果是统计图表，应该单独查询
+            const MAX_TWEETS = 1000;
 
-            const allTweets = await db.tweets.orderBy('savedAt').reverse().toArray();
+            const allTweets = await db.tweets
+                .orderBy('savedAt')
+                .reverse()
+                .limit(MAX_TWEETS)
+                .toArray();
+
+            // 🚀 性能优化 2：及早剥离无用大数据 (rawZip)
             const leanTweets = allTweets.map((t: any) => {
                 const { rawZip, ...rest } = t;
                 return rest;
             });
-            allTweets.length = 0;
+            allTweets.length = 0; // 手动释放内存
 
             const authorIds = Array.from(new Set(leanTweets.map(t => t.authorId).filter(Boolean)));
             const users = authorIds.length ? await db.users.where('id').anyOf(authorIds).toArray() : [];
             const userMap = new Map(users.map(u => [u.id, u]));
 
-            const tweetsWithUsers = await Promise.all(leanTweets.map(async (t: any) => {
-                // 🛠️ 兼容旧版与新版数据结构
-                let author: UserCache | undefined;
+            const tweetsWithUsers = leanTweets.map((t: any) => {
+                let author = t.authorId ? userMap.get(t.authorId) : undefined;
 
-                // 新版：用 authorId 关联 users 表
-                if (t.authorId) {
-                    author = userMap.get(t.authorId);
-                }
-
-                // 🔧 关键修复：即使从 users 表查到了用户，如果 avatar 是空的，也要从推文里补上！
                 if (author && !author.avatar) {
                     const tweetAvatar = (t as any).authorAvatarUrl;
-                    if (tweetAvatar) {
-                        author = { ...author, avatar: tweetAvatar };
-                    }
+                    if (tweetAvatar) author = { ...author, avatar: tweetAvatar };
                 }
 
-                // 兜底：如果 users 表查不到，尝试从推文嵌入数据构造
                 if (!author) {
-                    // 旧版数据可能直接嵌入了 author/authorName/authorAvatarUrl
-                    const legacyUser = (t as any).user;
-                    const legacyHandle = (t as any).author || (t as any).authorHandle || legacyUser?.screen_name || legacyUser?.handle;
-                    const legacyName = (t as any).authorName || legacyUser?.name;
-                    const legacyAvatar = (t as any).authorAvatarUrl || legacyUser?.profile_image_url_https || legacyUser?.avatar;
+                    const legacyHandle = (t as any).author || (t as any).authorHandle;
+                    const legacyName = (t as any).authorName;
+                    const legacyAvatar = (t as any).authorAvatarUrl;
 
-                    // 只要有 名字、Handle 或头像其中之一，就尝试构造
                     if (legacyHandle || legacyName || legacyAvatar) {
                         author = {
                             id: t.authorId || legacyHandle || 'unknown_id',
@@ -61,19 +56,25 @@ export function useTweets() {
                 }
 
                 return { ...t, author };
-            }));
+            });
 
-            // 过滤掉没有作者信息的推文
             return tweetsWithUsers.filter(t => t.author) as TweetWithUser[];
         }).subscribe({
             next: (val) => {
-                setTweets(val);
-                setLoading(false);
+                // 🚀 性能优化 3：防抖/节流更新。在抓取模式下，数据变化极快，没必要每秒更新几十次。
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => {
+                    setTweets(val);
+                    setLoading(false);
+                }, 500); // 500ms 的更新缓冲
             },
             error: (err) => console.error(err)
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            subscription.unsubscribe();
+            if (timer) clearTimeout(timer);
+        };
     }, []);
 
     return { tweets, loading };
