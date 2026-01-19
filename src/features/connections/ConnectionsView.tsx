@@ -65,23 +65,46 @@ const ConnectionsView: React.FC = () => {
         return current + diff * speed;
     };
 
-    // 图谱控制状态 - 用户测试的最佳参数
-    const [settings, setSettings] = useState<GraphSettings>({
-        repelForce: 70,        // 排斥力
-        linkDistance: 40,      // 连接距离
-        centerForce: 0.05,     // 中心引力
-        nodeScale: 1.1,        // 节点缩放
-        linkWidth: 0.6,        // 连线粗细
-        particleWidth: 2.5,    // 粒子大小
-        showUsers: true,
-        showTweets: true,
-        showTags: true,
-        highlightDepth: 2,     // 高亮层级
-        is3D: true,  // 默认 3D 模式
-        clusterByTopic: false,
-        temporalEvolution: false,
-        showPanelOnHover: false, // 🚀 默认关闭：悬浮时不弹出面板，必须点击锁定才弹出
-    });
+    // 🌟 从 localStorage 读取持久化设置
+    const getInitialSettings = (): GraphSettings => {
+        const defaultSettings: GraphSettings = {
+            // ⚡ 核心过滤
+            qualityThreshold: 0,
+            influenceLevel: 0,
+            explorationDepth: 2,
+            // 🎨 视觉展示
+            is3D: true,
+            showUsers: true,
+            showTweets: true,
+            showTags: true,
+            showPanelOnHover: false,
+            enableFlowParticles: false,
+            // 🧪 物理布局
+            layoutDensity: 3,
+            nodeScale: 1.1,
+        };
+
+        try {
+            const saved = localStorage.getItem('thattweet_graph_settings');
+            if (saved) {
+                return { ...defaultSettings, ...JSON.parse(saved) };
+            }
+        } catch (e) {
+            console.warn('[ConnectionsView] Failed to load saved settings:', e);
+        }
+        return defaultSettings;
+    };
+
+    const [settings, setSettings] = useState<GraphSettings>(getInitialSettings);
+
+    // 🌟 设置变化时持久化到 localStorage
+    useEffect(() => {
+        try {
+            localStorage.setItem('thattweet_graph_settings', JSON.stringify(settings));
+        } catch (e) {
+            console.warn('[ConnectionsView] Failed to save settings:', e);
+        }
+    }, [settings]);
 
     // 🌟 预渲染离屏星空贴图，极大提升性能
     const starPattern = useMemo(() => {
@@ -228,23 +251,67 @@ const ConnectionsView: React.FC = () => {
 
     const [selectedLink, setSelectedLink] = useState<any>(null); // 被选中的连线
 
-    // 🌟 数据过滤 (核心): 根据开关动态隐藏节点
+    // 🌟 精锐过滤 (核心): 根据质量阈值和影响力档位动态隐藏节点
     const filteredData = useMemo(() => {
         if (!data.nodes.length) return data;
 
-        // 1. 过滤节点
+        // 影响力阈值映射 (粉丝数)
+        const INFLUENCE_VALUES = [0, 1000, 10000, 100000, 1000000];
+        const minFollowers = INFLUENCE_VALUES[settings.influenceLevel];
+        const minQuality = settings.qualityThreshold;
+
+        // 1. 预处理：标记符合条件的用户和推文
+        const qualifiedUserIds = new Set<string>();
+        const qualifiedTweetIds = new Set<string>();
+
+        data.nodes.forEach((n: any) => {
+            if (n.type === 'user') {
+                // 用户过滤：粉丝量 >= 影响力阈值
+                const followers = n.data?.followersCount || 0;
+                if (followers >= minFollowers) {
+                    qualifiedUserIds.add(n.id);
+                }
+            } else if (n.type === 'tweet') {
+                // 推文过滤：AI 质量分 >= 质量阈值
+                const score = n.data?.aiScore || 0;
+                if (score >= minQuality || minQuality === 0) {
+                    qualifiedTweetIds.add(n.id);
+                }
+            }
+        });
+
+        // 2. 协同过滤逻辑 (Plan B)：
+        // - 用户：如果开启了用户显示，且符合粉丝量要求，则显示
+        // - 推文：只有符合质量的推文，且其作者也符合影响力要求，才显示
+        // - 话题：正常显示
         const visibleNodeIds = new Set<string>();
         const visibleNodes = data.nodes.filter((n: any) => {
-            let isVisible = true;
-            if (n.type === 'user' && !settings.showUsers) isVisible = false;
-            if (n.type === 'tweet' && !settings.showTweets) isVisible = false;
-            if (n.type === 'tag' && !settings.showTags) isVisible = false;
+            // 基础开关过滤
+            if (n.type === 'user' && !settings.showUsers) return false;
+            if (n.type === 'tweet' && !settings.showTweets) return false;
+            if (n.type === 'tag' && !settings.showTags) return false;
+
+            let isVisible = false;
+
+            if (n.type === 'user') {
+                // 用户：直接检查粉丝量
+                isVisible = qualifiedUserIds.has(n.id);
+            } else if (n.type === 'tweet') {
+                // 推文：必须同时满足质量要求 AND 作者满足影响力要求
+                const authorId = n.data?.authorId;
+                const tweetQualified = qualifiedTweetIds.has(n.id);
+                const authorQualified = !authorId || qualifiedUserIds.has(authorId) || settings.influenceLevel === 0;
+                isVisible = tweetQualified && authorQualified;
+            } else if (n.type === 'tag') {
+                // 话题：始终可见（如果开关开启）
+                isVisible = true;
+            }
 
             if (isVisible) visibleNodeIds.add(n.id);
             return isVisible;
         });
 
-        // 2. 过滤连线 (两端都必须可见)
+        // 3. 过滤连线 (两端都必须可见)
         const visibleLinks = data.links.filter((l: any) => {
             const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
             const targetId = typeof l.target === 'object' ? l.target.id : l.target;
@@ -252,7 +319,7 @@ const ConnectionsView: React.FC = () => {
         });
 
         return { nodes: visibleNodes, links: visibleLinks };
-    }, [data, settings.showUsers, settings.showTweets, settings.showTags]);
+    }, [data, settings.showUsers, settings.showTweets, settings.showTags, settings.qualityThreshold, settings.influenceLevel]);
 
     // 🌟 找出最新推文时间，用于时间流光效果
     const latestTweetTime = useMemo(() => {
@@ -271,7 +338,7 @@ const ConnectionsView: React.FC = () => {
 
         // 悬浮或锁定的节点都触发高亮
         const activeNode = lockedNode || hoverNode;
-        if (!activeNode || settings.highlightDepth === 0) {
+        if (!activeNode || settings.explorationDepth === 0) {
             return { highlightNodes, highlightLinks };
         }
 
@@ -304,7 +371,7 @@ const ConnectionsView: React.FC = () => {
             visited.add(id);
             highlightNodes.add(id);
 
-            if (depth < settings.highlightDepth) {
+            if (depth < settings.explorationDepth) {
                 const nodeData = adjacencyMap.get(id);
                 if (nodeData) {
                     nodeData.neighbors.forEach(neighborId => {
@@ -318,7 +385,7 @@ const ConnectionsView: React.FC = () => {
         }
 
         return { highlightNodes, highlightLinks };
-    }, [lockedNode, hoverNode, filteredData, settings.highlightDepth]);
+    }, [lockedNode, hoverNode, filteredData, settings.explorationDepth]);
 
     // 物理引擎配置 (实时)
     useEffect(() => {
@@ -368,16 +435,24 @@ const ConnectionsView: React.FC = () => {
                 // 重置自动缩放标记 (仅在数据大变或初次加载时)
                 // hasInitialZoomRef.current = false;
 
-                // 🌟 基础斥力与连接距离
+                // 🌟 基础斜力与连接距离 (根据 layoutDensity 计算)
+                const densityFactor = settings.layoutDensity; // 1-5
+                const nodeCount = filteredData.nodes.length;
+
+                // 🚀 自适应聚集：节点少时自动加强中心引力，防止太分散
+                const scatterFactor = nodeCount < 50 ? 0.5 : nodeCount < 200 ? 0.8 : 1.0;
+
+                const repelForce = (30 + (densityFactor * 15)) * scatterFactor; // 节点少时减弱斜力
+                const linkDistance = (20 + (densityFactor * 10)) * scatterFactor;
+                const centerForce = (0.1 - (densityFactor * 0.015)) + (nodeCount < 50 ? 0.05 : 0); // 节点少时加强中心引力
+
                 fg.d3Force('charge')?.strength((node: any) => {
-                    // 用户节点需要更强的斥力来推开周围的推文
-                    const baseRepel = -settings.repelForce * (settings.is3D ? 4 : 1);
+                    const baseRepel = -repelForce * (settings.is3D ? 4 : 1);
                     return node.type === 'user' ? baseRepel * 2.5 : baseRepel;
                 });
 
                 fg.d3Force('link')?.distance((link: any) => {
-                    // 连接用户和推文的线稍微拉长一点，防止重叠
-                    const baseDist = settings.linkDistance * (settings.is3D ? 1.5 : 1);
+                    const baseDist = linkDistance * (settings.is3D ? 1.5 : 1);
                     return (link.source.type === 'user' || link.target.type === 'user') ? baseDist * 1.5 : baseDist;
                 });
 
@@ -389,8 +464,8 @@ const ConnectionsView: React.FC = () => {
                     });
                 }
 
-                // 🌟 中心引力控制 (3D 模式下需要更弱的引力，否则会缩成一个球)
-                const centerAlpha = settings.is3D ? settings.centerForce * 0.2 : settings.centerForce;
+                // 🌟 中心引力控制
+                const centerAlpha = settings.is3D ? centerForce * 0.2 : centerForce;
 
                 if (!settings.is3D) {
                     const centerX = dimensions.w / 2;
@@ -402,17 +477,13 @@ const ConnectionsView: React.FC = () => {
                     fg.d3Force('centerX')?.strength(centerAlpha);
                     fg.d3Force('centerY')?.strength(centerAlpha);
                 } else {
-                    // 3D 模式使用原点作为重心
                     fg.d3Force('center')?.strength(centerAlpha);
                 }
 
-                // 🌟 聚类力场优化
-                if (settings.clusterByTopic) {
-                    fg.d3Force('charge')?.strength((node: any) => -settings.repelForce * 0.8);
+                // 🚀 3D 模式下需要重新激活物理模拟，否则参数变化不生效
+                if (settings.is3D && typeof fg.d3ReheatSimulation === 'function') {
+                    fg.d3ReheatSimulation();
                 }
-
-                // 🛡️ 只有在首次渲染或手动刷新时才重启物理模拟
-                // 移除了之前的频繁 reheat，防止节点抖动
 
             } catch (err) {
                 console.warn('[ConnectionsView] Physics update failed:', err);
@@ -665,8 +736,8 @@ const ConnectionsView: React.FC = () => {
                                 enableNavigationControls={true}
 
                                 // 🛡️ 物理模拟稳定化参数
-                                cooldownTime={3000} // 3秒后停止物理模拟
-                                warmupTicks={50}    // 初始化时快速稳定
+                                cooldownTime={2000} // 2秒后停止物理模拟
+                                warmupTicks={30}    // 减少初始化延迟
 
                                 nodeRelSize={4}
                                 nodeVal={d => d.val}
@@ -771,7 +842,7 @@ const ConnectionsView: React.FC = () => {
                                         }
 
                                         const baseSize = (Math.sqrt(node.val || 1) * 6) + 20;
-                                        const size = Math.min(baseSize, 120);
+                                        const size = Math.min(baseSize, 120) * settings.nodeScale;
                                         sprite.scale.set(size, size, 1);
                                         return sprite;
                                     }
@@ -795,11 +866,11 @@ const ConnectionsView: React.FC = () => {
                                         sprite.material = material;
                                     }
 
-                                    // ????
+                                    // 计算尺寸
                                     const val = node.val || 1;
-                                    // ?? ???????????????? + ????
+                                    // 🚀 应用 nodeScale 设置
                                     let baseSize = node.type === 'tweet' ? (Math.sqrt(val) * 2.5) + 6 : 8;
-                                    const size = node.type === 'tweet' ? Math.min(baseSize, 40) : baseSize; // ??????? 40
+                                    const size = (node.type === 'tweet' ? Math.min(baseSize, 40) : baseSize) * settings.nodeScale;
 
                                     sprite.scale.set(size, size, 1);
 
@@ -838,15 +909,15 @@ const ConnectionsView: React.FC = () => {
                                     return isHighlighted ? 0.6 : 0.15;
                                 }}
                                 linkDirectionalParticles={l => {
+                                    // 🚀 性能优化：默认关闭粒子，仅在开启且高亮时显示
+                                    if (!settings.enableFlowParticles) return 0;
+
                                     const sourceId = typeof l.source === 'object' ? (l.source as any).id : l.source;
                                     const targetId = typeof l.target === 'object' ? (l.target as any).id : l.target;
                                     const isHighlighted = highlightNodes.has(sourceId) || highlightNodes.has(targetId);
 
-                                    // 🌟 只有在相关联或者高亮时才展示流光粒子，避免全局太乱
-                                    if (!isHighlighted && (l as any).linkType !== 'social') return 0;
-
-                                    const base = (l as any).linkType === 'social' ? 2 : 1;
-                                    return isHighlighted ? base + 2 : base;
+                                    if (!isHighlighted) return 0;
+                                    return (l as any).linkType === 'social' ? 3 : 2;
                                 }}
                                 linkDirectionalParticleWidth={l => {
                                     if ((l as any).linkType === 'social') return 2.5;
@@ -854,7 +925,7 @@ const ConnectionsView: React.FC = () => {
                                 }}
                                 linkDirectionalParticleSpeed={l => {
                                     const baseSpeed = 0.004;
-                                    if ((l as any).linkType === 'social') return baseSpeed * 2.5;
+                                    if ((l as any).linkType === 'social') return baseSpeed * 2;
                                     return baseSpeed;
                                 }}
 
@@ -926,19 +997,8 @@ const ConnectionsView: React.FC = () => {
                                         dimFactor *= 0.6;
                                     }
 
-                                    // 🌟 时间流光 (Temporal Flow)
+                                    // 🌟 时间流光已移除，简化渲染
                                     let temporalPulse = 0;
-                                    if (settings.temporalEvolution && node.type === 'tweet' && node.data?.createdAt) {
-                                        const timestamp = new Date(node.data.createdAt).getTime();
-                                        const diffHours = (latestTweetTime - timestamp) / (1000 * 60 * 60);
-                                        const ageAlpha = Math.max(0.15, 1 - (diffHours / (24 * 7))); // 1周衰减
-                                        dimFactor *= ageAlpha;
-
-                                        // 最近 6 小时的有额外呼吸
-                                        if (diffHours < 6) {
-                                            temporalPulse = Math.sin(Date.now() / 400) * 0.3 + 0.3;
-                                        }
-                                    }
 
                                     // 氛围色计算
                                     let auraColor = 'rgba(255,255,255,0.08)';
@@ -1111,15 +1171,16 @@ const ConnectionsView: React.FC = () => {
                                     const isLinkHighlighted = highlightLinks.has(linkKey) || highlightLinks.has(reverseLinkKey);
                                     return isLinkHighlighted ? "rgba(255, 255, 255, 0.4)" : "rgba(255,255,255,0.02)";
                                 }}
-                                linkWidth={settings.linkWidth}
-                                // 🌟 动态粒子流：全局常驻，高亮时加速
+                                linkWidth={0.6}
+                                // 🌟 动态粒子流：仅在开启且高亮时显示
                                 linkDirectionalParticles={(link: any) => {
+                                    if (!settings.enableFlowParticles) return 0;
                                     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
                                     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
                                     const linkKey = `${sourceId}-${targetId}`;
                                     const reverseLinkKey = `${targetId}-${sourceId}`;
                                     const isHighlighted = highlightLinks.has(linkKey) || highlightLinks.has(reverseLinkKey);
-                                    return isHighlighted ? 4 : 1;
+                                    return isHighlighted ? 3 : 0;
                                 }}
                                 linkDirectionalParticleSpeed={(link: any) => {
                                     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
@@ -1127,9 +1188,9 @@ const ConnectionsView: React.FC = () => {
                                     const linkKey = `${sourceId}-${targetId}`;
                                     const reverseLinkKey = `${targetId}-${sourceId}`;
                                     const isHighlighted = highlightLinks.has(linkKey) || highlightLinks.has(reverseLinkKey);
-                                    return isHighlighted ? 0.015 : 0.003;
+                                    return isHighlighted ? 0.012 : 0.003;
                                 }}
-                                linkDirectionalParticleWidth={settings.particleWidth}
+                                linkDirectionalParticleWidth={2}
                                 linkDirectionalParticleColor={() => "rgba(255,255,255,0.6)"}
 
                                 d3VelocityDecay={0.4}
