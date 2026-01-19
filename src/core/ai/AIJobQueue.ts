@@ -28,18 +28,22 @@ export class AIJobQueue {
         }
 
         this.isProcessing = true;
+        // this.isProcessing = true; (already set above)
         try {
-            // 1. 获取待处理的推文
-            const pendingTweets = await TweetRepository.getPendingAITweets();
-            const toProcess = pendingTweets.filter(t => {
-                if (t.isArchived) return false;
-                if (t.aiStatus !== ProcessStatus.Pending) return false; // 严格检查
+            // 1. 获取待处理的推文 ID
+            const pendingIds = await TweetRepository.getPendingAITweets();
+            if (pendingIds.length === 0) return;
 
-                // 如果启用了图片分析且推文有图，必须等图片处理完；
+            // 2. 加载这些推文实体进行精确筛选
+            const candidateTweets = await db.tweets.bulkGet(pendingIds as string[]);
+            const toProcess = (candidateTweets.filter(t => t !== undefined) as any[]).filter(t => {
+                if (t.isArchived) return false;
+                if (t.aiStatus !== ProcessStatus.Pending) return false;
+
+                // 如果启用了图片分析且推文有图，必须等图片处理完
                 const isVisionActive = settings.workflowNodes.perception.enabled;
                 if (isVisionActive) {
-                    const hasImages = t.media?.some(m => m.type === 'image');
-                    // 如果图片还没处理完（处于 Pending 或 Processing），则跳过
+                    const hasImages = t.media?.some((m: any) => m.type === 'image');
                     if (hasImages && (t.imageProcessStatus === ProcessStatus.Pending || t.imageProcessStatus === ProcessStatus.Processing)) {
                         return false;
                     }

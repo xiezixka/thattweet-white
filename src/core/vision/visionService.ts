@@ -33,16 +33,20 @@ export class VisionService {
 
         console.log(`[VisionService] Starting perception process using provider: ${provider.name}`);
 
-        // 查找待处理的推文
-        const pendingTweets = await db.tweets
+        // 查找待处理的推文 ID (优化版：只拉取 ID)
+        const pendingIds = await db.tweets
             .where('imageProcessStatus')
             .equals(ProcessStatus.Pending)
-            .toArray();
+            .limit(100)
+            .primaryKeys();
 
-        // 过滤 visionEnabledAt 之后保存的推文，且必须有图
-        const eligibleTweets = pendingTweets.filter(t => {
+        if (pendingIds.length === 0) return;
+
+        // 加载实体进行筛选 (有图且在启用时间之后)
+        const candidates = await db.tweets.bulkGet(pendingIds as string[]);
+        const eligibleTweets = (candidates.filter(t => t !== undefined) as any[]).filter(t => {
             if (t.savedAt < settings.visionEnabledAt) return false;
-            return t.media?.some(m => m.type === 'image');
+            return t.media?.some((m: any) => m.type === 'image');
         });
 
         if (eligibleTweets.length === 0) return;
@@ -51,12 +55,10 @@ export class VisionService {
         try {
             // 一次处理一批
             const batchSize = settings.visionBatchSize || 3;
-            const tweetsToProcess = eligibleTweets
-                .filter(t => t.imageProcessStatus === ProcessStatus.Pending)
-                .slice(0, batchSize);
+            const tweetsToProcess = eligibleTweets.slice(0, batchSize);
 
             if (tweetsToProcess.length > 0) {
-                // 🚀 核心修复：立即标记状态，防止重复入队或 race condition
+                // 🚀 立即标记状态
                 for (const t of tweetsToProcess) {
                     await db.tweets.update(t.id, { imageProcessStatus: ProcessStatus.Processing });
                 }

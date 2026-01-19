@@ -119,11 +119,15 @@ export const TweetRepository = {
     /**
      * 筛选待处理 AI 的推文
      */
+    /**
+     * 筛选待处理 AI 的推文 (优化版：只拉取 ID，不加载实体)
+     */
     async getPendingAITweets() {
         return await db.tweets
             .where('aiStatus')
             .equals('pending')
-            .toArray();
+            .limit(100) // 🛡️ 限制单次检索数量
+            .primaryKeys(); // 🚀 关键：只取主键 ID
     },
 
     /**

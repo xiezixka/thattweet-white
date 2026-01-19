@@ -11,13 +11,31 @@ export function useGraphData() {
     // 只要 graphEdges, users, tweets 任何一个表发生变动，这个查询就会重新执行
     const data = useLiveQuery(async () => {
         try {
-            // 🌟 1. 改为直接拉取所有数据，不再依赖 edges 作为入口
-            // 这样即使旧数据没有 Edge，我们也能在内存中通过逻辑把它们连起来
+            // 🌟 1. 内存优化：只拉取画图所需的极简字段，丢弃沉重的 rawZip
+            // 设置 2000 条上限，防止万级数据直接撑爆浏览器
             const [allUsers, allTweets, edges] = await Promise.all([
-                db.users.toArray(),
-                db.tweets.toArray(),
-                db.graphEdges.toArray()
+                db.users.toArray(), // 用户通常不多（几千个），可以全量
+                db.tweets
+                    .orderBy('savedAt')
+                    .reverse()
+                    .limit(2000) // 🛡️ 窗口化加载：只看最近的 2000 条
+                    .toArray(),
+                db.graphEdges.toArray() // 边表本身就很轻量
             ]);
+
+            // 提取极简推文列表 (脱水处理)
+            const leanTweets = allTweets.map(t => ({
+                id: t.id,
+                authorId: t.authorId,
+                replyToId: t.replyToId,
+                replyToUser: t.replyToUser,
+                retweetFromId: (t as any).retweetFromId,
+                quoteFromId: (t as any).quoteFromId,
+                favoriteCount: t.favoriteCount,
+                retweetCount: t.retweetCount,
+                text: t.text, // 🌟 补上文本，用于标签显示
+                aiProfile: t.aiTags // 语义分析用
+            }));
 
             const userIds = new Set(allUsers.map(u => u.id));
             const tweetIds = new Set(allTweets.map(t => t.id));
@@ -46,11 +64,18 @@ export function useGraphData() {
             handleMap.forEach((u) => userMap.set(u.id, u));
 
             const getCanonicalId = (id: string) => userRedirectMap.get(id) || id;
-            const tweetMap = new Map(allTweets.map(t => [t.id, t]));
+            const tweetMap = new Map(leanTweets.map(t => [t.id, t]));
 
-            // 3. 统计
+            // 🌟 3. 只关注最近推文里的活跃用户，极大降低内存占用
+            const activeUserIds = new Set(leanTweets.map(t => getCanonicalId(t.authorId)));
+            const activeUserMap = new Map<string, any>();
+            userMap.forEach((u, id) => {
+                if (activeUserIds.has(id)) activeUserMap.set(id, u);
+            });
+
+            // 4. 统计 (仅统计窗口内的推文)
             const userStats = new Map<string, { tweetCount: number; totalEngagement: number }>();
-            allTweets.forEach(t => {
+            leanTweets.forEach(t => {
                 const authorId = getCanonicalId(t.authorId);
                 if (!authorId) return;
                 const existing = userStats.get(authorId) || { tweetCount: 0, totalEngagement: 0 };
@@ -75,7 +100,7 @@ export function useGraphData() {
 
                     // 填充数据并计算权重
                     if (type === 'user') {
-                        const u = userMap.get(id);
+                        const u = activeUserMap.get(id);
                         const stats = userStats.get(id) || { tweetCount: 0, totalEngagement: 0 };
 
                         label = u ? (u.name || u.handle) : id;
@@ -103,7 +128,7 @@ export function useGraphData() {
 
                         data = {
                             ...t,
-                            author: enrichedAuthor || t?.author || { id: t?.authorId }
+                            author: enrichedAuthor || { id: t?.authorId }
                         };
 
                         const likes = Number(t?.favoriteCount || 0);
@@ -126,7 +151,7 @@ export function useGraphData() {
             const derivedLinks: any[] = [];
 
             // 7.1 社交互动边 (User -> User): 基于回复/引用/转发
-            allTweets.forEach((t: any) => {
+            leanTweets.forEach((t: any) => {
                 const sourceUser = getCanonicalId(t.authorId);
                 const targets = new Set<string>(); // 一个推文可能关联多个目标用户
 
@@ -225,35 +250,63 @@ export function useGraphData() {
                 });
             });
 
-            // 7.2 语义/同好边 (User -> User): 基于 AI 关键词重合
-            const usersList = Array.from(userMap.values());
-            for (let i = 0; i < usersList.length; i++) {
-                for (let j = i + 1; j < usersList.length; j++) {
-                    const u1 = usersList[i];
-                    const u2 = usersList[j];
+            // 7.2 🌟 语义/同好边 (O(N) 倒排索引重构)
+            const keywordToUsers = new Map<string, string[]>();
+            const activeUsersList = Array.from(activeUserMap.values());
 
-                    const k1 = new Set(u1.aiProfile?.keywords || []);
-                    const k2 = new Set(u2.aiProfile?.keywords || []);
+            // 1. 构建倒排索引 (Keyword -> UserID[])
+            activeUsersList.forEach(u => {
+                const keywords = u.aiProfile?.keywords || [];
+                const uid = getCanonicalId(u.id);
+                keywords.forEach((k: string) => {
+                    const normalizedK = k.trim().toLowerCase();
+                    if (!normalizedK) return;
+                    if (!keywordToUsers.has(normalizedK)) keywordToUsers.set(normalizedK, []);
+                    keywordToUsers.get(normalizedK)!.push(uid);
+                });
+            });
 
-                    if (k1.size === 0 || k2.size === 0) continue;
+            // 2. 投票机制计算匹配度
+            const userPairScores = new Map<string, { count: number; common: string[] }>();
 
-                    // 计算交集
-                    const intersection = Array.from(k1).filter(k => k2.has(k));
-                    if (intersection.length >= 2) { // 至少有2个共同关键词
-                        const id1 = getCanonicalId(u1.id);
-                        const id2 = getCanonicalId(u2.id);
-                        derivedLinks.push({
-                            source: id1,
-                            target: id2,
-                            value: 2,
-                            linkType: 'semantic', // 🌟 语义/同好连线
-                            label: `共同关注: ${intersection.slice(0, 2).join(', ')}`
-                        });
-                        addNode(id1, 'user');
-                        addNode(id2, 'user');
-                    }
+            activeUsersList.forEach(u1 => {
+                const uid1 = getCanonicalId(u1.id);
+                const keywords = u1.aiProfile?.keywords || [];
+                const seenPairsForThisUser = new Set<string>();
+
+                keywords.forEach((k: string) => {
+                    const normalizedK = k.trim().toLowerCase();
+                    const coUsers = keywordToUsers.get(normalizedK) || [];
+                    coUsers.forEach(uid2 => {
+                        if (uid1 === uid2) return;
+                        const pairKey = uid1 < uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`;
+                        if (seenPairsForThisUser.has(pairKey)) return;
+
+                        const score = userPairScores.get(pairKey) || { count: 0, common: [] };
+                        score.count += 1;
+                        if (score.common.length < 2) score.common.push(normalizedK);
+                        userPairScores.set(pairKey, score);
+                    });
+                    // 防止同一个词针对同一个配对重复计分
+                    coUsers.forEach(uid2 => seenPairsForThisUser.add(uid1 < uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`));
+                });
+            });
+
+            // 3. 将高频匹配转为图谱连线
+            userPairScores.forEach((score, pairKey) => {
+                if (score.count >= 2) {
+                    const [id1, id2] = pairKey.split('_');
+                    derivedLinks.push({
+                        source: id1,
+                        target: id2,
+                        value: 2,
+                        linkType: 'semantic',
+                        label: `共同关注: ${score.common.join(', ')}`
+                    });
+                    addNode(id1, 'user');
+                    addNode(id2, 'user');
                 }
-            }
+            });
 
             // 8. 遍历原有边来生成节点
             edges.forEach(e => {

@@ -335,12 +335,29 @@ const ConnectionsView: React.FC = () => {
             }
         };
 
-        // ResizeObserver is better for container resizes
         const ro = new ResizeObserver(updateSize);
         if (containerRef.current) ro.observe(containerRef.current);
 
-        return () => ro.disconnect();
-    }, []);
+        return () => {
+            ro.disconnect();
+
+            // 🛡️ 终极地毯式清理：卸载时释放所有 GPU 资源
+            console.log('[ConnectionsView] Disposing GPU resources...');
+
+            userTextureCache.current.forEach(t => t.dispose());
+            userTextureCache.current.clear();
+
+            glowTextureCache.current.forEach(t => t.dispose());
+            glowTextureCache.current.clear();
+
+            filteredData.nodes.forEach((n: any) => {
+                if (n._materialCache) {
+                    Object.values(n._materialCache).forEach((m: any) => m.dispose());
+                    delete n._materialCache;
+                }
+            });
+        };
+    }, [filteredData.nodes]);
 
     // 🌟 动画循环：平滑更新节点状态
     useEffect(() => {
@@ -552,23 +569,40 @@ const ConnectionsView: React.FC = () => {
                                             };
                                         }
 
-                                        // 🌟 聚焦模式：计算透明度
+                                        // 🌟 性能：复用材质。Three.js 中 Material 的创建是非常昂贵的，且必须手动 dispose。
                                         const isHighlighted = highlightNodes.size === 0 || highlightNodes.has(node.id);
                                         const opacity = (lockedNode && !isHighlighted) ? 0.6 : 1.0;
+                                        const materialKey = `${cacheKey}_${opacity}`;
 
-                                        const material = new THREE.SpriteMaterial({
-                                            map: texture,
-                                            transparent: true,
-                                            opacity: opacity,
-                                            depthWrite: false, // 🛡️ 防止 Z-fighting 闪烁
-                                            depthTest: true,
-                                            sizeAttenuation: true
-                                        });
+                                        // 尝试从材质缓存获取
+                                        let material = (node as any)._materialCache?.[opacity];
+                                        if (!material) {
+                                            material = new THREE.SpriteMaterial({
+                                                map: texture,
+                                                transparent: true,
+                                                opacity: opacity,
+                                                depthWrite: false,
+                                                depthTest: true,
+                                                sizeAttenuation: true
+                                            });
+                                            if (!(node as any)._materialCache) (node as any)._materialCache = {};
+                                            (node as any)._materialCache[opacity] = material;
+                                        }
+
                                         const sprite = new THREE.Sprite(material);
 
-                                        // 🛡️ 放大头像尺寸，更易于识别
-                                        const baseSize = (Math.sqrt(node.val || 1) * 6) + 20; // 这里的倍数从 3 调到 6
-                                        const size = Math.min(baseSize, 120); // 最大尺寸从 60 调到 120
+                                        // 🛡️ 强制缓存控制：如果缓存太大，执行简单清理
+                                        if (userTextureCache.current.size > 200) {
+                                            const firstKey = userTextureCache.current.keys().next().value;
+                                            if (firstKey) {
+                                                const oldTexture = userTextureCache.current.get(firstKey);
+                                                oldTexture?.dispose();
+                                                userTextureCache.current.delete(firstKey);
+                                            }
+                                        }
+
+                                        const baseSize = (Math.sqrt(node.val || 1) * 6) + 20;
+                                        const size = Math.min(baseSize, 120);
                                         sprite.scale.set(size, size, 1);
                                         return sprite;
                                     }
