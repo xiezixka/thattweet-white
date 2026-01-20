@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "version": "4.5.3",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https:; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:;"
   },
@@ -26,9 +27,18 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://*/*",
     "https://twitter.com/*",
-    "https://x.com/*"
+    "https://x.com/*",
+    "https://api.deepseek.com/*",
+    "https://openrouter.ai/*",
+    "https://api.openai.com/*",
+    "https://api.siliconflow.cn/*",
+    "https://api.tu-zi.com/*",
+    "https://api.groq.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.together.xyz/*",
+    "https://dashscope.aliyuncs.com/*",
+    "https://api.perplexity.ai/*"
   ],
   "content_scripts": [
     {

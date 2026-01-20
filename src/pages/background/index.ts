@@ -7,7 +7,7 @@ import { triggerFullBackup, hasBackupDirectory } from '../../core/backup/backupS
 /**
  * [ThatTweet] Background Service Worker
  */
-console.log('%c[ThatTweet] Background Script Active v1.0.2', 'color: #1d9bf0; font-weight: bold');
+console.log('%c[ThatTweet] Background Script Active v4.5.3', 'color: #1d9bf0; font-weight: bold');
 
 // ============ Backup Alarm Setup ============
 const BACKUP_ALARM_NAME = "thattweet-full-backup";

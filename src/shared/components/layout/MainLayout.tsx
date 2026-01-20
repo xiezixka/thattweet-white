@@ -105,7 +105,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         <span className="uppercase tracking-wider font-medium">{t('status_ai_idle')}</span>
                     </div>
                     <div className="flex-1" />
-                    <span className="opacity-40">{t('status_version_prefix')}1.0.1 ALPHA</span>
+                    <span className="opacity-40">{t('status_version_prefix')}4.5.3</span>
                 </footer>
             </main>
         </div>
