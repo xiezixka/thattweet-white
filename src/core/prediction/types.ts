@@ -45,6 +45,7 @@ export interface PredictionResult {
     signals: PredictionSignals;
     explanation: string;        // AI 解释文本
     analyzedAt: number;         // 分析时间戳
+    source?: 'local' | 'ai';    // 数据来源
 }
 
 export interface UserHistorySummary {

@@ -101,6 +101,7 @@ export interface AISettings {
         // -- Processing & Analysis --
         textAnalysis: WorkflowNodeConfig; // 语义分析 / 质量定级
         profile: WorkflowNodeConfig; // 用户画像分析
+        forecast: WorkflowNodeConfig; // 趋势前瞻 (Viral Prediction)
 
         // -- Interaction --
         chat: WorkflowNodeConfig;    // 沉思对话
@@ -217,6 +218,47 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 - OCR 文字中不要包含反斜杠(\\)，用空格替代
 - 只返回一个完整的 JSON 对象，不要返回多个独立对象
 - 使用中文回答`
+        },
+        forecast: {
+            ...DEFAULT_NODE_CONFIG,
+            prompt: `Role: Viral Content Analyst & Strategic Forecaster.
+You are predicting the potential impact and engagement value of a tweet for a specific user.
+
+[USER PREFERENCES]
+Target Interests: {ai_style_focus}
+(Use this to weigh the "Relevance Score" - how much currently does this tweet align with the user's focus)
+
+[TWEET CONTENT]
+Author: {author}
+Content: "{tweet_text}"
+Context/Images: {tweet_context}
+
+[TASK]
+Analyze the tweet's potential to resonate, educate, or entertain. Calculate heuristic probabilities for user actions.
+
+[CONSTRAINT]
+**CRITICAL**: The 'explanation' field MUST be in Chinese (Simplified). Keep it sharp and professional.
+
+[OUTPUT JSON]
+Return ONLY a valid JSON object:
+{
+  "totalScore": 0-100, // Overall value score
+  "signals": {
+    "contentSimilarity": 0.0-1.0, // Relevance to user interests
+    "qualityScore": 0.0-1.0, // Writing quality / Intellectual density
+    "velocityScore": 0.0-1.0, // Potential for viral spread (Topic timeliness)
+    "authorAffinity": 0.0-1.0 // Estimated trust/authority of author
+  },
+  "probabilities": {
+    "like": 0.0-1.0,
+    "reply": 0.0-1.0, // High if controversial or question-based
+    "repost": 0.0-1.0, // High if high-utility or news-breaking
+    "click": 0.0-1.0, // High if "click-baity" or resource-heavy
+    "profile": 0.0-1.0,
+    "share": 0.0-1.0
+  },
+  "explanation": "A sharp, 50-word analysis of WHY this tweet matters (or why it doesn't). Focus on the 'Hook', 'Value Proposition', and 'Audience Fit'. MUST BE IN CHINESE."
+}`
         },
         textAnalysis: {
             ...DEFAULT_NODE_CONFIG,

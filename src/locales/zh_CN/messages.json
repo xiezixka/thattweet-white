@@ -644,6 +644,12 @@
   "node_profile_desc": {
     "message": "用户画像与性格建模"
   },
+  "node_forecast": {
+    "message": "趋势前瞻"
+  },
+  "node_forecast_desc": {
+    "message": "推文传播潜能与趋势预测"
+  },
   "node_chat": {
     "message": "沉思创作"
   },
@@ -798,102 +804,84 @@
     "message": "此指令将影响整个神经流水线的内容相关性判断。"
   },
   "system_active": {
-    "message": "系统运行中"
+    "message": "激活"
   },
-  "system_paused": {
-    "message": "系统暂停"
+  "sim_title": {
+    "message": "趋势前瞻"
   },
-  "pipeline_arch": {
-    "message": "流水线架构"
+  "sim_filter_all": {
+    "message": "全量信号"
   },
-  "section_rag": {
-    "message": "向量数据库 (RAG)"
+  "sim_filter_high": {
+    "message": "高潜挖掘"
   },
-  "status_enabled": {
-    "message": "已启用"
+  "sim_filter_rising": {
+    "message": "全网激增"
   },
-  "status_disabled": {
-    "message": "已禁用"
+  "sim_loading": {
+    "message": "正在扫描全网信号..."
   },
-  "label_embedding_model": {
-    "message": "嵌入模型 (Embedding)"
+  "sim_score_label": {
+    "message": "预测评分"
   },
-  "desc_embedding_model": {
-    "message": "用于推文向量化的模型 ID"
+  "sim_narrative_title": {
+    "message": "智能判读"
   },
-  "label_reranker_model": {
-    "message": "重排模型 (Reranker)"
+  "sim_analyzed_at": {
+    "message": "分析时间"
   },
-  "desc_reranker_model": {
-    "message": "用于语义重排序的模型 ID"
+  "sim_metric_semantic": {
+    "message": "语义匹配"
   },
-  "label_endpoint": {
-    "message": "接口配置"
+  "sim_metric_social": {
+    "message": "社交引力"
   },
-  "desc_endpoint": {
-    "message": "向量服务的 Base URL"
+  "sim_metric_quality": {
+    "message": "内容质量"
   },
-  "rag_offline": {
-    "message": "本地知识库已离线"
+  "sim_metric_velocity": {
+    "message": "爆发速率"
   },
-  "section_backup": {
-    "message": "快照协议 (BACKUP)"
+  "sim_metric_decay": {
+    "message": "时效衰减"
   },
-  "label_auto_backup": {
-    "message": "自动备份"
+  "sim_action_engagement": {
+    "message": "交互概率"
   },
-  "desc_auto_backup": {
-    "message": "每日自动生成本地快照"
+  "sim_action_depth": {
+    "message": "转化深度"
   },
-  "label_location": {
-    "message": "存储位置"
+  "sim_btn_like": {
+    "message": "点赞"
   },
-  "section_taxonomy": {
-    "message": "分类学 (TAXONOMY)"
+  "sim_btn_reply": {
+    "message": "回复"
   },
-  "placeholder_new_tag": {
-    "message": "+ 新建标签"
+  "sim_btn_repost": {
+    "message": "转发"
   },
-  "app_suite_version": {
-    "message": "智能套件 v1.1.0"
+  "sim_btn_expand": {
+    "message": "详情"
   },
-  "btn_docs": {
-    "message": "文档"
+  "sim_btn_profile": {
+    "message": "主页"
   },
-  "btn_github": {
-    "message": "GITHUB"
+  "sim_btn_share": {
+    "message": "分享"
   },
-  "backup_manual_title": {
-    "message": "手动备份"
+  "sim_empty_select": {
+    "message": "请选择左侧信号查看相信报告"
   },
-  "backup_manual_desc": {
-    "message": "下载当前数据快照或从备份恢复"
+  "sim_refresh_tooltip": {
+    "message": "刷新全网扫描"
   },
-  "btn_backup_download": {
-    "message": "下载快照"
+  "sim_clear_tooltip": {
+    "message": "清空预测结果"
   },
-  "btn_backup_upload": {
-    "message": "恢复备份"
+  "sim_critical_burst": {
+    "message": "临界爆发"
   },
-  "label_include_settings": {
-    "message": "包含扩展设置"
-  },
-  "desc_include_settings": {
-    "message": "将包含 API Key 等敏感配置，请安全存储备份文件"
-  },
-  "system_about_title": {
-    "message": "关于项目"
-  },
-  "system_about_desc": {
-    "message": "ThatTweet 是一个专为严肃阅读者设计的推特知识库工具，旨在将碎片化信息转化为系统性知识。"
-  },
-  "system_connect_title": {
-    "message": "连接与反馈"
-  },
-  "system_sponsor_title": {
-    "message": "支持开发"
-  },
-  "system_sponsor_desc": {
-    "message": "如果这个工具对您有帮助，欢迎请我喝杯咖啡，这将支持我持续维护和开发新功能。"
+  "sim_normal_growth": {
+    "message": "平稳增长"
   }
 }

@@ -14,7 +14,7 @@ interface AIPipelineDesignerProps {
     onUpdate: (newSettings: AISettings) => void;
 }
 
-type NodeKey = 'perception' | 'textAnalysis' | 'profile' | 'chat' | 'salon';
+type NodeKey = 'perception' | 'textAnalysis' | 'profile' | 'forecast' | 'chat' | 'salon';
 
 interface NodeMeta {
     key: NodeKey;
@@ -32,6 +32,7 @@ const CAPTURE_NODES: NodeMeta[] = [
 const ANALYSIS_NODES: NodeMeta[] = [
     { key: 'textAnalysis', icon: Sparkles, labelKey: 'node_text', descKey: 'node_text_desc', hasPrompt: true },
     { key: 'profile', icon: User, labelKey: 'node_profile', descKey: 'node_profile_desc', hasPrompt: true },
+    { key: 'forecast', icon: Activity, labelKey: 'node_forecast', descKey: 'node_forecast_desc', hasPrompt: true },
 ];
 
 const INTERACTION_NODES: NodeMeta[] = [

@@ -193,10 +193,12 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                     </div>
                 )}
 
-                {viralScore !== null && viralScore > 60 && (
+                {viralScore !== null && (
                     <div className={cn(
                         "px-2 py-0.5 rounded-lg border text-[10px] font-black italic tracking-tighter transition-all duration-500 shrink-0",
-                        viralScore > 85 ? "text-amber-400 bg-amber-400/10 border-amber-400/20 shadow-lg shadow-amber-400/20" : "text-blue-400 bg-blue-400/10 border-blue-400/20"
+                        viralScore > 85 ? "text-amber-400 bg-amber-400/10 border-amber-400/20 shadow-lg shadow-amber-400/20" :
+                            viralScore > 50 ? "text-blue-400 bg-blue-400/10 border-blue-400/20" :
+                                "text-zinc-500 bg-zinc-500/10 border-zinc-500/20"
                     )}>
                         VIRAL {viralScore}
                     </div>

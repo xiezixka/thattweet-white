@@ -9,6 +9,7 @@ import { db, EmbeddingRecord } from '../storage/db';
 import { embeddingService, dequantizeVector, cosineSimilarity } from '../../features/intelligence/services/embeddingService';
 import { Tweet } from '../../shared/types/tweet';
 import { PredictionResult, UserHistorySummary } from './types';
+import { llmService } from '../../features/intelligence/services/llmService';
 
 // ================================
 // 常量配置 (算法权重)
@@ -203,8 +204,82 @@ export class PredictionService {
                 timeDecay
             },
             explanation,
-            analyzedAt: now
+            analyzedAt: now,
+            source: 'local'
         };
+    }
+
+    /**
+     * 真正的 AI 深度分析 (Deep Dive)
+     * 调用 llmService.generateJSON('forecast', ...)
+     */
+    async aiAnalyze(tweet: Tweet, userSummary: UserHistorySummary): Promise<PredictionResult | null> {
+        try {
+            const settings = await llmService.getSettings();
+            if (!settings.workflowNodes.forecast?.enabled) {
+                console.warn('[PredictionService] Forecast node is disabled.');
+                return null;
+            }
+
+            const authorName = (typeof tweet.author === 'object')
+                ? (tweet.author as any).handle
+                : (tweet.authorName || tweet.author || 'unknown');
+
+            // 准备上下文
+            const variables = {
+                author: authorName,
+                tweet_text: tweet.text || '',
+                tweet_context: `Likes: ${tweet.favoriteCount}, RT: ${tweet.retweetCount}, Replies: ${tweet.replyCount}. Media: ${tweet.media?.map(m => m.type).join(', ') || 'None'}`,
+                ai_style_focus: settings.aiStyleFocus || 'General Interest'
+            };
+
+            console.log('[PredictionService] Starting AI Forecast for', tweet.id, 'using', settings.workflowNodes.forecast.model);
+
+            const aiResult = await llmService.generateJSON('forecast', variables);
+
+            if (!aiResult) {
+                throw new Error('AI returned empty result');
+            }
+
+            // Map AI result to PredictionResult
+            return {
+                tweetId: tweet.id,
+                totalScore: aiResult.totalScore || 0,
+                // AI 返回的 probabilities 可能不全，我们做个 merge 或 fallback
+                components: {
+                    favoriteProb: aiResult.probabilities?.like || 0,
+                    replyProb: aiResult.probabilities?.reply || 0,
+                    repostProb: aiResult.probabilities?.repost || 0,
+                    clickProb: aiResult.probabilities?.click || 0,
+                    photoExpandProb: 0.5, // AI 可能没算这个细项
+                    videoViewProb: 0.5,
+                    dwellTimeProb: 0.5,
+                    profileClickProb: aiResult.probabilities?.profile || 0,
+                    followProb: 0.5,
+                    shareProb: aiResult.probabilities?.share || 0,
+                    quoteProb: 0.3,
+                    negativeProb: 0.05,
+                    notInterestedProb: 0,
+                    muteProb: 0,
+                    blockProb: 0,
+                    reportProb: 0
+                },
+                signals: {
+                    contentSimilarity: aiResult.signals?.contentSimilarity || 0,
+                    authorAffinity: aiResult.signals?.authorAffinity || 0,
+                    velocityScore: aiResult.signals?.velocityScore || 0, // AI 很难算准这个，最好还是用本地的
+                    qualityScore: aiResult.signals?.qualityScore || 0,
+                    timeDecay: 1.0 // AI 视角通常是看当下的价值
+                },
+                explanation: aiResult.explanation || 'AI analysis complete.',
+                analyzedAt: Date.now(),
+                source: 'ai'
+            };
+
+        } catch (error) {
+            console.error('[PredictionService] AI Analyze Failed:', error);
+            return null; // 让 UI层 处理 fallback 或显示错误
+        }
     }
 
     /**
