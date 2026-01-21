@@ -46,6 +46,23 @@ export interface PredictionResult {
     explanation: string;        // AI 解释文本
     analyzedAt: number;         // 分析时间戳
     source?: 'local' | 'ai';    // 数据来源
+    // --- 增长预测 (Growth Projections) ---
+    growthForecast?: {
+        next24h: { likes: number; retweets: number; views: number; replies: number };
+        next7d: { likes: number; retweets: number; views: number; replies: number };
+        next30d: { likes: number; retweets: number; views: number; replies: number };
+        verdict: string;
+    };
+    // --- 30天逐日模拟 (Daily Simulation) ---
+    dailySimulation?: Array<{
+        day: number;
+        likes: number;
+        views: number;
+        retweets: number;
+        replies: number;
+    }>;
+    // Deprecated
+    futureEstimates?: any;
 }
 
 export interface UserHistorySummary {

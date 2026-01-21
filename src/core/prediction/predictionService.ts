@@ -205,7 +205,50 @@ export class PredictionService {
             },
             explanation,
             analyzedAt: now,
-            source: 'local'
+            source: 'local',
+            futureEstimates: this.calculateFutureEstimates(tweet, {
+                totalScore,
+                velocity: velocityScore,
+                quality: qualityScore
+            })
+        };
+    }
+
+    /**
+     * 根据当前数据与 AI 信号，估算未来增长曲线 (1d, 7d, 30d)
+     */
+    private calculateFutureEstimates(tweet: Tweet, signals: { totalScore: number, velocity: number, quality: number }) {
+        const { totalScore, velocity, quality } = signals;
+
+        // 基础倍率计算 (结合传播速度与质量)
+        // 核心直觉：爆发力(Velocity)决定 1d，质量(Quality)决定 7d 和 30d
+        const favBase = tweet.favoriteCount || 10;
+        const viewBase = tweet.viewCount || favBase * 20;
+        const rtBase = tweet.retweetCount || Math.round(favBase * 0.1);
+        const replyBase = tweet.replyCount || Math.round(favBase * 0.05);
+
+        // 增长潜力因子 (基于 Score)
+        const potential = 1 + (totalScore / 100) * 5; // 0-100 分对应 1-6 倍增长潜力
+
+        const estimate = (days: number, power: number) => {
+            // 使用饱和增长模型：Initial + Ceiling * (1 - e^-kt)
+            // 这里简化为：Base * (1 + Potential * 衰减函数)
+            // 衰减函数取决于 Quality
+            const decay = Math.log10(days + 1) / Math.log10(31); // 0-1 的时间进度感
+            const growthFactor = 1 + (potential * Math.pow(decay, 1 / (quality + 0.5)));
+
+            return {
+                fav: Math.round(favBase * growthFactor),
+                view: Math.round(viewBase * (growthFactor * 1.2)), // 观看量通常增长更快
+                rt: Math.round(rtBase * growthFactor),
+                replies: Math.round(replyBase * growthFactor)
+            };
+        };
+
+        return {
+            '1d': estimate(1, velocity),
+            '7d': estimate(7, quality),
+            '30d': estimate(30, quality)
         };
     }
 
@@ -269,7 +312,7 @@ export class PredictionService {
                     id: t.id,
                     author: (typeof t.author === 'object' ? (t.author as any).name : t.authorName) || 'unknown',
                     text: t.text ? t.text.substring(0, 500) : '',
-                    stats: `Lik:${t.favoriteCount},RT:${t.retweetCount},Rep:${t.replyCount}`,
+                    stats: `Lik:${t.favoriteCount},RT:${t.retweetCount},Rep:${t.replyCount},Views:${t.viewCount || 0}`,
                     trend: trendContext,
                     vision: visionContext, // New Field
                     media: t.media?.map(m => m.type).join(',') || 'none'
@@ -326,17 +369,47 @@ export class PredictionService {
                         },
                         explanation: analysis.explanation || 'AI analysis complete.',
                         analyzedAt: Date.now(),
-                        source: 'ai'
+                        source: 'ai',
+                        growthForecast: analysis.growth_forecast ? {
+                            next24h: analysis.growth_forecast.next_24h,
+                            next7d: analysis.growth_forecast.next_7d,
+                            next30d: analysis.growth_forecast.next_30d,
+                            verdict: analysis.growth_forecast.verdict
+                        } : undefined,
+                        dailySimulation: analysis.daily_simulation ? analysis.daily_simulation.map((sim: any, idx: number, arr: any[]) => {
+                            // 强制实施“单调递增”和“基位保护”逻辑
+                            const sanitized = { ...sim };
+                            const prev = idx > 0 ? arr[idx - 1] : null;
+
+                            // 1. 基位保护：不得低于采样时的当前值
+                            sanitized.views = Math.max(sanitized.views || 0, tweet.viewCount || 0);
+                            sanitized.likes = Math.max(sanitized.likes || 0, tweet.favoriteCount || 0);
+                            sanitized.retweets = Math.max(sanitized.retweets || 0, tweet.retweetCount || 0);
+                            sanitized.replies = Math.max(sanitized.replies || 0, tweet.replyCount || 0);
+
+                            // 2. 连续性保护：Day N 必须 >= Day N-1 (防止 AI 中途数据缩水)
+                            if (prev) {
+                                sanitized.views = Math.max(sanitized.views, prev.views || 0);
+                                sanitized.likes = Math.max(sanitized.likes, prev.likes || 0);
+                                sanitized.retweets = Math.max(sanitized.retweets, prev.retweets || 0);
+                                sanitized.replies = Math.max(sanitized.replies, prev.replies || 0);
+                            }
+                            return sanitized;
+                        }) : undefined,
+                        // Fallback local calc if AI fails to provide forecast
+                        futureEstimates: !analysis.growth_forecast ? this.calculateFutureEstimates(tweet, {
+                            totalScore: analysis.totalScore || 0,
+                            velocity: analysis.signals?.velocityScore || 0,
+                            quality: analysis.signals?.qualityScore || 0
+                        }) : undefined
                     };
 
                     resultMap[tweet.id] = prediction;
 
-                    // Persist to DB
+                    // Persist to DB - Do NOT overwrite aiReason/aiSummary to keep original capture insights
                     db.tweets.update(tweet.id, {
-                        aiScore: prediction.totalScore,
-                        aiReason: prediction.explanation,
-                        aiSummary: prediction.explanation,
                         prediction: prediction,
+                        aiScore: prediction.totalScore, // We can update score to most accurate deep score
                         aiStatus: ProcessStatus.Completed,
                         aiProcessedAt: Date.now()
                     }).catch(console.error);

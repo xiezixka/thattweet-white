@@ -23,6 +23,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../shared/utils/cn';
 import { useSettingsStore } from '../../shared/store/useSettingsStore';
+import { TrendChart } from '../../shared/components/TrendChart';
 
 interface PredictedTweet extends Tweet {
     prediction?: PredictionResult;
@@ -154,7 +155,17 @@ export const SimulationView: React.FC = () => {
                 }
                 setProgress(Math.round(((i + 1) / allTweets.length) * 100));
             }
-            results.sort((a, b) => (b.prediction?.totalScore || 0) - (a.prediction?.totalScore || 0));
+            results.sort((a, b) => {
+                // 排序优先级：
+                // 1. 已进行 AI Deep Dive 的结果 (Source: ai)
+                // 2. 采集时由 AI textAnalysis 生成的 aiScore (卡片生成时的数值)
+                // 3. 本地启发式引擎生成的预测分 (Source: local)
+                const getScore = (t: PredictedTweet) => {
+                    if (t.prediction?.source === 'ai') return t.prediction.totalScore;
+                    return t.aiScore || t.prediction?.totalScore || 0;
+                };
+                return getScore(b) - getScore(a);
+            });
             setTweets(results);
             if (results.length > 0) setSelectedId(results[0].id);
         } catch (error) {
@@ -235,10 +246,11 @@ export const SimulationView: React.FC = () => {
                                 <div className="text-[10px] font-black tracking-widest text-zinc-600">{chrome.i18n.getMessage('sim_loading')} {progress}%</div>
                             </div>
                         )}
-                        {!loading && filteredTweets.map((tweet) => (
+                        {!loading && filteredTweets.map((tweet, index) => (
                             <ForecastItem
                                 key={tweet.id}
                                 tweet={tweet}
+                                index={index}
                                 active={selectedId === tweet.id}
                                 onClick={() => setSelectedId(tweet.id)}
                             />
@@ -320,9 +332,53 @@ export const SimulationView: React.FC = () => {
                                                     {analyzeError}
                                                 </div>
                                             )}
-                                            <p className="text-lg text-amber-100/90 leading-relaxed font-medium italic">
-                                                "{selectedTweet.prediction?.explanation}"
-                                            </p>
+                                            <div className="space-y-6">
+                                                {/* Section A: Original Semantic DNA */}
+                                                <div className="bg-zinc-900/40 rounded-2xl p-4 border border-white/5 relative group">
+                                                    <div className="flex items-center gap-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                                                        <Activity size={12} className="text-zinc-600" />
+                                                        Content DNA (Captured)
+                                                    </div>
+                                                    <p className="text-[14px] text-zinc-400 leading-relaxed font-medium">
+                                                        {selectedTweet.aiReason || "Initial semantic analysis not available for this capture."}
+                                                    </p>
+                                                    {selectedTweet.aiCategory && (
+                                                        <div className="mt-3">
+                                                            <span className="px-2 py-0.5 rounded bg-zinc-800/50 text-zinc-500 text-[9px] font-black uppercase tracking-wider border border-white/5">
+                                                                #{selectedTweet.aiCategory}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Section B: New Strategic Verdict (The "Deep Dive") */}
+                                                <div className="bg-amber-500/[0.03] rounded-2xl p-5 border border-amber-500/10 relative overflow-hidden">
+                                                    <div className="absolute top-0 right-0 p-2 opacity-10">
+                                                        <Sparkles size={40} className="text-amber-500" />
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3 relative z-10">
+                                                        <Zap size={12} className="text-amber-500" />
+                                                        AI Strategic Trajectory
+                                                    </div>
+                                                    <p className="text-xl text-amber-100/90 leading-relaxed font-black italic relative z-10">
+                                                        "{selectedTweet.prediction?.explanation || "Awaiting AI Deep Dive Analysis..."}"
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* 趋势图表插入 */}
+                                            <div className="mt-8 mb-2 min-h-[440px]">
+                                                <div className="flex justify-between items-end mb-4 px-2">
+                                                    <span className="text-[10px] font-black text-amber-500/60 uppercase tracking-widest">Growth Forecast Matrix</span>
+                                                    <span className="text-[10px] font-mono text-amber-500/40">30-Day Organic Simulation</span>
+                                                </div>
+                                                <TrendChart
+                                                    history={selectedTweet.metricsHistory}
+                                                    prediction={selectedTweet.prediction}
+                                                    createdAt={selectedTweet.createdAt}
+                                                    className="h-[400px] w-full"
+                                                />
+                                            </div>
                                         </div>
                                         <div className="flex-none pt-4 border-t border-amber-500/10 mt-4 flex justify-between items-end">
                                             <div className="text-[9px] text-amber-500/50 font-mono">
@@ -381,14 +437,18 @@ const SmallTab = ({ active, onClick, children }: any) => (
     </button>
 );
 
-const ForecastItem = ({ tweet, active, onClick }: any) => {
+const ForecastItem = ({ tweet, index, active, onClick }: any) => {
     const author = (typeof tweet.author === 'object' && tweet.author !== null)
         ? tweet.author
         : { name: tweet.authorName || 'Unknown', handle: tweet.authorId, avatar: '' };
 
     const authorHandle = author.handle;
     const avatarUrl = author.avatar || `https://unavatar.io/x/${authorHandle}`;
-    const score = tweet.prediction?.totalScore || 0;
+
+    // 优先显示初始 AI 评分，如果 Deep Dive 跑完则使用最终总分
+    const score = (tweet.prediction?.source === 'ai')
+        ? tweet.prediction.totalScore
+        : (tweet.aiScore || tweet.prediction?.totalScore || 0);
 
     // 分数颜色
     const scoreColor = score >= 80 ? "text-amber-400" : score >= 50 ? "text-blue-400" : "text-zinc-600";
@@ -403,15 +463,16 @@ const ForecastItem = ({ tweet, active, onClick }: any) => {
                 bgActive
             )}
         >
-            {/* Left Score Column */}
-            <div className="w-16 flex flex-col items-center justify-center border-r border-white/5 bg-black/20 gap-1">
+            {/* Left Rank & Score Column */}
+            <div className="w-20 flex flex-col items-center justify-center border-r border-white/5 bg-black/20 py-3 gap-0.5">
+                <span className="text-[10px] font-mono text-zinc-700 font-bold mb-1">#{index + 1}</span>
                 <span className={cn("text-2xl font-black italic tracking-tighter font-mono", scoreColor)}>
                     {score}
                 </span>
                 {isAiAnalyzed && (
-                    <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                    <div className="mt-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
                         <Sparkles size={8} className="text-amber-500" />
-                        <span className="text-[8px] font-black text-amber-500 uppercase">AI</span>
+                        <span className="text-[8px] font-black text-amber-500 uppercase">DEEP</span>
                     </div>
                 )}
             </div>

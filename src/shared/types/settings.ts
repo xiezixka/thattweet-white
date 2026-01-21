@@ -265,10 +265,26 @@ Example Format:
       "profile": 0.0-1.0,
       "share": 0.0-1.0
     },
-    "explanation": "Chinese analysis (50 words) focusing on User Alignment and Value."
-  },
-  "tweet_id_2": { ... }
-}`
+    "growth_forecast": {
+      "next_24h": { "likes": 120, "retweets": 15, "views": 1200, "replies": 5 },
+      "next_7d": { "likes": 400, "retweets": 40, "views": 4500, "replies": 20 },
+      "next_30d": { "likes": 450, "retweets": 45, "views": 5200, "replies": 25 },
+      "verdict": "Steady Growth"
+    },
+    "daily_simulation": [
+      { "day": 1, "likes": 120, "retweets": 15, "views": 1200, "replies": 5 },
+      { "day": 2, "likes": 200, "retweets": 25, "views": 2200, "replies": 10 },
+      "... continue for day 3-30 where day 30 is the final TOTAL CUMULATIVE state"
+    ],
+    "explanation": "Chinese analysis (max 50 words) emphasizing why the trend behave this way (e.g., exponential start, fast decay, or long-tail value)."
+  }
+
+  [SIMULATION RULES]
+  1. **Cumulative Logic**: Data in 'daily_simulation' MUST be the total accumulated count (Final State) for that day. It should never decrease.
+  2. **Baseline Scaling**: Use the provided 'stats' (e.g., Views:60000, Lik:110) as Day 0. Your Day 1 predictions MUST be greater than or equal to these values. NEVER start from 0 if current stats are high.
+  3. **Organic Volatility**: Do NOT return perfectly linear growth. Simulate "Waves" (波浪式增长) - e.g., higher growth on day 1-3, slow down on day 4-6, a small spike on day 7, then long-tail plateau.
+  4. **Engagement Sync**: Likes, Retweets, and Replies should grow proportionally but with distinct decay rates (e.g., views grow fastest/longest, replies decay fastest).
+  `
         },
         textAnalysis: {
             ...DEFAULT_NODE_CONFIG,
