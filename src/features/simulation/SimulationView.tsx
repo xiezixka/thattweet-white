@@ -140,7 +140,14 @@ export const SimulationView: React.FC = () => {
                         const author = await db.users.get(tweet.authorId);
                         tweet.author = author || { id: tweet.authorId, name: tweet.authorName || 'Unknown', handle: tweet.authorId, avatar: tweet.authorAvatarUrl || '', updatedAt: 0 } as any;
                     }
-                    const prediction = await predictionService.predict(tweet, summary);
+                    let prediction;
+                    // 如果已经有 AI 深度分析的结果，则保留 AI 结果，不再被本地预测覆盖
+                    if (tweet.prediction?.source === 'ai') {
+                        prediction = tweet.prediction;
+                        // 补充：可以在这里调用一个轻量级的方法更新时间衰减，但保持 AI 的核心评价不变
+                    } else {
+                        prediction = await predictionService.predict(tweet, summary);
+                    }
                     results.push({ ...tweet, prediction });
                 } catch (err) {
                     console.error(`[Forecasting] Failed predicting ${allTweets[i].id}:`, err);

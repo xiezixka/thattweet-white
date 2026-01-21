@@ -251,14 +251,30 @@ export class PredictionService {
 
             console.log('[PredictionService] Starting Batch Forecast for', tweets.length, 'tweets');
 
-            // 简化输入以节省 Token
-            const batchInput = tweets.map(t => ({
-                id: t.id,
-                author: (typeof t.author === 'object' ? (t.author as any).name : t.authorName) || 'unknown',
-                text: t.text ? t.text.substring(0, 500) : '',
-                stats: `Lik:${t.favoriteCount},RT:${t.retweetCount},Rep:${t.replyCount}`,
-                media: t.media?.map(m => m.type).join(',') || 'none'
-            }));
+            // 简化输入以节省 Token (Enriched with Dynamic Context)
+            const batchInput = tweets.map(t => {
+                // Calculate trend description
+                let trendContext = "Normal growth.";
+                const velocity = this.calculateVelocity(t); // Re-use the smart velocity logic
+                if (velocity > 0.8) trendContext = "VIRAL ALERT: Extremely high engagement velocity.";
+                else if (velocity > 0.5) trendContext = "Accelerating: Engagement is picking up speed.";
+                else if (t.createdAt && (Date.now() - new Date(t.createdAt).getTime() > 1000 * 60 * 60 * 24 * 30) && velocity > 0.2) {
+                    trendContext = "Resurrected: Old tweet suddenly gaining new traction.";
+                }
+
+                // Append Visual Context
+                const visionContext = t.visionDescription ? `[Visual Content: ${t.visionDescription.substring(0, 100)}...]` : "";
+
+                return {
+                    id: t.id,
+                    author: (typeof t.author === 'object' ? (t.author as any).name : t.authorName) || 'unknown',
+                    text: t.text ? t.text.substring(0, 500) : '',
+                    stats: `Lik:${t.favoriteCount},RT:${t.retweetCount},Rep:${t.replyCount}`,
+                    trend: trendContext,
+                    vision: visionContext, // New Field
+                    media: t.media?.map(m => m.type).join(',') || 'none'
+                };
+            });
 
             const variables = {
                 tweet_batch_json: JSON.stringify(batchInput, null, 2),
@@ -435,20 +451,48 @@ export class PredictionService {
     /**
      * 计算传播速度 (Velocity)
      */
+    /**
+     * 计算传播速度 (Velocity) - 动态趋势版
+     * 结合平均速度与瞬时加速度
+     */
     private calculateVelocity(tweet: Tweet): number {
         const createdDate = new Date(tweet.createdAt);
         const createdTs = isNaN(createdDate.getTime()) ? (tweet.savedAt || Date.now()) : createdDate.getTime();
         const ageMs = Date.now() - createdTs;
         const ageMin = Math.max(ageMs / (1000 * 60), 1);
 
-        // 互动总数 (加权)
+        // 1. 平均速度 (Average Velocity)
         const engagement = (tweet.favoriteCount || 0) + (tweet.retweetCount || 0) * 3 + (tweet.replyCount || 0) * 2;
+        const avgVelocity = engagement / ageMin;
 
-        // 速度指标
-        const v = engagement / ageMin;
+        // 2. 瞬时速度 (Instant Velocity) - 基于 MetricsHistory
+        let instantVelocity = 0;
+        let acceleration = 0; // 加速度
+
+        if (tweet.metricsHistory && tweet.metricsHistory.length >= 2) {
+            // 取最近两个快照
+            const last = tweet.metricsHistory[tweet.metricsHistory.length - 1];
+            const prev = tweet.metricsHistory[tweet.metricsHistory.length - 2];
+
+            const timeDeltaMin = (last.capturedAt - prev.capturedAt) / (1000 * 60);
+
+            if (timeDeltaMin > 0) {
+                const engLast = last.favoriteCount + last.retweetCount * 3 + last.replyCount * 2;
+                const engPrev = prev.favoriteCount + prev.retweetCount * 3 + prev.replyCount * 2;
+
+                // 瞬时速度 (每分钟互动增量)
+                instantVelocity = Math.max(0, engLast - engPrev) / timeDeltaMin;
+            }
+        }
+
+        // 3. 最终速度取两个维度的最高值 (捕捉"虽老但火"的情况)
+        // 瞬时速度给予更高权重，因为它是当下正在发生的事实
+        const finalVelocity = Math.max(avgVelocity, instantVelocity * 2);
 
         // 归一化 (经验值：每分钟10个互动视为极快)
-        return Math.min(v / 5, 1.0);
+        // 使用 Logistic 函数平滑映射到 0-1
+        // x=5 -> 0.5, x=20 -> 0.95
+        return this.sigmoid((finalVelocity - 5) * 0.5);
     }
 
     /**

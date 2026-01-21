@@ -44,10 +44,49 @@ export const TweetRepository = {
                 // 已存在的推文：更新互动数据，保留 AI 结果和用户标记
                 // 采用 Math.max 确保计数只会增长 (或者至少不会被 0 覆盖)
 
-                // 🌟 智能保留更长的文本（避免 DOM 抓取的截断文本覆盖 API 获取的完整长文）
+                // 🌟 智能保留更长的文本
                 const keepLongerText = (existingTweet.text?.length || 0) >= (tweet.text?.length || 0)
                     ? existingTweet.text
                     : tweet.text;
+
+                // --- 历史趋势快照逻辑 (Snapshot Logic) ---
+                const history = existingTweet.metricsHistory || [];
+                const lastSnapshot = history.length > 0 ? history[history.length - 1] : null;
+                const now = Date.now();
+
+                // 构造当前快照
+                const currentSnapshot = {
+                    capturedAt: now,
+                    favoriteCount: tweet.favoriteCount || 0,
+                    retweetCount: tweet.retweetCount || 0,
+                    replyCount: tweet.replyCount || 0,
+                    viewCount: tweet.viewCount || 0
+                };
+
+                let shouldAppend = false;
+
+                if (!lastSnapshot) {
+                    shouldAppend = true;
+                } else {
+                    const timeDiff = now - lastSnapshot.capturedAt;
+                    // 策略：每小时至少存一次 OR 关键互动量变化超过 10%
+                    const isTimeDue = timeDiff > 1000 * 60 * 60; // 1 hour
+                    const isSignificantChange = (
+                        Math.abs(currentSnapshot.favoriteCount - lastSnapshot.favoriteCount) > (lastSnapshot.favoriteCount * 0.1) ||
+                        Math.abs(currentSnapshot.retweetCount - lastSnapshot.retweetCount) > (lastSnapshot.retweetCount * 0.1)
+                    );
+
+                    // 只有当至少有一个值是非零时才记录变化（避免从0到0的无效记录）
+                    const hasValue = currentSnapshot.favoriteCount > 0 || currentSnapshot.retweetCount > 0;
+
+                    shouldAppend = hasValue && (isTimeDue || isSignificantChange);
+                }
+
+                if (shouldAppend) {
+                    history.push(currentSnapshot);
+                    // 限制历史记录最大长度，避免无限膨胀 (比如保留最近 50 个点)
+                    if (history.length > 50) history.shift();
+                }
 
                 await db.tweets.update(tweet.id, {
                     // 保留更长的文本
@@ -58,18 +97,28 @@ export const TweetRepository = {
                     replyCount: Math.max(tweet.replyCount || 0, existingTweet.replyCount || 0),
                     viewCount: Math.max(tweet.viewCount || 0, existingTweet.viewCount || 0),
 
+                    // 更新趋势数据
+                    metricsHistory: history,
+
                     // 更新头像（智能合并）
                     authorAvatarUrl: user.avatar || existingUser?.avatar || existingTweet.authorAvatarUrl || tweet.authorAvatarUrl,
 
-                    // 媒体可能有更完整的数据 (比如从封面图更新到了视频源)
+                    // 媒体可能有更完整的数据
                     media: (tweet.media?.length > (existingTweet.media?.length || 0)) ? tweet.media : existingTweet.media,
                 });
-                console.log(`[ThatTweet] Tweet ${tweet.id} stats updated (text: ${keepLongerText === existingTweet.text ? 'kept existing' : 'updated'})`);
+                console.log(`[ThatTweet] Tweet ${tweet.id} stats updated. Snapshot captured: ${shouldAppend}`);
             } else {
-                // 新推文：完整写入
+                // 新推文：完整写入 + 初始化历史快照
                 await db.tweets.put({
                     ...tweet,
-                    authorAvatarUrl: user.avatar || tweet.authorAvatarUrl
+                    authorAvatarUrl: user.avatar || tweet.authorAvatarUrl,
+                    metricsHistory: [{
+                        capturedAt: Date.now(),
+                        favoriteCount: tweet.favoriteCount || 0,
+                        retweetCount: tweet.retweetCount || 0,
+                        replyCount: tweet.replyCount || 0,
+                        viewCount: tweet.viewCount || 0
+                    }]
                 });
                 console.log(`[ThatTweet] Tweet ${tweet.id} saved (new)`);
             }

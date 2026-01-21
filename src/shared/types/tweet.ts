@@ -46,6 +46,15 @@ export interface MediaItem {
   previewUrl?: string;
 }
 
+export interface MetricSnapshot {
+  capturedAt: number;        // 采集时间戳
+  favoriteCount: number;     // 点赞
+  retweetCount: number;      // 转发
+  replyCount: number;        // 回复
+  viewCount: number;         // 浏览
+  quoteCount?: number;       // 引用 (可选)
+}
+
 // --- 推文核心表 (Tweet) ---
 export interface Tweet {
   // --- 基础关联 ---
@@ -105,6 +114,9 @@ export interface Tweet {
   // --- 原始数据快照 ---
   // 存储 LZ-String 压缩后的推文原始 API JSON 字符串
   rawZip?: string;
+
+  // --- 动态趋势数据 (History Tracking) ---
+  metricsHistory?: MetricSnapshot[]; // 历史互动数据快照
 }
 
 /**
