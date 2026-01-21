@@ -9,6 +9,7 @@ import { Heart, RefreshCw } from 'lucide-react';
 
 import { GraphSettingsPanel, GraphSettings } from './components/GraphSettingsPanel';
 import { GraphSearch } from './components/GraphSearch';
+import { PredictionSummary } from './components/PredictionSummary';
 
 const ConnectionsView: React.FC = () => {
     const { data, loading } = useGraphData();
@@ -82,12 +83,20 @@ const ConnectionsView: React.FC = () => {
             // 🧪 物理布局
             layoutDensity: 3,
             nodeScale: 1.1,
+            // 🔬 算法模拟
+            showPrediction: true,
         };
 
         try {
             const saved = localStorage.getItem('thattweet_graph_settings');
             if (saved) {
-                return { ...defaultSettings, ...JSON.parse(saved) };
+                const parsed = JSON.parse(saved);
+                return {
+                    ...defaultSettings,
+                    ...parsed,
+                    // 确保新功能默认开启
+                    showPrediction: parsed.showPrediction ?? true
+                };
             }
         } catch (e) {
             console.warn('[ConnectionsView] Failed to load saved settings:', e);
@@ -1413,6 +1422,11 @@ const ConnectionsView: React.FC = () => {
                                                         </a>
                                                     )}
                                                 </div>
+
+                                                {/* 🔬 AI 爆火潜力预测 (Simulation Mode) */}
+                                                {settings.showPrediction && activeNode.data && (
+                                                    <PredictionSummary tweet={activeNode.data} />
+                                                )}
 
                                                 {/* 作者信息与操作 */}
                                                 <div className="flex items-center justify-between bg-zinc-900/30 rounded-xl p-3 border border-white/5">

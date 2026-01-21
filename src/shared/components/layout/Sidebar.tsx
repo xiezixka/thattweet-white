@@ -6,7 +6,8 @@ import {
     LineChart,
     Settings2,
     Network,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Zap
 } from 'lucide-react';
 import { useUIStore, ViewType } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -34,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false, isPinned 
         { id: 'analytics', icon: LineChart, label: t('nav_analytics') },
         { id: 'intelligence', icon: BrainCircuit, label: t('nav_intelligence') },
         { id: 'connections', icon: Network, label: '连结' },
+        { id: 'simulation', icon: Zap, label: '前瞻' },
         { id: 'gallery', icon: ImageIcon, label: t('nav_gallery') },
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];

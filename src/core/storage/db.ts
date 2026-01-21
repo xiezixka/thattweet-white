@@ -40,9 +40,9 @@ export class ThatTweetDB extends Dexie {
             embeddings: 'tweetId, modelId, updatedAt'
         });
 
-        // Version 3: 添加图谱关系表和标签映射表 (Connections Feature)
-        this.version(3).stores({
-            tweets: 'id, authorId, savedAt, aiStatus, imageProcessStatus, isBookmarked, *tags',
+        // Version 4: 添加 aiScore 索引用于爆火预测
+        this.version(4).stores({
+            tweets: 'id, authorId, savedAt, aiStatus, aiScore, imageProcessStatus, isBookmarked, *tags',
             users: 'id, handle, name',
             embeddings: 'tweetId, modelId, updatedAt',
             graphEdges: '++id, source, target, type, [source+target+type], createdAt',

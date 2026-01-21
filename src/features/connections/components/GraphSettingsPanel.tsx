@@ -20,6 +20,9 @@ export interface GraphSettings {
     // 🧪 物理布局 (高级)
     layoutDensity: number;         // 布局疏密度 (整合排斥力/连接距离)
     nodeScale: number;
+
+    // 🔬 算法模拟
+    showPrediction: boolean;       // 是否显示 AI 爆火潜力预测
 }
 
 // 影响力档位标签
@@ -159,7 +162,15 @@ export const GraphSettingsPanel: React.FC<Props> = ({ settings, onUpdate }) => {
                         onChange={(v: number) => onUpdate('explorationDepth', v)}
                         hint={`${settings.explorationDepth} 层`}
                     />
-                    <div className="text-[10px] text-zinc-600 -mt-2 mb-1">点击大 V 后展开 {settings.explorationDepth} 层关联内容</div>
+                    <div className="text-[10px] text-zinc-600 -mt-2 mb-4">点击大 V 后展开 {settings.explorationDepth} 层关联内容</div>
+
+                    <Toggle
+                        label="AI 趋势前瞻"
+                        checked={settings.showPrediction}
+                        onChange={(v: boolean) => onUpdate('showPrediction', v)}
+                        color="bg-amber-500"
+                        hint="基于 X 算法模拟趋势评分"
+                    />
                 </Section>
 
                 {/* 🎨 视觉展示 */}

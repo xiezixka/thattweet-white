@@ -44,6 +44,19 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
     const isMasonry = mode === 'masonry';
     const isCitation = mode === 'citation';
 
+    const [viralScore, setViralScore] = useState<number | null>(null);
+
+    React.useEffect(() => {
+        if (!isMasonry || isCitation) return;
+        const calcViral = async () => {
+            const { predictionService } = await import('../../core/prediction/predictionService');
+            // Simplified summary for speed
+            const res = await predictionService.predict(tweet, { centroidVector: null, topAuthors: [], dislikedTags: [] });
+            setViralScore(res.totalScore);
+        };
+        calcViral();
+    }, [tweet.id]);
+
     const handleDelete = async (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!deleteConfirm) {
@@ -163,6 +176,15 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                         scoreStyles
                     )}>
                         {tweet.aiScore}
+                    </div>
+                )}
+
+                {viralScore !== null && viralScore > 60 && (
+                    <div className={cn(
+                        "px-2 py-0.5 rounded-lg border text-[10px] font-black italic tracking-tighter transition-all duration-500 shrink-0",
+                        viralScore > 85 ? "text-amber-400 bg-amber-400/10 border-amber-400/20 shadow-lg shadow-amber-400/20" : "text-blue-400 bg-blue-400/10 border-blue-400/20"
+                    )}>
+                        VIRAL {viralScore}
                     </div>
                 )}
             </div>
