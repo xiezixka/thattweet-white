@@ -38,6 +38,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
     const [isExpanded, setIsExpanded] = useState(false);
     const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
     const [imgFail, setImgFail] = useState(false);
+    const [currentAvatar, setCurrentAvatar] = useState<string | undefined>(undefined);
     const [deleteConfirm, setDeleteConfirm] = useState(false);
     const { t } = useTranslation();
     const { openLightbox } = useUIStore();
@@ -51,7 +52,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
         const calcViral = async () => {
             const { predictionService } = await import('../../core/prediction/predictionService');
             // Simplified summary for speed
-            const res = await predictionService.predict(tweet, { centroidVector: null, topAuthors: [], dislikedTags: [] });
+            const res = await predictionService.predict(tweet, { centroidVector: null, topAuthors: [], dislikedTags: [], topKeywords: [] });
             setViralScore(res.totalScore);
         };
         calcViral();
@@ -73,10 +74,15 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
         tweet.aiScore !== undefined ? getScoreStyles(tweet.aiScore) : ''
         , [tweet.aiScore]);
 
-    const hasLongText = tweet.text.length > 140;
-
     // 1. 头像处理 (增加 fallback 状态)
+    const hasLongText = tweet.text.length > 140;
     const avatarUrl = React.useMemo(() => normalizeTwitterImage(author?.avatar, 'avatar'), [author?.avatar]);
+
+    // reset avatar state when author changes
+    React.useEffect(() => {
+        setCurrentAvatar(avatarUrl);
+        setImgFail(false);
+    }, [avatarUrl]);
 
     // 2. 媒体处理 (多图逻辑)
     const mediaItems = tweet.media || [];
@@ -129,13 +135,21 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
                         "rounded-full border border-white/10 bg-zinc-800 shrink-0 overflow-hidden",
                         isCitation ? "w-8 h-8" : "w-10 h-10"
                     )}>
-                        {avatarUrl && !imgFail ? (
+                        {(!imgFail) ? (
                             <img
-                                src={avatarUrl}
+                                src={currentAvatar || `https://unavatar.io/x/${author?.handle}`}
                                 alt={author?.name}
                                 className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
-                                onError={() => setImgFail(true)}
+                                onError={(e) => {
+                                    // 如果当前是原始头像失败，尝试 Unavatar
+                                    if (currentAvatar && author?.handle && e.currentTarget.src !== `https://unavatar.io/x/${author.handle}`) {
+                                        setCurrentAvatar(`https://unavatar.io/x/${author.handle}`);
+                                    } else {
+                                        // 彻底失败
+                                        setImgFail(true);
+                                    }
+                                }}
                                 loading="lazy"
                             />
                         ) : (
