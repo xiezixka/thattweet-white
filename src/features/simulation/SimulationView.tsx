@@ -37,6 +37,7 @@ export const SimulationView: React.FC = () => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [analyzingId, setAnalyzingId] = useState<string | null>(null);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+    const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false);
 
     const filteredTweets = useMemo(() => {
         if (filter === 'high') return tweets.filter(t => (t.prediction?.totalScore || 0) > 60);
@@ -45,6 +46,39 @@ export const SimulationView: React.FC = () => {
     }, [tweets, filter]);
 
     const selectedTweet = useMemo(() => tweets.find(t => t.id === selectedId), [tweets, selectedId]);
+
+    const handleBatchAnalyze = async () => {
+        if (isBatchAnalyzing) return;
+        setIsBatchAnalyzing(true);
+        setAnalyzeError(null);
+
+        const candidates = filteredTweets
+            .filter(t => t.prediction?.source !== 'ai')
+            .slice(0, 5);
+
+        if (candidates.length === 0) {
+            setIsBatchAnalyzing(false);
+            return;
+        }
+
+        try {
+            const summary = await predictionService.getUserSummary();
+            const results = await predictionService.aiAnalyzeBatch(candidates, summary);
+
+            if (Object.keys(results).length > 0) {
+                setTweets(prev => prev.map(t =>
+                    results[t.id] ? { ...t, prediction: results[t.id] } : t
+                ));
+            } else {
+                setAnalyzeError("Batch analysis returned no results. Check AI settings.");
+            }
+        } catch (e: any) {
+            console.error("Batch failed", e);
+            setAnalyzeError(e.message || "Batch Analysis Failed");
+        } finally {
+            setIsBatchAnalyzing(false);
+        }
+    };
 
     const handleAiAnalyze = async (tweet: PredictedTweet) => {
         if (analyzingId) return;
@@ -130,8 +164,6 @@ export const SimulationView: React.FC = () => {
 
     useEffect(() => { runSimulation(); }, []);
 
-
-
     return (
         <div className="flex h-screen w-full bg-[#050507] text-zinc-300 overflow-hidden font-sans">
             {/* Main Content: Split View */}
@@ -146,6 +178,15 @@ export const SimulationView: React.FC = () => {
                                     <Zap size={16} />
                                 </div>
                                 <h2 className="text-lg font-black italic tracking-tighter text-white uppercase">{chrome.i18n.getMessage('sim_title')} <span className="text-[10px] not-italic text-zinc-600 ml-1 font-mono">v4.2</span></h2>
+
+                                <button
+                                    onClick={handleBatchAnalyze}
+                                    disabled={isBatchAnalyzing}
+                                    className="ml-2 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Sparkles size={12} className={isBatchAnalyzing ? "animate-spin" : ""} />
+                                    <span className="text-[10px] tracking-wide">SCAN TOP 5</span>
+                                </button>
                             </div>
                             <div className="flex items-center gap-1">
                                 <button

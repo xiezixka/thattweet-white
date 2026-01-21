@@ -7,7 +7,7 @@
 
 import { db, EmbeddingRecord } from '../storage/db';
 import { embeddingService, dequantizeVector, cosineSimilarity } from '../../features/intelligence/services/embeddingService';
-import { Tweet } from '../../shared/types/tweet';
+import { Tweet, ProcessStatus } from '../../shared/types/tweet';
 import { PredictionResult, UserHistorySummary } from './types';
 import { llmService } from '../../features/intelligence/services/llmService';
 
@@ -215,70 +215,123 @@ export class PredictionService {
      */
     async aiAnalyze(tweet: Tweet, userSummary: UserHistorySummary): Promise<PredictionResult | null> {
         try {
+            // 复用 Batch 逻辑，将其视为单条 batch
+            const batchResults = await this.aiAnalyzeBatch([tweet], userSummary);
+
+            // 返回该推文的结果
+            if (batchResults[tweet.id]) {
+                return batchResults[tweet.id];
+            }
+
+            // 如果 AI 返回了结果单 ID 不匹配（罕见情况，可能 AI 幻觉了 ID），
+            // 尝试返回第一个 value（因为只需 1 条）
+            const keys = Object.keys(batchResults);
+            if (keys.length > 0) {
+                return batchResults[keys[0]];
+            }
+
+            return null;
+        } catch (error) {
+            console.error('[PredictionService] AI Analyze Failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * AI 批量深度分析 (Batch Deep Dive)
+     * 同时分析多条推文，提高 Token 利用率并进行横向对比
+     */
+    async aiAnalyzeBatch(tweets: Tweet[], userSummary: UserHistorySummary): Promise<Record<string, PredictionResult>> {
+        try {
             const settings = await llmService.getSettings();
             if (!settings.workflowNodes.forecast?.enabled) {
                 console.warn('[PredictionService] Forecast node is disabled.');
-                return null;
+                return {};
             }
 
-            const authorName = (typeof tweet.author === 'object')
-                ? (tweet.author as any).handle
-                : (tweet.authorName || tweet.author || 'unknown');
+            console.log('[PredictionService] Starting Batch Forecast for', tweets.length, 'tweets');
 
-            // 准备上下文
+            // 简化输入以节省 Token
+            const batchInput = tweets.map(t => ({
+                id: t.id,
+                author: (typeof t.author === 'object' ? (t.author as any).name : t.authorName) || 'unknown',
+                text: t.text ? t.text.substring(0, 500) : '',
+                stats: `Lik:${t.favoriteCount},RT:${t.retweetCount},Rep:${t.replyCount}`,
+                media: t.media?.map(m => m.type).join(',') || 'none'
+            }));
+
             const variables = {
-                author: authorName,
-                tweet_text: tweet.text || '',
-                tweet_context: `Likes: ${tweet.favoriteCount}, RT: ${tweet.retweetCount}, Replies: ${tweet.replyCount}. Media: ${tweet.media?.map(m => m.type).join(', ') || 'None'}`,
+                tweet_batch_json: JSON.stringify(batchInput, null, 2),
                 ai_style_focus: settings.aiStyleFocus || 'General Interest'
             };
 
-            console.log('[PredictionService] Starting AI Forecast for', tweet.id, 'using', settings.workflowNodes.forecast.model);
+            console.log('[PredictionService] BATCH INPUT:', JSON.stringify(variables, null, 2));
 
-            const aiResult = await llmService.generateJSON('forecast', variables);
+            const aiResponse = await llmService.generateJSON('forecast', variables);
 
-            if (!aiResult) {
+            console.log('[PredictionService] BATCH OUTPUT:', aiResponse);
+
+            if (!aiResponse) {
                 throw new Error('AI returned empty result');
             }
 
-            // Map AI result to PredictionResult
-            return {
-                tweetId: tweet.id,
-                totalScore: aiResult.totalScore || 0,
-                // AI 返回的 probabilities 可能不全，我们做个 merge 或 fallback
-                components: {
-                    favoriteProb: aiResult.probabilities?.like || 0,
-                    replyProb: aiResult.probabilities?.reply || 0,
-                    repostProb: aiResult.probabilities?.repost || 0,
-                    clickProb: aiResult.probabilities?.click || 0,
-                    photoExpandProb: 0.5, // AI 可能没算这个细项
-                    videoViewProb: 0.5,
-                    dwellTimeProb: 0.5,
-                    profileClickProb: aiResult.probabilities?.profile || 0,
-                    followProb: 0.5,
-                    shareProb: aiResult.probabilities?.share || 0,
-                    quoteProb: 0.3,
-                    negativeProb: 0.05,
-                    notInterestedProb: 0,
-                    muteProb: 0,
-                    blockProb: 0,
-                    reportProb: 0
-                },
-                signals: {
-                    contentSimilarity: aiResult.signals?.contentSimilarity || 0,
-                    authorAffinity: aiResult.signals?.authorAffinity || 0,
-                    velocityScore: aiResult.signals?.velocityScore || 0, // AI 很难算准这个，最好还是用本地的
-                    qualityScore: aiResult.signals?.qualityScore || 0,
-                    timeDecay: 1.0 // AI 视角通常是看当下的价值
-                },
-                explanation: aiResult.explanation || 'AI analysis complete.',
-                analyzedAt: Date.now(),
-                source: 'ai'
-            };
+            const resultMap: Record<string, PredictionResult> = {};
+
+            for (const tweet of tweets) {
+                const analysis = aiResponse[tweet.id];
+                if (analysis) {
+                    const prediction: PredictionResult = {
+                        tweetId: tweet.id,
+                        totalScore: analysis.totalScore || 0,
+                        components: {
+                            favoriteProb: analysis.probabilities?.like || 0,
+                            replyProb: analysis.probabilities?.reply || 0,
+                            repostProb: analysis.probabilities?.repost || 0,
+                            clickProb: analysis.probabilities?.click || 0,
+                            photoExpandProb: 0.5,
+                            videoViewProb: 0.5,
+                            dwellTimeProb: 0.5,
+                            profileClickProb: analysis.probabilities?.profile || 0,
+                            followProb: 0.5,
+                            shareProb: analysis.probabilities?.share || 0,
+                            quoteProb: 0.3,
+                            negativeProb: 0.05,
+                            notInterestedProb: 0,
+                            muteProb: 0,
+                            blockProb: 0,
+                            reportProb: 0
+                        },
+                        signals: {
+                            contentSimilarity: analysis.signals?.contentSimilarity || 0,
+                            authorAffinity: analysis.signals?.authorAffinity || 0,
+                            velocityScore: analysis.signals?.velocityScore || 0,
+                            qualityScore: analysis.signals?.qualityScore || 0,
+                            timeDecay: 1.0
+                        },
+                        explanation: analysis.explanation || 'AI analysis complete.',
+                        analyzedAt: Date.now(),
+                        source: 'ai'
+                    };
+
+                    resultMap[tweet.id] = prediction;
+
+                    // Persist to DB
+                    db.tweets.update(tweet.id, {
+                        aiScore: prediction.totalScore,
+                        aiReason: prediction.explanation,
+                        aiSummary: prediction.explanation,
+                        prediction: prediction,
+                        aiStatus: ProcessStatus.Completed,
+                        aiProcessedAt: Date.now()
+                    }).catch(console.error);
+                };
+            }
+
+            return resultMap;
 
         } catch (error) {
-            console.error('[PredictionService] AI Analyze Failed:', error);
-            return null; // 让 UI层 处理 fallback 或显示错误
+            console.error('[PredictionService] AI Batch Analyze Failed:', error);
+            return {};
         }
     }
 

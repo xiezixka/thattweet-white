@@ -222,42 +222,52 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
         forecast: {
             ...DEFAULT_NODE_CONFIG,
             prompt: `Role: Viral Content Analyst & Strategic Forecaster.
-You are predicting the potential impact and engagement value of a tweet for a specific user.
+Task: Analyze a batch of tweets to predict their potential impact and engagement value for a specific user.
 
 [USER PREFERENCES]
 Target Interests: {ai_style_focus}
-(Use this to weigh the "Relevance Score" - how much currently does this tweet align with the user's focus)
+(CRITICAL: Use this to determine "Content Similarity" and influence interaction probabilities.)
 
-[TWEET CONTENT]
-Author: {author}
-Content: "{tweet_text}"
-Context/Images: {tweet_context}
+[INPUT DATA]
+The input is a JSON array of tweets.
+{tweet_batch_json}
 
-[TASK]
-Analyze the tweet's potential to resonate, educate, or entertain. Calculate heuristic probabilities for user actions.
+[ANALYSIS LOGIC CHAIN]
+For EACH tweet, apply this logic:
+1. **Relevance Check**: Compare Tweet Content vs User Target Interests.
+   - High Match (>0.8): Boost 'Like', 'Reply', 'Profile' probabilities.
+   - Low Match (<0.3): Significantly penalize ALL interaction probabilities, even if Quality is high.
+2. **Action Prediction**:
+   - 'Reply': High if content is controversial, asks a question, or touches a User Interest pain point.
+   - 'Repost': High if content provides high-utility resources or breaking news relevant to User Interests.
+   - 'Profile Click': High if the author provides unique value aligned with User Interests but is not yet fully trusted.
 
 [CONSTRAINT]
 **CRITICAL**: The 'explanation' field MUST be in Chinese (Simplified). Keep it sharp and professional.
 
 [OUTPUT JSON]
-Return ONLY a valid JSON object:
+Return a SINGLE JSON Object where keys are Tweet IDs and values are the analysis results.
+Example Format:
 {
-  "totalScore": 0-100, // Overall value score
-  "signals": {
-    "contentSimilarity": 0.0-1.0, // Relevance to user interests
-    "qualityScore": 0.0-1.0, // Writing quality / Intellectual density
-    "velocityScore": 0.0-1.0, // Potential for viral spread (Topic timeliness)
-    "authorAffinity": 0.0-1.0 // Estimated trust/authority of author
+  "tweet_id_1": {
+    "totalScore": 0-100,
+    "signals": {
+      "contentSimilarity": 0.0-1.0, 
+      "qualityScore": 0.0-1.0,
+      "velocityScore": 0.0-1.0,
+      "authorAffinity": 0.0-1.0
+    },
+    "probabilities": {
+      "like": 0.0-1.0,
+      "reply": 0.0-1.0,
+      "repost": 0.0-1.0,
+      "click": 0.0-1.0,
+      "profile": 0.0-1.0,
+      "share": 0.0-1.0
+    },
+    "explanation": "Chinese analysis (50 words) focusing on User Alignment and Value."
   },
-  "probabilities": {
-    "like": 0.0-1.0,
-    "reply": 0.0-1.0, // High if controversial or question-based
-    "repost": 0.0-1.0, // High if high-utility or news-breaking
-    "click": 0.0-1.0, // High if "click-baity" or resource-heavy
-    "profile": 0.0-1.0,
-    "share": 0.0-1.0
-  },
-  "explanation": "A sharp, 50-word analysis of WHY this tweet matters (or why it doesn't). Focus on the 'Hook', 'Value Proposition', and 'Audience Fit'. MUST BE IN CHINESE."
+  "tweet_id_2": { ... }
 }`
         },
         textAnalysis: {
