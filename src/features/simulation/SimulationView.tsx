@@ -2,8 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { db } from '../../core/storage/db';
 import { predictionService } from '../../core/prediction/predictionService';
 import { PredictionResult } from '../../core/prediction/types';
-import { Tweet } from '../../shared/types/tweet';
+import { Tweet, TweetWithUser } from '../../shared/types/tweet';
 import { TweetCard } from '../../shared/components/TweetCard';
+import { TweetRepository } from '../../core/storage/TweetRepository';
 import {
     Zap,
     TrendingUp,
@@ -18,14 +19,16 @@ import {
     ShieldCheck,
     Globe,
     Sparkles,
-    Trash2
+    Trash2,
+    ExternalLink,
+    Activity as Pulse
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../shared/utils/cn';
 import { useSettingsStore } from '../../shared/store/useSettingsStore';
 import { TrendChart } from '../../shared/components/TrendChart';
 
-interface PredictedTweet extends Tweet {
+interface PredictedTweet extends TweetWithUser {
     prediction?: PredictionResult;
 }
 
@@ -48,38 +51,7 @@ export const SimulationView: React.FC = () => {
 
     const selectedTweet = useMemo(() => tweets.find(t => t.id === selectedId), [tweets, selectedId]);
 
-    const handleBatchAnalyze = async () => {
-        if (isBatchAnalyzing) return;
-        setIsBatchAnalyzing(true);
-        setAnalyzeError(null);
-
-        const candidates = filteredTweets
-            .filter(t => t.prediction?.source !== 'ai')
-            .slice(0, 5);
-
-        if (candidates.length === 0) {
-            setIsBatchAnalyzing(false);
-            return;
-        }
-
-        try {
-            const summary = await predictionService.getUserSummary();
-            const results = await predictionService.aiAnalyzeBatch(candidates, summary);
-
-            if (Object.keys(results).length > 0) {
-                setTweets(prev => prev.map(t =>
-                    results[t.id] ? { ...t, prediction: results[t.id] } : t
-                ));
-            } else {
-                setAnalyzeError("Batch analysis returned no results. Check AI settings.");
-            }
-        } catch (e: any) {
-            console.error("Batch failed", e);
-            setAnalyzeError(e.message || "Batch Analysis Failed");
-        } finally {
-            setIsBatchAnalyzing(false);
-        }
-    };
+    // handleBatchAnalyze removed as per user request
 
     const handleAiAnalyze = async (tweet: PredictedTweet) => {
         if (analyzingId) return;
@@ -109,38 +81,26 @@ export const SimulationView: React.FC = () => {
         }
     };
 
-    // Auto-Analyze Effect
+    // Auto-Analyze Disabled: Only manual trigger from UI
     useEffect(() => {
-        if (
-            selectedTweet &&
-            settings.workflowNodes?.forecast?.enabled &&
-            selectedTweet.prediction?.source !== 'ai' &&
-            !analyzingId &&
-            !analyzeError
-        ) {
-            handleAiAnalyze(selectedTweet);
-        }
-    }, [selectedId, settings.workflowNodes?.forecast?.enabled]);
+        // We no longer trigger handleAiAnalyze automatically.
+    }, [selectedId]);
 
     const runSimulation = async () => {
         setLoading(true);
         setProgress(0);
         try {
-            const allTweets = await db.tweets.orderBy('savedAt').reverse().limit(100).toArray();
-            if (allTweets.length === 0) {
+            const resultsWithUser = await TweetRepository.getPagedTweets(0, 100);
+            if (resultsWithUser.length === 0) {
                 setTweets([]);
                 setLoading(false);
                 return;
             }
             const summary = await predictionService.getUserSummary();
             const results: PredictedTweet[] = [];
-            for (let i = 0; i < allTweets.length; i++) {
+            for (let i = 0; i < resultsWithUser.length; i++) {
                 try {
-                    const tweet = { ...allTweets[i] } as PredictedTweet;
-                    if (typeof tweet.author !== 'object') {
-                        const author = await db.users.get(tweet.authorId);
-                        tweet.author = author || { id: tweet.authorId, name: tweet.authorName || 'Unknown', handle: tweet.authorId, avatar: tweet.authorAvatarUrl || '', updatedAt: 0 } as any;
-                    }
+                    const tweet = resultsWithUser[i] as PredictedTweet;
                     let prediction;
                     // 如果已经有 AI 深度分析的结果，则保留 AI 结果，不再被本地预测覆盖
                     if (tweet.prediction?.source === 'ai') {
@@ -151,9 +111,9 @@ export const SimulationView: React.FC = () => {
                     }
                     results.push({ ...tweet, prediction });
                 } catch (err) {
-                    console.error(`[Forecasting] Failed predicting ${allTweets[i].id}:`, err);
+                    console.error(`[Forecasting] Failed predicting tweet:`, err);
                 }
-                setProgress(Math.round(((i + 1) / allTweets.length) * 100));
+                setProgress(Math.round(((i + 1) / resultsWithUser.length) * 100));
             }
             results.sort((a, b) => {
                 // 排序优先级：
@@ -187,24 +147,12 @@ export const SimulationView: React.FC = () => {
             {/* Main Content: Split View */}
             <div className="flex-1 flex overflow-hidden">
                 {/* List View */}
-                <div className="w-[450px] flex flex-col border-r border-white/5 bg-zinc-900/10 relative">
+                <div className="w-[320px] flex flex-col border-r border-white/5 bg-zinc-900/10 relative shrink-0">
                     {/* List Header */}
                     <div className="p-4 space-y-4 border-b border-white/5 bg-zinc-900/20 backdrop-blur-sm z-20">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
-                                    <Zap size={16} />
-                                </div>
                                 <h2 className="text-lg font-black italic tracking-tighter text-white uppercase">{chrome.i18n.getMessage('sim_title')} <span className="text-[10px] not-italic text-zinc-600 ml-1 font-mono">v4.2</span></h2>
-
-                                <button
-                                    onClick={handleBatchAnalyze}
-                                    disabled={isBatchAnalyzing}
-                                    className="ml-2 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Sparkles size={12} className={isBatchAnalyzing ? "animate-spin" : ""} />
-                                    <span className="text-[10px] tracking-wide">SCAN TOP 5</span>
-                                </button>
                             </div>
                             <div className="flex items-center gap-1">
                                 <button
@@ -255,6 +203,11 @@ export const SimulationView: React.FC = () => {
                                 onClick={() => setSelectedId(tweet.id)}
                             />
                         ))}
+                        {!loading && filteredTweets.length === 0 && (
+                            <div className="py-20 text-center">
+                                <div className="text-[10px] font-black text-zinc-700 uppercase tracking-widest italic opacity-50">No Data Captured</div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Scan Line effect */}
@@ -262,7 +215,18 @@ export const SimulationView: React.FC = () => {
                 </div>
 
                 {/* Detail Insight View */}
-                <div className="flex-1 overflow-hidden bg-[radial-gradient(circle_at_top_right,#111,transparent)]">
+                <div className="flex-1 overflow-hidden bg-[#050507] relative">
+                    {/* Background Grid Decoration */}
+                    <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
+                        style={{
+                            backgroundImage: `
+                                radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0),
+                                linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+                                linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px)
+                            `,
+                            backgroundSize: '24px 24px, 120px 120px, 120px 120px'
+                        }} />
+
                     <AnimatePresence mode="wait">
                         {selectedTweet ? (
                             <motion.div
@@ -272,125 +236,229 @@ export const SimulationView: React.FC = () => {
                                 exit={{ opacity: 0, x: -10 }}
                                 className="h-full flex flex-col p-6 gap-6 overflow-hidden max-h-screen"
                             >
-                                {/* 1. Top Section: Header & Core Metrics (Fixed Height) */}
-                                <div className="flex-none flex gap-6 h-[100px]">
-                                    {/* Big Score Card */}
-                                    <div className="w-[180px] bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden group shrink-0">
-                                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-50" />
-                                        <div className="relative z-10 text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">{chrome.i18n.getMessage('sim_score_label')}</div>
-                                        <div className="relative z-10 text-5xl font-black italic text-white tracking-tighter">{selectedTweet.prediction?.totalScore}</div>
+                                {/* 1. New Compact Top Metrics Bar (Glassmorphic) */}
+                                <div className="flex-none flex items-stretch gap-px bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden backdrop-blur-md h-16">
+                                    {/* Score Card */}
+                                    <div className="w-[100px] flex flex-col items-center justify-center relative bg-white/[0.02] group shrink-0 border-r border-white/5">
+                                        <div className="text-[8px] font-black text-amber-500/50 uppercase tracking-widest mb-0.5">{chrome.i18n.getMessage('sim_score_label')}</div>
+                                        <div className="text-3xl font-black italic text-white tracking-tighter leading-none">{selectedTweet.prediction?.totalScore || selectedTweet.aiScore || 0}</div>
+
+                                        {/* Rank decoration */}
+                                        <div className="absolute top-1 right-1 text-[6px] font-mono text-white/10 uppercase">Index.v4</div>
                                     </div>
 
-                                    {/* Metrics Grid */}
-                                    <div className="flex-1 grid grid-cols-5 gap-3">
-                                        <MetricBox label={chrome.i18n.getMessage('sim_metric_semantic')} value={`${((selectedTweet.prediction?.signals.contentSimilarity || 0) * 100).toFixed(0)}%`} icon={<Search size={12} />} />
-                                        <MetricBox label={chrome.i18n.getMessage('sim_metric_social')} value={`${((selectedTweet.prediction?.signals.authorAffinity || 0) * 100).toFixed(0)}%`} icon={<Activity size={12} />} />
-                                        <MetricBox label={chrome.i18n.getMessage('sim_metric_quality')} value={`${((selectedTweet.prediction?.signals.qualityScore || 0) * 100).toFixed(0)}%`} icon={<Sparkles size={12} />} />
-                                        <MetricBox label={chrome.i18n.getMessage('sim_metric_velocity')} value={`${((selectedTweet.prediction?.signals.velocityScore || 0) * 100).toFixed(0)}%`} icon={<TrendingUp size={12} />} />
-                                        <MetricBox label={chrome.i18n.getMessage('sim_metric_decay')} value={`-${((1 - (selectedTweet.prediction?.signals.timeDecay || 0)) * 100).toFixed(0)}%`} icon={<ShieldCheck size={12} />} />
+                                    {/* Metrics Flow */}
+                                    <div className="flex-1 flex px-6 items-center justify-between gap-8 overflow-hidden bg-black/20">
+                                        <SlimMetric label={chrome.i18n.getMessage('sim_metric_semantic_short')} value={`${((selectedTweet.prediction?.signals.contentSimilarity || 0) * 100).toFixed(0)}%`} color="text-rose-400" />
+                                        <SlimMetric label={chrome.i18n.getMessage('sim_metric_social_short')} value={`${((selectedTweet.prediction?.signals.authorAffinity || 0) * 100).toFixed(0)}%`} color="text-emerald-400" />
+                                        <SlimMetric label={chrome.i18n.getMessage('sim_metric_quality_short')} value={`${((selectedTweet.prediction?.signals.qualityScore || 0) * 100).toFixed(0)}%`} color="text-blue-400" />
+                                        <SlimMetric label={chrome.i18n.getMessage('sim_metric_velocity_short')} value={`${((selectedTweet.prediction?.signals.velocityScore || 0) * 100).toFixed(0)}%`} icon={<TrendingUp size={10} />} color="text-amber-400" />
+                                        <SlimMetric label={chrome.i18n.getMessage('sim_metric_decay_short')} value={`-${((1 - (selectedTweet.prediction?.signals.timeDecay || 0)) * 100).toFixed(0)}%`} color="text-zinc-500" />
+                                    </div>
+
+                                    {/* Deep Dive Action */}
+                                    <div className="w-[120px] flex items-center justify-center p-3">
+                                        <button
+                                            onClick={() => handleAiAnalyze(selectedTweet)}
+                                            disabled={!!analyzingId}
+                                            className="w-full h-full flex items-center justify-center gap-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 text-amber-500 hover:text-black font-black transition-all disabled:opacity-30 border border-amber-500/20 active:scale-95 group"
+                                        >
+                                            <Sparkles size={12} className={analyzingId === selectedTweet.id ? "animate-spin" : "group-hover:animate-pulse"} />
+                                            <span className="text-[10px] tracking-tight">{chrome.i18n.getMessage('sim_btn_analyze')}</span>
+                                        </button>
                                     </div>
                                 </div>
 
-                                {/* 2. Middle Section: Split Content (Flexible Height) */}
+                                {/* 2. Main Work Area: Side-by-Side Split */}
                                 <div className="flex-1 min-h-0 flex gap-6">
-                                    {/* Left: Tweet Card Container */}
-                                    <div className="flex-1 min-w-0 bg-white/[0.02] rounded-3xl border border-white/5 flex flex-col overflow-hidden relative">
-                                        <div className="flex-none p-3 border-b border-white/5 bg-white/[0.01] text-[10px] font-black text-zinc-500 uppercase tracking-widest flex justify-between items-center">
-                                            <span>Source Content</span>
-                                            <div className="flex gap-1">
-                                                <div className="w-2 h-2 rounded-full bg-rose-500/50" />
-                                                <div className="w-2 h-2 rounded-full bg-amber-500/50" />
-                                                <div className="w-2 h-2 rounded-full bg-green-500/50" />
+                                    {/* Left Partition (30%): Content Blueprint & DNA */}
+                                    <div className="w-[300px] flex flex-col gap-6 shrink-0 overflow-y-auto no-scrollbar">
+                                        {/* Source Snapshot */}
+                                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+                                            <div className="px-4 py-2 bg-white/[0.03] border-b border-white/5 text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center justify-between">
+                                                <span>{chrome.i18n.getMessage('sim_section_snapshot')}</span>
+                                                <div className="flex gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-800" />
+                                                </div>
+                                            </div>
+                                            <div className="p-4 space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <img
+                                                        src={
+                                                            selectedTweet.author?.avatar ||
+                                                            selectedTweet.authorAvatarUrl ||
+                                                            `https://unavatar.io/x/${selectedTweet.author?.handle || selectedTweet.authorId}`
+                                                        }
+                                                        className="w-8 h-8 rounded-full border border-white/10 object-cover shadow-lg shadow-black/50"
+                                                        onError={(e: any) => e.target.src = `https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png`}
+                                                    />
+                                                    <div className="min-w-0">
+                                                        <div className="text-[11px] font-black text-white truncate tracking-tight uppercase">{selectedTweet.author?.name || selectedTweet.authorName || 'UNKNOWN'}</div>
+                                                        <div className="text-[9px] font-mono text-zinc-500 leading-none">@{selectedTweet.author?.handle || selectedTweet.authorId}</div>
+                                                    </div>
+                                                </div>
+                                                <p className="text-[12px] text-zinc-400 leading-relaxed line-clamp-[6] font-medium tracking-tight">
+                                                    {selectedTweet.text}
+                                                </p>
+
+                                                {/* Micro Metrics Tray */}
+                                                <div className="flex items-center gap-4 py-2 border-y border-white/5 opacity-60">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] font-black text-zinc-600 uppercase">{chrome.i18n.getMessage('sim_metric_views')}</span>
+                                                        <span className="text-[11px] font-black font-mono text-zinc-300">{(selectedTweet.viewCount || 0).toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] font-black text-zinc-600 uppercase">{chrome.i18n.getMessage('sim_metric_likes')}</span>
+                                                        <span className="text-[11px] font-black font-mono text-amber-500/80">{(selectedTweet.favoriteCount || 0).toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] font-black text-zinc-600 uppercase">{chrome.i18n.getMessage('sim_metric_rts')}</span>
+                                                        <span className="text-[11px] font-black font-mono text-zinc-300">{(selectedTweet.retweetCount || 0).toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] font-black text-zinc-600 uppercase">{chrome.i18n.getMessage('sim_metric_reps')}</span>
+                                                        <span className="text-[11px] font-black font-mono text-zinc-300">{(selectedTweet.replyCount || 0).toLocaleString()}</span>
+                                                    </div>
+                                                </div>
+
+                                                {selectedTweet.media && selectedTweet.media.length > 0 && (
+                                                    <div className={cn(
+                                                        "grid gap-1 mt-2",
+                                                        selectedTweet.media.length === 1 ? "grid-cols-1" : "grid-cols-2"
+                                                    )}>
+                                                        {selectedTweet.media.slice(0, 4).map((m, i) => (
+                                                            <div key={i} className="aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/5 shadow-inner">
+                                                                <img src={m.url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 cursor-pointer" />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
-                                            <TweetCard tweet={selectedTweet} author={selectedTweet.author as any} mode="masonry" />
+
+                                        {/* Content DNA Section (The "Symmetric" Essence) */}
+                                        <div className="bg-zinc-900/10 border border-white/5 rounded-2xl p-5 space-y-4 shadow-xl">
+                                            <div className="flex items-center gap-2 text-[9px] font-black text-rose-500/80 uppercase tracking-[0.2em]">
+                                                <Search size={10} />
+                                                {chrome.i18n.getMessage('sim_section_semantic')}
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <div className="text-[8px] font-black text-zinc-600 uppercase mb-1 tracking-widest">{chrome.i18n.getMessage('sim_label_core_narrative')}</div>
+                                                    <p className="text-[12px] text-zinc-400 leading-relaxed font-medium">
+                                                        {selectedTweet.aiReason || chrome.i18n.getMessage('sim_label_awaiting_insight')}
+                                                    </p>
+                                                </div>
+
+                                                {selectedTweet.aiSummary && (
+                                                    <div>
+                                                        <div className="text-[8px] font-black text-zinc-600 uppercase mb-1 tracking-widest">{chrome.i18n.getMessage('sim_label_condensed_logic')}</div>
+                                                        <p className="text-[11px] text-zinc-500 leading-normal italic">
+                                                            "{selectedTweet.aiSummary}"
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {selectedTweet.visionDescription && (
+                                                    <div className="pt-2 border-t border-white/5">
+                                                        <div className="text-[8px] font-black text-zinc-600 uppercase mb-1 tracking-widest">{chrome.i18n.getMessage('sim_label_visual_context')}</div>
+                                                        <p className="text-[11px] text-zinc-500 line-clamp-3 leading-relaxed">
+                                                            {selectedTweet.visionDescription}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {selectedTweet.aiCategory && (
+                                                <div className="mt-2 flex">
+                                                    <div className="px-2 py-0.5 rounded-sm bg-rose-500/5 text-[8px] font-black text-rose-500/60 uppercase tracking-wider border border-rose-500/10">
+                                                        {selectedTweet.aiCategory}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
-                                    {/* Right: AI Analysis */}
-                                    <div className="flex-1 min-w-0 bg-amber-500/[0.02] border border-amber-500/10 rounded-3xl p-5 relative overflow-hidden flex flex-col">
-                                        <div className="flex items-center justify-between text-amber-500 text-[10px] font-black uppercase tracking-widest mb-4 flex-none">
-                                            <div className="flex items-center gap-2">
-                                                <Info size={14} />
-                                                {chrome.i18n.getMessage('sim_narrative_title')}
+                                    {/* Right Partition (Flexible): Narrative & Matrix */}
+                                    <div className="flex-1 flex flex-col gap-6 overflow-y-auto no-scrollbar">
+                                        {/* Strategic Trajectory Verdict (The Hero) */}
+                                        <div className="bg-amber-500/[0.02] border border-white/5 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-center min-h-[140px] shrink-0 group transition-all hover:bg-amber-500/[0.04] shadow-2xl">
+                                            {/* Decorative Elements */}
+                                            <div className="absolute top-0 left-0 w-1 h-full bg-amber-500/20" />
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 blur-[60px] pointer-events-none" />
+                                            <div className="absolute -top-10 -right-10 blur-3xl opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
+                                                <Zap size={240} className="text-amber-500" />
                                             </div>
-                                            <button
-                                                onClick={() => handleAiAnalyze(selectedTweet)}
-                                                disabled={!!analyzingId}
-                                                className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition-colors disabled:opacity-50 cursor-pointer"
-                                                title="Run Deep AI Forecast using configured model"
-                                            >
-                                                <Sparkles size={10} className={analyzingId === selectedTweet.id ? "animate-spin" : ""} />
-                                                <span className="text-[9px]">AI DEEP DIVE</span>
-                                            </button>
+
+                                            {/* Corner Accents */}
+                                            <div className="absolute top-2 right-2 flex gap-1 group-hover:gap-1.5 transition-all">
+                                                <div className="w-1 h-1 bg-amber-500/20 rounded-full" />
+                                                <div className="w-1 h-1 bg-amber-500/40 rounded-full" />
+                                                <div className="w-1 h-1 bg-amber-500/60 rounded-full" />
+                                            </div>
+
+                                            <div className="text-[8px] font-black text-amber-500/40 uppercase tracking-[0.4em] mb-3 flex items-center gap-2">
+                                                <Zap size={8} /> {chrome.i18n.getMessage('sim_verdict_title')}
+                                                <div className="h-px flex-1 bg-amber-500/10 ml-2" />
+                                            </div>
+
+                                            <p className="text-xl font-black italic text-zinc-100 leading-relaxed tracking-tight relative z-10 drop-shadow-2xl">
+                                                "{selectedTweet.prediction?.explanation || chrome.i18n.getMessage('sim_verdict_awaiting')}"
+                                            </p>
+
+                                            <div className="mt-4 flex items-center gap-4 relative z-10 opacity-40 group-hover:opacity-100 transition-opacity">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-[7px] font-black text-amber-500/50 uppercase tracking-widest leading-none">Confidence Matrix</span>
+                                                    <div className="w-32 h-0.5 bg-white/5 rounded-full overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${(selectedTweet.prediction?.totalScore || 0)}%` }}
+                                                            className="h-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="text-[9px] font-mono text-white/20 uppercase tracking-tighter">
+                                                    P-Value: {((selectedTweet.prediction?.totalScore || 0) / 100).toFixed(4)}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-                                            {analyzeError && (
-                                                <div className="mb-3 p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-                                                    <Info size={14} className="shrink-0" />
-                                                    {analyzeError}
-                                                </div>
-                                            )}
-                                            <div className="space-y-6">
-                                                {/* Section A: Original Semantic DNA */}
-                                                <div className="bg-zinc-900/40 rounded-2xl p-4 border border-white/5 relative group">
-                                                    <div className="flex items-center gap-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2">
-                                                        <Activity size={12} className="text-zinc-600" />
-                                                        Content DNA (Captured)
-                                                    </div>
-                                                    <p className="text-[14px] text-zinc-400 leading-relaxed font-medium">
-                                                        {selectedTweet.aiReason || "Initial semantic analysis not available for this capture."}
-                                                    </p>
-                                                    {selectedTweet.aiCategory && (
-                                                        <div className="mt-3">
-                                                            <span className="px-2 py-0.5 rounded bg-zinc-800/50 text-zinc-500 text-[9px] font-black uppercase tracking-wider border border-white/5">
-                                                                #{selectedTweet.aiCategory}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
 
-                                                {/* Section B: New Strategic Verdict (The "Deep Dive") */}
-                                                <div className="bg-amber-500/[0.03] rounded-2xl p-5 border border-amber-500/10 relative overflow-hidden">
-                                                    <div className="absolute top-0 right-0 p-2 opacity-10">
-                                                        <Sparkles size={40} className="text-amber-500" />
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3 relative z-10">
-                                                        <Zap size={12} className="text-amber-500" />
-                                                        AI Strategic Trajectory
-                                                    </div>
-                                                    <p className="text-xl text-amber-100/90 leading-relaxed font-black italic relative z-10">
-                                                        "{selectedTweet.prediction?.explanation || "Awaiting AI Deep Dive Analysis..."}"
-                                                    </p>
+                                        {/* Chart Matrix */}
+                                        <div className="flex-1 bg-white/[0.01] border border-white/5 rounded-3xl p-6 flex flex-col min-h-[500px]">
+                                            <div className="flex justify-between items-center mb-6 px-2 shrink-0">
+                                                <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                    <Pulse size={12} className="text-amber-500" />
+                                                    {chrome.i18n.getMessage('sim_matrix_title')}
+                                                </h3>
+                                                <div className="flex items-center gap-4 text-[9px] font-black uppercase text-zinc-600 tracking-tighter">
+                                                    <div className="flex items-center gap-1.5"><div className="w-3 h-[1px] bg-amber-500" /> <span>{chrome.i18n.getMessage('sim_matrix_actual')}</span></div>
+                                                    <div className="flex items-center gap-1.5"><div className="w-3 h-[1px] border-t border-dashed border-zinc-600" /> <span>{chrome.i18n.getMessage('sim_matrix_ai')}</span></div>
                                                 </div>
                                             </div>
 
-                                            {/* 趋势图表插入 */}
-                                            <div className="mt-8 mb-2 min-h-[440px]">
-                                                <div className="flex justify-between items-end mb-4 px-2">
-                                                    <span className="text-[10px] font-black text-amber-500/60 uppercase tracking-widest">Growth Forecast Matrix</span>
-                                                    <span className="text-[10px] font-mono text-amber-500/40">30-Day Organic Simulation</span>
-                                                </div>
+                                            <div className="flex-1 min-h-0 relative">
                                                 <TrendChart
+                                                    key={`${selectedTweet.id}-${selectedTweet.prediction?.source || 'local'}`}
                                                     history={selectedTweet.metricsHistory}
                                                     prediction={selectedTweet.prediction}
                                                     createdAt={selectedTweet.createdAt}
-                                                    className="h-[400px] w-full"
                                                 />
                                             </div>
                                         </div>
-                                        <div className="flex-none pt-4 border-t border-amber-500/10 mt-4 flex justify-between items-end">
-                                            <div className="text-[9px] text-amber-500/50 font-mono">
-                                                {chrome.i18n.getMessage('sim_analyzed_at')} {new Date(selectedTweet.prediction?.analyzedAt || Date.now()).toLocaleTimeString()}
-                                            </div>
-                                            <Sparkles className="text-amber-500/10 w-12 h-12" />
-                                        </div>
                                     </div>
+                                </div>
+                                <div className="flex-none pt-4 border-t border-amber-500/10 mt-4 flex justify-between items-end">
+                                    <div className="text-[9px] text-amber-500/50 font-mono">
+                                        {chrome.i18n.getMessage('sim_analyzed_at')} {new Date(selectedTweet.prediction?.analyzedAt || Date.now()).toLocaleTimeString()}
+                                    </div>
+                                    <Sparkles className="text-amber-500/10 w-12 h-12" />
                                 </div>
 
                                 {/* 3. Bottom Section: Action Probabilities (Fixed Height) */}
-                                <div className="flex-none h-[110px] grid grid-cols-2 gap-6">
+                                <div className="flex-none h-[110px] grid grid-cols-2 gap-6 mt-6">
                                     {/* Engagement DNA */}
                                     <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col justify-center gap-2">
                                         <div className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-1">{chrome.i18n.getMessage('sim_action_engagement')}</div>
@@ -406,7 +474,7 @@ export const SimulationView: React.FC = () => {
                                         <div className="text-[9px] text-zinc-500 font-black uppercase tracking-widest mb-1">{chrome.i18n.getMessage('sim_action_depth')}</div>
                                         <div className="grid grid-cols-3 gap-4">
                                             <ProgressLine label={chrome.i18n.getMessage('sim_btn_expand')} value={selectedTweet.prediction?.components.clickProb || 0} color="bg-zinc-400" compact />
-                                            <ProgressLine label={chrome.i18n.getMessage('sim_btn_profile')} value={selectedTweet.prediction?.components.profileClickProb || 0} color="bg-purple-500" compact />
+                                            <ProgressLine label={chrome.i18n.getMessage('sim_btn_profile')} value={(selectedTweet.prediction?.components as any)?.profileClickProb || 0} color="bg-purple-500" compact />
                                             <ProgressLine label={chrome.i18n.getMessage('sim_btn_share')} value={selectedTweet.prediction?.components.shareProb || 0} color="bg-indigo-500" compact />
                                         </div>
                                     </div>
@@ -442,8 +510,7 @@ const ForecastItem = ({ tweet, index, active, onClick }: any) => {
         ? tweet.author
         : { name: tweet.authorName || 'Unknown', handle: tweet.authorId, avatar: '' };
 
-    const authorHandle = author.handle;
-    const avatarUrl = author.avatar || `https://unavatar.io/x/${authorHandle}`;
+    const avatarUrl = author.avatar || tweet.authorAvatarUrl || `https://unavatar.io/x/${author.handle || tweet.authorId}`;
 
     // 优先显示初始 AI 评分，如果 Deep Dive 跑完则使用最终总分
     const score = (tweet.prediction?.source === 'ai')
@@ -464,52 +531,53 @@ const ForecastItem = ({ tweet, index, active, onClick }: any) => {
             )}
         >
             {/* Left Rank & Score Column */}
-            <div className="w-20 flex flex-col items-center justify-center border-r border-white/5 bg-black/20 py-3 gap-0.5">
-                <span className="text-[10px] font-mono text-zinc-700 font-bold mb-1">#{index + 1}</span>
-                <span className={cn("text-2xl font-black italic tracking-tighter font-mono", scoreColor)}>
+            <div className="w-14 flex flex-col items-center justify-center border-r border-white/5 bg-black/40 py-2 gap-0.5 shrink-0">
+                <span className="text-[9px] font-mono text-zinc-700 font-bold leading-none mb-1">#{index + 1}</span>
+                <span className={cn("text-xl font-black italic tracking-tighter font-mono leading-none", scoreColor)}>
                     {score}
                 </span>
                 {isAiAnalyzed && (
-                    <div className="mt-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
-                        <Sparkles size={8} className="text-amber-500" />
-                        <span className="text-[8px] font-black text-amber-500 uppercase">DEEP</span>
+                    <div className="mt-1 flex items-center justify-center w-full">
+                        <div className="px-1 py-0.5 rounded-sm bg-amber-500/10 border border-amber-500/20 scale-[0.8]">
+                            <Sparkles size={6} className="text-amber-500" />
+                        </div>
                     </div>
                 )}
             </div>
 
             {/* Right Info Column */}
-            <div className="flex-1 p-3 min-w-0 flex flex-col justify-center gap-1.5 relative">
+            <div className="flex-1 p-2.5 min-w-0 flex flex-col justify-center gap-1 relative overflow-hidden">
                 {/* Active Scan Line */}
                 {active && (
                     <motion.div
                         layoutId="scan-line"
-                        className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent pointer-events-none"
+                        className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent pointer-events-none"
                     />
                 )}
 
                 {/* Header */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                     <img
                         src={avatarUrl}
-                        className="w-5 h-5 rounded-full object-cover opacity-70 grayscale group-hover:grayscale-0 transition-all"
+                        className="w-4 h-4 rounded-full object-cover opacity-60 grayscale group-hover:grayscale-0 transition-all shrink-0"
                         onError={(e: any) => e.target.src = `https://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png`}
                     />
-                    <span className="text-[13px] font-bold text-zinc-300 truncate max-w-[140px] group-hover:text-amber-100 transition-colors">{author.name}</span>
-                    <span className="text-[11px] font-mono text-zinc-600 ml-auto">
+                    <span className="text-[11px] font-bold text-zinc-400 truncate max-w-[100px] group-hover:text-amber-100/80 transition-colors uppercase tracking-tight">{author.name}</span>
+                    <span className="text-[10px] font-mono text-zinc-800 ml-auto group-hover:text-zinc-600 transition-colors shrink-0">
                         {tweet.createdAt ? new Date(tweet.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                     </span>
                 </div>
 
                 {/* Content Snippet */}
-                <p className="text-[13px] text-zinc-400 truncate font-medium leading-normal tracking-wide opacity-80 group-hover:opacity-100 transition-opacity">
+                <p className="text-[11px] text-zinc-500 truncate font-semibold leading-tight tracking-tight opacity-70 group-hover:opacity-100 transition-opacity">
                     {tweet.aiSummary || tweet.text}
                 </p>
 
                 {/* Micro Indicators (RGB Dots) */}
-                <div className="flex items-center gap-4 mt-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                    <MicroDot label="SEM" value={tweet.prediction?.signals.contentSimilarity} color="bg-rose-500" />
-                    <MicroDot label="SOC" value={tweet.prediction?.signals.authorAffinity} color="bg-emerald-500" />
-                    <MicroDot label="QUAL" value={tweet.prediction?.signals.qualityScore} color="bg-blue-500" />
+                <div className="flex items-center gap-2.5 mt-0.5 opacity-40 group-hover:opacity-80 transition-opacity">
+                    <MicroDot label="SEM" value={tweet.prediction?.signals.contentSimilarity} color="bg-rose-500/80" />
+                    <MicroDot label="SOC" value={tweet.prediction?.signals.authorAffinity} color="bg-emerald-500/80" />
+                    <MicroDot label="QUAL" value={tweet.prediction?.signals.qualityScore} color="bg-blue-500/80" />
                 </div>
             </div>
         </div>
@@ -517,19 +585,26 @@ const ForecastItem = ({ tweet, index, active, onClick }: any) => {
 };
 
 const MicroDot = ({ label, value, color }: any) => (
-    <div className="flex items-center gap-1.5" title={`${label}: ${(value * 100).toFixed(0)}%`}>
-        <div className={cn("w-2 h-2 rounded-full transition-opacity", value > 0.3 ? color : "bg-zinc-800", value > 0.8 && "shadow-[0_0_8px_currentColor]")} />
-        <span className="text-[10px] font-bold text-zinc-500 font-sans tracking-wide">{label}</span>
+    <div className="flex items-center gap-1" title={`${label}: ${(value * 100).toFixed(0)}%`}>
+        <div className={cn("w-1.5 h-1.5 rounded-full transition-opacity", value > 0.3 ? color : "bg-zinc-800", value > 0.8 && "shadow-[0_0_5px_currentColor]")} />
+        <span className="text-[8px] font-black text-zinc-600 font-sans tracking-tight leading-none">{label}</span>
     </div>
 );
 
-const MetricBox = ({ label, value, icon }: any) => (
-    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col gap-1 hover:border-white/10 transition-colors">
-        <div className="flex items-center gap-2 text-[9px] font-black text-zinc-600 uppercase tracking-widest">
-            {icon}
+const SlimMetric = ({ label, value, color }: any) => (
+    <div className="flex flex-col gap-0.5 group cursor-default">
+        <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest group-hover:text-zinc-500 transition-colors">{label}</span>
+        <div className={cn("text-2xl font-black font-mono leading-none tracking-tighter", color)}>{value}</div>
+    </div>
+);
+
+const MetricBox = ({ label, value, icon, color }: any) => (
+    <div className="bg-zinc-950/40 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5 hover:border-white/10 transition-all hover:bg-zinc-950/60 group">
+        <div className="flex items-center gap-1.5 text-[8px] font-black text-zinc-600 uppercase tracking-widest group-hover:text-zinc-500 transition-colors">
+            <span className="opacity-50">{icon}</span>
             {label}
         </div>
-        <div className="text-xl font-black text-white font-mono">{value}</div>
+        <div className={cn("text-lg font-black font-mono leading-none mt-0.5", color || "text-white")}>{value}</div>
     </div>
 );
 

@@ -645,7 +645,7 @@
     "message": "用户画像与性格建模"
   },
   "node_forecast": {
-    "message": "趋势前瞻"
+    "message": "前瞻"
   },
   "node_forecast_desc": {
     "message": "推文传播潜能与趋势预测"
@@ -807,7 +807,7 @@
     "message": "激活"
   },
   "sim_title": {
-    "message": "趋势前瞻"
+    "message": "前瞻"
   },
   "sim_filter_all": {
     "message": "全量信号"
@@ -883,5 +883,110 @@
   },
   "sim_normal_growth": {
     "message": "平稳增长"
+  },
+  "section_rag": {
+    "message": "知识库 (RAG)"
+  },
+  "status_disabled": {
+    "message": "已禁用"
+  },
+  "rag_offline": {
+    "message": "离线模式"
+  },
+  "section_backup": {
+    "message": "数据备份与恢复"
+  },
+  "label_auto_backup": {
+    "message": "自动备份"
+  },
+  "desc_auto_backup": {
+    "message": "定期将数据备份到本地存储"
+  },
+  "label_location": {
+    "message": "备份位置"
+  },
+  "backup_manual_title": {
+    "message": "手动备份"
+  },
+  "backup_manual_desc": {
+    "message": "立即下载完整数据备份文件"
+  },
+  "label_include_settings": {
+    "message": "包含配置"
+  },
+  "desc_include_settings": {
+    "message": "备份中包含 API 密钥和个人设置"
+  },
+  "btn_backup_download": {
+    "message": "下载备份"
+  },
+  "btn_backup_upload": {
+    "message": "上传恢复"
+  },
+  "sim_btn_scan_batch": {
+    "message": "扫描 TOP 5"
+  },
+  "sim_btn_analyze": {
+    "message": "深度判读"
+  },
+  "sim_section_snapshot": {
+    "message": "信源快照"
+  },
+  "sim_section_semantic": {
+    "message": "语义遗传 (DNA)"
+  },
+  "sim_label_core_narrative": {
+    "message": "核心叙事"
+  },
+  "sim_label_condensed_logic": {
+    "message": "逻辑浓缩"
+  },
+  "sim_label_visual_context": {
+    "message": "视觉语境"
+  },
+  "sim_label_awaiting_insight": {
+    "message": "等待扫描见解..."
+  },
+  "sim_metric_views": {
+    "message": "阅读"
+  },
+  "sim_metric_likes": {
+    "message": "点赞"
+  },
+  "sim_metric_rts": {
+    "message": "转发"
+  },
+  "sim_metric_reps": {
+    "message": "回复"
+  },
+  "sim_verdict_title": {
+    "message": "战略裁决"
+  },
+  "sim_verdict_awaiting": {
+    "message": "正在等待 AI 深度分析报告..."
+  },
+  "sim_matrix_title": {
+    "message": "增长预测矩阵"
+  },
+  "sim_matrix_actual": {
+    "message": "实际"
+  },
+  "sim_matrix_ai": {
+    "message": "AI 仿真"
+  },
+  "sim_metric_semantic_short": {
+    "message": "语义"
+  },
+  "sim_metric_social_short": {
+    "message": "社交"
+  },
+  "sim_metric_quality_short": {
+    "message": "质量"
+  },
+  "sim_metric_velocity_short": {
+    "message": "爆发"
+  },
+  "sim_metric_decay_short": {
+    "message": "衰减"
   }
 }

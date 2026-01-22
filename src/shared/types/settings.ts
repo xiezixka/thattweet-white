@@ -2,141 +2,141 @@ export type AIProvider = 'siliconflow' | 'deepseek' | 'openai' | 'anthropic' | '
 
 // 基础服务商配置模版 (Static Template)
 export interface AIProviderConfig {
-    id: AIProvider;
-    name: string;
-    icon: string; // lucide icon name or image url
-    defaultBaseUrl: string;
-    models: string[]; // 预设模型列表
-    isVisionSupported: boolean;
+  id: AIProvider;
+  name: string;
+  icon: string; // lucide icon name or image url
+  defaultBaseUrl: string;
+  models: string[]; // 预设模型列表
+  isVisionSupported: boolean;
 }
 
 export const PROVIDER_PRESETS: Record<string, AIProviderConfig> = {
-    deepseek: {
-        id: 'deepseek',
-        name: 'DeepSeek',
-        icon: 'https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/deepseek-color.png',
-        defaultBaseUrl: 'https://api.deepseek.com',
-        models: ['deepseek-chat', 'deepseek-coder'],
-        isVisionSupported: false
-    },
-    openai: {
-        id: 'openai',
-        name: 'OpenAI',
-        icon: 'https://openai.com/favicon.ico',
-        defaultBaseUrl: 'https://api.openai.com/v1',
-        models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-        isVisionSupported: true
-    },
-    anthropic: {
-        id: 'anthropic',
-        name: 'Anthropic',
-        icon: 'https://anthropic.com/favicon.ico',
-        defaultBaseUrl: 'https://api.anthropic.com/v1',
-        models: ['claude-3-5-sonnet-20240620', 'claude-3-opus-20240229'],
-        isVisionSupported: true
-    },
-    siliconflow: {
-        id: 'siliconflow',
-        name: 'SiliconFlow',
-        icon: 'https://siliconflow.cn/favicon.ico',
-        defaultBaseUrl: 'https://api.siliconflow.cn/v1',
-        models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V3'],
-        isVisionSupported: true
-    },
-    openrouter: {
-        id: 'openrouter',
-        name: 'OpenRouter',
-        icon: 'https://openrouter.ai/favicon.ico',
-        defaultBaseUrl: 'https://openrouter.ai/api/v1',
-        models: ['xiaomi/mimo-v2-flash:free', 'google/gemini-2.0-flash-exp:free', 'mistralai/mistral-7b-instruct:free'],
-        isVisionSupported: true
-    },
-    custom: {
-        id: 'custom',
-        name: 'Custom',
-        icon: '',
-        defaultBaseUrl: '',
-        models: [],
-        isVisionSupported: true
-    }
+  deepseek: {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    icon: 'https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/deepseek-color.png',
+    defaultBaseUrl: 'https://api.deepseek.com',
+    models: ['deepseek-chat', 'deepseek-coder'],
+    isVisionSupported: false
+  },
+  openai: {
+    id: 'openai',
+    name: 'OpenAI',
+    icon: 'https://openai.com/favicon.ico',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    isVisionSupported: true
+  },
+  anthropic: {
+    id: 'anthropic',
+    name: 'Anthropic',
+    icon: 'https://anthropic.com/favicon.ico',
+    defaultBaseUrl: 'https://api.anthropic.com/v1',
+    models: ['claude-3-5-sonnet-20240620', 'claude-3-opus-20240229'],
+    isVisionSupported: true
+  },
+  siliconflow: {
+    id: 'siliconflow',
+    name: 'SiliconFlow',
+    icon: 'https://siliconflow.cn/favicon.ico',
+    defaultBaseUrl: 'https://api.siliconflow.cn/v1',
+    models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V3'],
+    isVisionSupported: true
+  },
+  openrouter: {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    icon: 'https://openrouter.ai/favicon.ico',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    models: ['xiaomi/mimo-v2-flash:free', 'google/gemini-2.0-flash-exp:free', 'mistralai/mistral-7b-instruct:free'],
+    isVisionSupported: true
+  },
+  custom: {
+    id: 'custom',
+    name: 'Custom',
+    icon: '',
+    defaultBaseUrl: '',
+    models: [],
+    isVisionSupported: true
+  }
 };
 
 // 用户配置的服务商实例 (简化版: 只存 URL + Key)
 export interface AIServiceProvider {
-    id: string; // UUID
-    provider: AIProvider;
-    name: string; // 用户自定义名称 "我的 DeepSeek"
-    baseUrl: string;
-    apiKey: string;
+  id: string; // UUID
+  provider: AIProvider;
+  name: string; // 用户自定义名称 "我的 DeepSeek"
+  baseUrl: string;
+  apiKey: string;
 
-    // 连通性状态
-    status: 'idle' | 'checking' | 'connected' | 'error';
-    latency?: number; // ms
-    lastChecked?: number; // timestamp
-    errorMsg?: string;
+  // 连通性状态
+  status: 'idle' | 'checking' | 'connected' | 'error';
+  latency?: number; // ms
+  lastChecked?: number; // timestamp
+  errorMsg?: string;
 
-    // 动态获取的模型列表 (缓存)
-    cachedModels?: string[];
-    modelsCachedAt?: number;
+  // 动态获取的模型列表 (缓存)
+  cachedModels?: string[];
+  modelsCachedAt?: number;
 }
 
 // 工作流节点配置 (每个节点选择 Provider + Model + Prompt)
 export interface WorkflowNodeConfig {
-    providerId: string; // 指向 AIServiceProvider.id, 空字符串表示使用全局默认
-    model: string; // 选中的模型名
-    prompt?: string; // 节点特定的系统指令
-    enabled?: boolean; // 是否启用此节点
+  providerId: string; // 指向 AIServiceProvider.id, 空字符串表示使用全局默认
+  model: string; // 选中的模型名
+  prompt?: string; // 节点特定的系统指令
+  enabled?: boolean; // 是否启用此节点
 }
 
 export interface AISettings {
-    // === 1. 服务商库 (Provider Pool) ===
-    providers: AIServiceProvider[];
-    defaultProviderId: string; // 全局默认服务商
+  // === 1. 服务商库 (Provider Pool) ===
+  providers: AIServiceProvider[];
+  defaultProviderId: string; // 全局默认服务商
 
-    // === 2. 工作流节点配置 (Workflow Nodes) ===
-    workflowNodes: {
-        // -- Input & Perception --
-        perception: WorkflowNodeConfig; // 感知层 (视觉 + OCR 文字提取)
+  // === 2. 工作流节点配置 (Workflow Nodes) ===
+  workflowNodes: {
+    // -- Input & Perception --
+    perception: WorkflowNodeConfig; // 感知层 (视觉 + OCR 文字提取)
 
-        // -- Processing & Analysis --
-        textAnalysis: WorkflowNodeConfig; // 语义分析 / 质量定级
-        profile: WorkflowNodeConfig; // 用户画像分析
-        forecast: WorkflowNodeConfig; // 趋势前瞻 (Viral Prediction)
+    // -- Processing & Analysis --
+    textAnalysis: WorkflowNodeConfig; // 语义分析 / 质量定级
+    profile: WorkflowNodeConfig; // 用户画像分析
+    forecast: WorkflowNodeConfig; // 趋势前瞻 (Viral Prediction)
 
-        // -- Interaction --
-        chat: WorkflowNodeConfig;    // 沉思对话
-        salon: WorkflowNodeConfig;   // 深度沙龙 (Expert)
-        queryAnalysis: WorkflowNodeConfig; // RAG 关键词提取
-        titleGeneration: WorkflowNodeConfig; // 对话标题生成
-    };
+    // -- Interaction --
+    chat: WorkflowNodeConfig;    // 沉思对话
+    salon: WorkflowNodeConfig;   // 深度沙龙 (Expert)
+    queryAnalysis: WorkflowNodeConfig; // RAG 关键词提取
+    titleGeneration: WorkflowNodeConfig; // 对话标题生成
+  };
 
-    // === 3. Automation & System Core ===
-    autoAnalyze: boolean;
-    batchSize: number;
-    rateLimitMs: number;
-    categories: string[];
-    aiStyleFocus: string;
+  // === 3. Automation & System Core ===
+  autoAnalyze: boolean;
+  batchSize: number;
+  rateLimitMs: number;
+  categories: string[];
+  aiStyleFocus: string;
 
-    // === 4. Backup ===
-    autoBackupEnabled: boolean;
-    backupFolderId?: string;
-    backupFolderName?: string;
+  // === 4. Backup ===
+  autoBackupEnabled: boolean;
+  backupFolderId?: string;
+  backupFolderName?: string;
 
-    // === 5. RAG (Embeddings & Retrieval) ===
-    ragEnabled: boolean;
-    ragApiKey: string;
-    embeddingModel: string;
-    embeddingUrl: string;
-    rerankerModel: string;
-    rerankerUrl: string;
+  // === 5. RAG (Embeddings & Retrieval) ===
+  ragEnabled: boolean;
+  ragApiKey: string;
+  embeddingModel: string;
+  embeddingUrl: string;
+  rerankerModel: string;
+  rerankerUrl: string;
 
-    // === Legacy & Internal (Minimized) ===
-    visionEnabledAt: number;
-    maxImagesPerTweet: number;
-    visionBatchSize: 3;
+  // === Legacy & Internal (Minimized) ===
+  visionEnabledAt: number;
+  maxImagesPerTweet: number;
+  visionBatchSize: 3;
 
-    // === 6. Appearance ===
-    themeFont: string;
+  // === 6. Appearance ===
+  themeFont: string;
 }
 
 // Backward Compatibility: AIInstance is an alias for AIServiceProvider
@@ -144,22 +144,22 @@ export type AIInstance = AIServiceProvider;
 
 // Default Workflow Node Config
 const DEFAULT_NODE_CONFIG: WorkflowNodeConfig = {
-    providerId: '', // Empty means follow global default
-    model: '',
-    enabled: true
+  providerId: '', // Empty means follow global default
+  model: '',
+  enabled: true
 };
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
-    // === 1. 服务商库 Defaults ===
-    providers: [],
-    defaultProviderId: '',
+  // === 1. 服务商库 Defaults ===
+  providers: [],
+  defaultProviderId: '',
 
-    // === 2. 工作流节点配置 Defaults ===
-    workflowNodes: {
-        perception: {
-            ...DEFAULT_NODE_CONFIG,
-            enabled: false,
-            prompt: `你是一名专业的图像分析师。请仔细观察每张图片并进行深度分析。
+  // === 2. 工作流节点配置 Defaults ===
+  workflowNodes: {
+    perception: {
+      ...DEFAULT_NODE_CONFIG,
+      enabled: false,
+      prompt: `你是一名专业的图像分析师。请仔细观察每张图片并进行深度分析。
 
 **图片与推文 ID 对应关系**：
 {tweet_mapping}
@@ -218,202 +218,168 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 - OCR 文字中不要包含反斜杠(\\)，用空格替代
 - 只返回一个完整的 JSON 对象，不要返回多个独立对象
 - 使用中文回答`
-        },
-        forecast: {
-            ...DEFAULT_NODE_CONFIG,
-            prompt: `Role: Viral Content Analyst & Strategic Forecaster.
-Task: Analyze a batch of tweets to predict their potential impact and engagement value for a specific user.
+    },
+    forecast: {
+      ...DEFAULT_NODE_CONFIG,
+      prompt: `Role: Viral Content Analyst & Strategic Forecaster.
+  Task: Analyze a batch of tweets to predict their potential impact and engagement value for a specific user.
 
 [USER PREFERENCES]
-Target Interests: {ai_style_focus}
-(CRITICAL: Use this to determine "Content Similarity" and influence interaction probabilities.)
+Target Interests: { ai_style_focus }
 
 [INPUT DATA]
-The input is a JSON array of tweets.
-{tweet_batch_json}
+- Author: { author }
+- Content: { text }
+- Social Stats: { stats }
+- Growth History: { growth_history }
+- Current Trend: { trend }
 
-[ANALYSIS LOGIC CHAIN]
-For EACH tweet, apply this logic:
-1. **Relevance Check**: Compare Tweet Content vs User Target Interests.
-   - High Match (>0.8): Boost 'Like', 'Reply', 'Profile' probabilities.
-   - Low Match (<0.3): Significantly penalize ALL interaction probabilities, even if Quality is high.
-2. **Action Prediction**:
-   - 'Reply': High if content is controversial, asks a question, or touches a User Interest pain point.
-   - 'Repost': High if content provides high-utility resources or breaking news relevant to User Interests.
-   - 'Profile Click': High if the author provides unique value aligned with User Interests but is not yet fully trusted.
-
-[CONSTRAINT]
-**CRITICAL**: The 'explanation' field MUST be in Chinese (Simplified). Keep it sharp and professional.
-
-[OUTPUT JSON]
-Return a SINGLE JSON Object where keys are Tweet IDs and values are the analysis results.
-Example Format:
+[OUTPUT JSON SCHEMA]
+Return a single JSON object with the following structure:
 {
-  "tweet_id_1": {
-    "totalScore": 0-100,
-    "signals": {
-      "contentSimilarity": 0.0-1.0, 
-      "qualityScore": 0.0-1.0,
-      "velocityScore": 0.0-1.0,
-      "authorAffinity": 0.0-1.0
-    },
-    "probabilities": {
-      "like": 0.0-1.0,
-      "reply": 0.0-1.0,
-      "repost": 0.0-1.0,
-      "click": 0.0-1.0,
-      "profile": 0.0-1.0,
-      "share": 0.0-1.0
-    },
-    "growth_forecast": {
-      "next_24h": { "likes": 120, "retweets": 15, "views": 1200, "replies": 5 },
-      "next_7d": { "likes": 400, "retweets": 40, "views": 4500, "replies": 20 },
-      "next_30d": { "likes": 450, "retweets": 45, "views": 5200, "replies": 25 },
-      "verdict": "Steady Growth"
-    },
-    "daily_simulation": [
-      { "day": 1, "likes": 120, "retweets": 15, "views": 1200, "replies": 5 },
-      { "day": 2, "likes": 200, "retweets": 25, "views": 2200, "replies": 10 },
-      "... continue for day 3-30 where day 30 is the final TOTAL CUMULATIVE state"
-    ],
-    "explanation": "Chinese analysis (max 50 words) emphasizing why the trend behave this way (e.g., exponential start, fast decay, or long-tail value)."
-  }
+  "totalScore": 0-100,
+  "signals": { "contentSimilarity": 0-1, "qualityScore": 0-1, "velocityScore": 0-1, "authorAffinity": 0-1 },
+  "probabilities": { "like": 0-1, "reply": 0-1, "repost": 0-1, "click": 0-1, "profile": 0-1, "share": 0-1 },
+  "daily_simulation": [
+    { "day": 1, "likes": 120, "retweets": 10, "views": 1200, "replies": 5 },
+    "... (30 entries total, cumulative totals)"
+  ],
+  "explanation": "简明扼要的中文分析..."
+}
 
-  [SIMULATION RULES]
-  1. **Cumulative Logic**: Data in 'daily_simulation' MUST be the total accumulated count (Final State) for that day. It should never decrease.
-  2. **Baseline Scaling**: Use the provided 'stats' (e.g., Views:60000, Lik:110) as Day 0. Your Day 1 predictions MUST be greater than or equal to these values. NEVER start from 0 if current stats are high.
-  3. **Organic Volatility**: Do NOT return perfectly linear growth. Simulate "Waves" (波浪式增长) - e.g., higher growth on day 1-3, slow down on day 4-6, a small spike on day 7, then long-tail plateau.
-  4. **Engagement Sync**: Likes, Retweets, and Replies should grow proportionally but with distinct decay rates (e.g., views grow fastest/longest, replies decay fastest).
-  `
-        },
-        textAnalysis: {
-            ...DEFAULT_NODE_CONFIG,
-            prompt: `请作为一名深耕互联网多年的“信息策展人”，对以下推文进行质量定级。
+**IMPORTANT**: 
+1. The 'explanation' field must be in Chinese.
+2. Ensure the output is a valid single JSON object.
+`
+    },
+    textAnalysis: {
+      ...DEFAULT_NODE_CONFIG,
+      prompt: `请作为一名深耕互联网多年的“信息策展人”，对以下推文进行质量定级。
 
 [用户关注偏好]
-用户当前最关注：{ai_style_focus}
+用户当前最关注：{ ai_style_focus }
 (请在评估时，将符合上述偏好的内容优先视作高价值资产。)
 
 定级规范：
-- S级 (90-100): 能够引发深思的独到见解、极其详尽的干货、或具有不可替代性的原始资源。
-- A级 (70-89): 逻辑清晰、信息增量明显、或对特定领域有实际参考作用。
-- B级 (40-69): 正常的资讯流通、泛泛而谈的观点、或缺乏深度的日常记录。
-- C级 (40以下): 营销垃圾、AI 幻觉内容、纯粹的情绪宣泄或极低密度的水贴。
+- S级(90 - 100): 能够引发深思的独到见解、极其详尽的干货、或具有不可替代性的原始资源。
+- A级(70 - 89): 逻辑清晰、信息增量明显、或对特定领域有实际参考作用。
+- B级(40 - 69): 正常的资讯流通、泛泛而谈的观点、或缺乏深度的日常记录。
+- C级(40以下): 营销垃圾、AI 幻觉内容、纯粹的情绪宣泄或极低密度的水贴。
 
 核心考量点：
 1. 这种内容值得用户在三个月后重新翻出来阅读吗？
-2. 图片/OCR 提取的内容是否提供了关键的支撑证据或更深层的信息？请务必结合提供的图像分析数据进行综合研判。
-3. 内容是“博主深耕的结果”还是“简单的搬运/机器人批量生成”？
+2. 图片 / OCR 提取的内容是否提供了关键的支撑证据或更深层的信息？请务必结合提供的图像分析数据进行综合研判。
+3. 内容是“博主深耕的结果”还是“简单的搬运 / 机器人批量生成”？
 
 分类选项：技术、资讯、观点、教程、工具、灵感、娱乐、其他
 
 严格按照以下 JSON 格式返回，不要添加任何其他内容：
-{"id": "{tweet_id}", "score": 数字, "category": "分类", "reason": "评价理由"}`
-        },
-        profile: {
-            ...DEFAULT_NODE_CONFIG,
-            prompt: `Role: You are a Master Social Media Profiler & Psychologist.
-Task: Construct a sharp, high-resolution psychological portrait of the author based on their Twitter/X feed.
+{ "id": "{tweet_id}", "score": 数字, "category": "分类", "reason": "评价理由" } `
+    },
+    profile: {
+      ...DEFAULT_NODE_CONFIG,
+      prompt: `Role: You are a Master Social Media Profiler & Psychologist.
+  Task: Construct a sharp, high - resolution psychological portrait of the author based on their Twitter / X feed.
 
 [DATA SOURCE]
-Analysis based on {count} top tweets:
-{context}
+Analysis based on { count } top tweets:
+{ context }
 
 [ANALYSIS DIMENSIONS]
-1. **Cognitive Architecture**: Are they a strategic thinker (macro), a tactical executor (micro), or a connector? How do they construct logic?
-2. **Hidden Motivations**: Why do they tweet? (Status seeking, Altruism, Venting, Community building?)
-3. **Persona Texture**: The unique "flavor" of their digital presence (e.g., Cynical Rationalist, Warm Evangelist, Anxious Overachiever).
+1. ** Cognitive Architecture **: Are they a strategic thinker(macro), a tactical executor(micro), or a connector ? How do they construct logic ?
+  2. ** Hidden Motivations **: Why do they tweet ? (Status seeking, Altruism, Venting, Community building ?)
+3. ** Persona Texture **: The unique "flavor" of their digital presence(e.g., Cynical Rationalist, Warm Evangelist, Anxious Overachiever).
 
 [OUTPUT REQUIREMENTS]
-1. **Summary (Deep Insight)**: 80-120 words. CUT THE FLUFF. Do not say "This user focuses on...". Instead, define their essence. Example: "A ruthless pragmatist who dissects industry hype with surgical precision. Their content is driven by a desire to democratize knowledge..."
-2. **Keywords (Archetypes)**: 3-5 sharp tags defining their persona (e.g., #DigitalStoic, #GrowthHacker, #GentleMentor).
-3. **Sentiment (Emotional Baseline)**: Describe their emotional temperature and stance (e.g., "Calm but authoritative," "Manic and creative").
-4. **Semantic (Intellectual Structure)**: Analyze the depth and consistency of their thought framworks.
+1. ** Summary(Deep Insight) **: 80 - 120 words.CUT THE FLUFF.Do not say "This user focuses on...".Instead, define their essence.Example: "A ruthless pragmatist who dissects industry hype with surgical precision. Their content is driven by a desire to democratize knowledge..."
+2. ** Keywords(Archetypes) **: 3 - 5 sharp tags defining their persona(e.g., #DigitalStoic, #GrowthHacker, #GentleMentor).
+3. ** Sentiment(Emotional Baseline) **: Describe their emotional temperature and stance(e.g., "Calm but authoritative," "Manic and creative").
+4. ** Semantic(Intellectual Structure) **: Analyze the depth and consistency of their thought framworks.
 
 [CONSTRAINT]
-- Language: Professional, Sophisticated Chinese (Simplified).
+  - Language: Professional, Sophisticated Chinese(Simplified).
 - Tone: Clinical, Insightful, Direct.
 
 [FORMAT]
 Return ONLY a valid JSON object:
 {
   "summary": "...",
-  "keywords": ["tag1", "tag2", "tag3"],
-  "sentiment": "...",
-  "semantic": "..."
-}`
-        },
-        chat: { ...DEFAULT_NODE_CONFIG },
-        salon: { ...DEFAULT_NODE_CONFIG },
-        queryAnalysis: {
-            ...DEFAULT_NODE_CONFIG,
-            model: 'xiaomi/mimo-v2-flash:free',
-            prompt: `你是一个专业的搜索专家。请分析用户的提问，并从中提取出 3-5 个最核心的搜索关键词。
+    "keywords": ["tag1", "tag2", "tag3"],
+      "sentiment": "...",
+        "semantic": "..."
+} `
+    },
+    chat: { ...DEFAULT_NODE_CONFIG },
+    salon: { ...DEFAULT_NODE_CONFIG },
+    queryAnalysis: {
+      ...DEFAULT_NODE_CONFIG,
+      model: 'xiaomi/mimo-v2-flash:free',
+      prompt: `你是一个专业的搜索专家。请分析用户的提问，并从中提取出 3 - 5 个最核心的搜索关键词。
 
-**要求：**
-1. 关键词必须简练，能代表问题的核心。
+** 要求：**
+  1. 关键词必须简练，能代表问题的核心。
 2. 如果包含中文，请确保关键词符合中文社交媒体（推文）的表达习惯。
 3. 如果问题包含特定的人物、项目、技术或时间，请务必作为核心词。
 4. 返回格式必须为严格的 JSON 数组。
 
-**示例：**
-用户提问："最近关于 DeepSeek 的成本分析有哪些？"
+** 示例：**
+  用户提问："最近关于 DeepSeek 的成本分析有哪些？"
 返回：["DeepSeek", "成本分析", "算力", "推理成本"]
 
 用户提问："{query}"
 返回：`
-        },
-        titleGeneration: {
-            ...DEFAULT_NODE_CONFIG,
-            model: 'xiaomi/mimo-v2-flash:free',
-            prompt: `请根据用户的输入内容，生成一个简短、精准且有吸引力的对话标题（不超过 15 个字）。
+    },
+    titleGeneration: {
+      ...DEFAULT_NODE_CONFIG,
+      model: 'xiaomi/mimo-v2-flash:free',
+      prompt: `请根据用户的输入内容，生成一个简短、精准且有吸引力的对话标题（不超过 15 个字）。
 直接返回标题文本，不要包含引号或任何额外解释。
 
 用户内容："{query}"
 标题：`
-        }
-    },
+    }
+  },
 
-    autoAnalyze: true,
-    batchSize: 25,
-    rateLimitMs: 1000,
-    categories: ['技术', '资讯', '观点', '教程', '工具', '灵感', '娱乐', '其他'],
-    aiStyleFocus: '技术干货、深度见解、实操教程、行业趋势',
+  autoAnalyze: true,
+  batchSize: 25,
+  rateLimitMs: 1000,
+  categories: ['技术', '资讯', '观点', '教程', '工具', '灵感', '娱乐', '其他'],
+  aiStyleFocus: '技术干货、深度见解、实操教程、行业趋势',
 
-    ragEnabled: false,
-    ragApiKey: '',
-    embeddingModel: 'BAAI/bge-m3',
-    embeddingUrl: 'https://api.siliconflow.cn/v1/embeddings',
-    rerankerModel: 'BAAI/bge-reranker-v2-m3',
-    rerankerUrl: 'https://api.siliconflow.cn/v1/rerank',
+  ragEnabled: false,
+  ragApiKey: '',
+  embeddingModel: 'BAAI/bge-m3',
+  embeddingUrl: 'https://api.siliconflow.cn/v1/embeddings',
+  rerankerModel: 'BAAI/bge-reranker-v2-m3',
+  rerankerUrl: 'https://api.siliconflow.cn/v1/rerank',
 
-    autoBackupEnabled: false,
-    visionEnabledAt: 0,
-    maxImagesPerTweet: 4,
-    visionBatchSize: 3,
+  autoBackupEnabled: false,
+  visionEnabledAt: 0,
+  maxImagesPerTweet: 4,
+  visionBatchSize: 3,
 
-    // === 6. Appearance ===
-    themeFont: 'Noto Sans SC' // Default font
+  // === 6. Appearance ===
+  themeFont: 'Noto Sans SC' // Default font
 };
 
 /**
  * 确保配置对象结构完整 (Safe Merge)
  */
 export function getSafeAISettings(loaded: any): AISettings {
-    if (!loaded) return DEFAULT_AI_SETTINGS;
+  if (!loaded) return DEFAULT_AI_SETTINGS;
 
-    const settings = { ...DEFAULT_AI_SETTINGS, ...loaded };
+  const settings = { ...DEFAULT_AI_SETTINGS, ...loaded };
 
-    // 深层合并工作流节点
-    settings.workflowNodes = {
-        ...DEFAULT_AI_SETTINGS.workflowNodes,
-        ...(loaded.workflowNodes || {})
-    };
+  // 深层合并工作流节点
+  settings.workflowNodes = {
+    ...DEFAULT_AI_SETTINGS.workflowNodes,
+    ...(loaded.workflowNodes || {})
+  };
 
-    // 确保 providers 是数组
-    if (!Array.isArray(settings.providers)) {
-        settings.providers = [];
-    }
+  // 确保 providers 是数组
+  if (!Array.isArray(settings.providers)) {
+    settings.providers = [];
+  }
 
-    return settings as AISettings;
+  return settings as AISettings;
 }

@@ -83,26 +83,63 @@ export class PredictionService {
         }
 
         const authorAffinity = await this.calculateAuthorAffinity(tweet.authorId);
-        const velocityScore = this.calculateVelocity(tweet);
+        const qualityScore = (tweet.aiScore !== undefined) ? (tweet.aiScore / 100) : 0.5;
+
+        // --- NEW: Smart Velocity & Confidence Logic ---
+        // 1. Calculate velocity with awareness of data density
+        const velocityScore = this.calculateVelocity(tweet, qualityScore);
+
+        // 2. Data Confidence Factor: 
+        // How much can we trust the current engagement numbers?
+        const history = tweet.metricsHistory || [];
+        const ageMs = Date.now() - (new Date(tweet.createdAt).getTime() || tweet.savedAt || Date.now());
+        const ageMin = ageMs / (1000 * 60);
+
+        // Confidence grows with scale of time and number of samples
+        // If we have > 3 points and > 30 mins, we are very confident in the data trend
+        const timeConfidence = Math.min(ageMin / 60, 1.0); // 1 hour for full time confidence
+        const sampleConfidence = Math.min(history.length / 5, 1.0); // 5 points for full sample confidence
+        const dataConfidence = (timeConfidence * 0.4) + (sampleConfidence * 0.6);
+
         const timeDecay = this.calculateTimeDecay(tweet.createdAt);
 
         // 质量与负面信号探测
-        const qualityScore = (tweet.aiScore !== undefined) ? (tweet.aiScore / 100) : 0.5;
         const isDisliked = userSummary.dislikedTags?.some(tag => tweet.tags?.includes(tag));
         const isLowQuality = qualityScore < 0.3;
 
         // 2. 推理层：模拟 19 种动作概率 (Heuristic Probabilities)
+        // Adjust weights based on dataConfidence: 
+        // If dataConfidence is low, trust ContentSim/Quality more.
+        // If dataConfidence is high, trust Velocity (Real Numbers) more.
 
+        // -- 核心互动 --
+        const favoriteProb = Math.min(
+            (contentSim * (0.6 - dataConfidence * 0.2)) +
+            (authorAffinity * 0.3) +
+            (qualityScore * (0.4 - dataConfidence * 0.2)) +
+            (velocityScore * (dataConfidence * 0.5)),
+            1.0
+        );
+
+        const replyProb = Math.min(
+            authorAffinity * 1.2 +
+            (contentSim * 0.3 * (1 - dataConfidence)) +
+            (tweet.replyCount > 5 ? 0.2 : 0),
+            1.0
+        );
+
+        // Repost is a strong viral signal, highly dependent on actual velocity if we have data
+        const repostProb = Math.min(
+            (velocityScore * (0.4 + dataConfidence * 0.6)) +
+            (contentSim * (0.4 * (1 - dataConfidence))),
+            1.0
+        );
+
+        // -- 消费行为 --
         const hasClickableMedia = tweet.media && tweet.media.length > 0;
         const hasVideo = tweet.media?.some(m => m.type === 'video');
         const textLen = tweet.text?.length || 0;
 
-        // -- 核心互动 --
-        const favoriteProb = Math.min((contentSim * 0.5) + (authorAffinity * 0.4) + (qualityScore * 0.1), 1.0);
-        const replyProb = Math.min(authorAffinity * 1.5 + (tweet.replyCount > 5 ? 0.2 : 0), 1.0);
-        const repostProb = Math.min(velocityScore * 1.5 + (contentSim * 0.3), 1.0);
-
-        // -- 消费行为 --
         const clickProb = 0.1 + (hasClickableMedia ? 0.4 : 0);
         const photoExpandProb = hasClickableMedia ? 0.6 : 0;
         const videoViewProb = hasVideo ? 0.7 : 0;
@@ -110,7 +147,7 @@ export class PredictionService {
 
         // -- 深度转化 --
         const profileClickProb = Math.min(authorAffinity * 0.8 + (contentSim * 0.3), 1.0); // 好奇
-        const followProb = Math.min((contentSim * 0.6) + (qualityScore * 0.4), 1.0); // 内容征服
+        const followProb = Math.min((contentSim * 0.6) + (qualityScore * 0.4), 1.0); // 内容征征
         const shareProb = Math.min((repostProb * 0.8) + (favoriteProb * 0.2), 1.0); // 想分享的欲望
         const quoteProb = repostProb * 0.6; // 引用是高阶转发
 
@@ -148,10 +185,9 @@ export class PredictionService {
         scoreSum += reportProb * ACTION_WEIGHTS.REPORT;
 
         // X算法核心技巧：Offset Score (平滑处理)
-        // 这里的逻辑是：如果总分很低（全是负反馈），也不要让它变成负无穷，而是映射到一个低分区间
         let finalRawScore = scoreSum;
         if (finalRawScore < 0) {
-            finalRawScore = 0; // 简单截断，或者用 sigmoid 映射
+            finalRawScore = 0;
         }
 
         // 加上亲密度红利 (社交保底)
@@ -294,51 +330,76 @@ export class PredictionService {
 
             console.log('[PredictionService] Starting Batch Forecast for', tweets.length, 'tweets');
 
-            // 简化输入以节省 Token (Enriched with Dynamic Context)
-            const batchInput = tweets.map(t => {
-                // Calculate trend description
-                let trendContext = "Normal growth.";
-                const velocity = this.calculateVelocity(t); // Re-use the smart velocity logic
-                if (velocity > 0.8) trendContext = "VIRAL ALERT: Extremely high engagement velocity.";
-                else if (velocity > 0.5) trendContext = "Accelerating: Engagement is picking up speed.";
-                else if (t.createdAt && (Date.now() - new Date(t.createdAt).getTime() > 1000 * 60 * 60 * 24 * 30) && velocity > 0.2) {
-                    trendContext = "Resurrected: Old tweet suddenly gaining new traction.";
-                }
-
-                // Append Visual Context
-                const visionContext = t.visionDescription ? `[Visual Content: ${t.visionDescription.substring(0, 100)}...]` : "";
-
-                return {
-                    id: t.id,
-                    author: (typeof t.author === 'object' ? (t.author as any).name : t.authorName) || 'unknown',
-                    text: t.text ? t.text.substring(0, 500) : '',
-                    stats: `Lik:${t.favoriteCount},RT:${t.retweetCount},Rep:${t.replyCount},Views:${t.viewCount || 0}`,
-                    trend: trendContext,
-                    vision: visionContext, // New Field
-                    media: t.media?.map(m => m.type).join(',') || 'none'
-                };
-            });
-
-            const variables = {
-                tweet_batch_json: JSON.stringify(batchInput, null, 2),
+            // 准备变量
+            let variables: any = {
                 ai_style_focus: settings.aiStyleFocus || 'General Interest'
             };
 
-            console.log('[PredictionService] BATCH INPUT:', JSON.stringify(variables, null, 2));
+            if (tweets.length === 1) {
+                // 🚀 单推模式：提供更直接的字段，解决 ID 匹配问题
+                const t = tweets[0];
+                const createdAtTs = typeof t.createdAt === 'string' ? new Date(t.createdAt).getTime() : Number(t.createdAt || Date.now());
+                const velocity = this.calculateVelocity(t);
+                let trendContext = velocity > 0.8 ? "VIRAL ALERT" : velocity > 0.5 ? "Accelerating" : "Steady";
 
-            const aiResponse = await llmService.generateJSON('forecast', variables);
-
-            console.log('[PredictionService] BATCH OUTPUT:', aiResponse);
-
-            if (!aiResponse) {
-                throw new Error('AI returned empty result');
+                variables = {
+                    ...variables,
+                    author: (typeof t.author === 'object' ? (t.author as any).name : t.authorName) || 'unknown',
+                    text: t.text || '',
+                    stats: `Lik:${t.favoriteCount},RT:${t.retweetCount},Rep:${t.replyCount},Views:${t.viewCount || 0}`,
+                    trend: trendContext,
+                    growth_history: JSON.stringify((t.metricsHistory || []).map(h => ({
+                        age: `${((h.capturedAt - createdAtTs) / 3600000).toFixed(1)}h`,
+                        lik: h.favoriteCount,
+                        view: h.viewCount
+                    })))
+                };
+            } else {
+                // 批量模式：保留原有的 JSON 数组格式
+                const batchInput = tweets.map(t => {
+                    const createdAtTs = typeof t.createdAt === 'string' ? new Date(t.createdAt).getTime() : Number(t.createdAt || Date.now());
+                    return {
+                        id: t.id,
+                        author: (typeof t.author === 'object' ? (t.author as any).name : t.authorName) || 'unknown',
+                        text: t.text?.substring(0, 300) || '',
+                        stats: `L:${t.favoriteCount},V:${t.viewCount}`,
+                        trend: this.calculateVelocity(t) > 0.5 ? "Rising" : "Flat",
+                        history: t.metricsHistory?.slice(-3).map(h => `${((h.capturedAt - createdAtTs) / 3600000).toFixed(1)}h:${h.favoriteCount}`)
+                    };
+                });
+                variables.tweet_batch_json = JSON.stringify(batchInput, null, 2);
             }
+
+            console.log('[PredictionService] AI INPUT:', variables);
+            const aiResponse = await llmService.generateJSON('forecast', variables);
+            console.log('[PredictionService] AI OUTPUT:', aiResponse);
+
+            if (!aiResponse) throw new Error('AI returned empty result');
 
             const resultMap: Record<string, PredictionResult> = {};
 
             for (const tweet of tweets) {
-                const analysis = aiResponse[tweet.id];
-                if (analysis) {
+                // 🔍 智能匹配结果
+                let analysis = aiResponse[tweet.id];
+
+                // 单推模式：AI 可能直接返回结果对象，而不是 { id: result } 的格式
+                if (!analysis && tweets.length === 1) {
+                    // 检查 aiResponse 本身是否就是结果对象（扁平返回）
+                    if (aiResponse.totalScore !== undefined || aiResponse.daily_simulation) {
+                        analysis = aiResponse; // 直接使用整个响应
+                    } else {
+                        // 尝试取第一个 value（适用于 AI 用随机 ID 包裹的情况）
+                        const keys = Object.keys(aiResponse);
+                        if (keys.length > 0) {
+                            const firstValue = aiResponse[keys[0]];
+                            if (typeof firstValue === 'object' && firstValue !== null) {
+                                analysis = firstValue;
+                            }
+                        }
+                    }
+                }
+
+                if (analysis && (analysis.totalScore !== undefined || analysis.daily_simulation)) {
                     const prediction: PredictionResult = {
                         tweetId: tweet.id,
                         totalScore: analysis.totalScore || 0,
@@ -375,7 +436,13 @@ export class PredictionService {
                             next7d: analysis.growth_forecast.next_7d,
                             next30d: analysis.growth_forecast.next_30d,
                             verdict: analysis.growth_forecast.verdict
-                        } : undefined,
+                        } : (analysis.daily_simulation ? {
+                            // 从 30 天数组中自动提取关键节点
+                            next24h: analysis.daily_simulation[0],
+                            next7d: analysis.daily_simulation[6] || analysis.daily_simulation[analysis.daily_simulation.length - 1],
+                            next30d: analysis.daily_simulation[29] || analysis.daily_simulation[analysis.daily_simulation.length - 1],
+                            verdict: (analysis.totalScore || 0) > 80 ? 'Viral Spike' : (analysis.totalScore || 0) > 50 ? 'Steady Growth' : 'Steady'
+                        } : undefined),
                         dailySimulation: analysis.daily_simulation ? analysis.daily_simulation.map((sim: any, idx: number, arr: any[]) => {
                             // 强制实施“单调递增”和“基位保护”逻辑
                             const sanitized = { ...sim };
@@ -389,10 +456,10 @@ export class PredictionService {
 
                             // 2. 连续性保护：Day N 必须 >= Day N-1 (防止 AI 中途数据缩水)
                             if (prev) {
-                                sanitized.views = Math.max(sanitized.views, prev.views || 0);
-                                sanitized.likes = Math.max(sanitized.likes, prev.likes || 0);
-                                sanitized.retweets = Math.max(sanitized.retweets, prev.retweets || 0);
-                                sanitized.replies = Math.max(sanitized.replies, prev.replies || 0);
+                                sanitized.views = Math.max(sanitized.views || 0, prev.views || 0);
+                                sanitized.likes = Math.max(sanitized.likes || 0, prev.likes || 0);
+                                sanitized.retweets = Math.max(sanitized.retweets || 0, prev.retweets || 0);
+                                sanitized.replies = Math.max(sanitized.replies || 0, prev.replies || 0);
                             }
                             return sanitized;
                         }) : undefined,
@@ -528,7 +595,7 @@ export class PredictionService {
      * 计算传播速度 (Velocity) - 动态趋势版
      * 结合平均速度与瞬时加速度
      */
-    private calculateVelocity(tweet: Tweet): number {
+    private calculateVelocity(tweet: Tweet, qualityScore: number = 0.5): number {
         const createdDate = new Date(tweet.createdAt);
         const createdTs = isNaN(createdDate.getTime()) ? (tweet.savedAt || Date.now()) : createdDate.getTime();
         const ageMs = Date.now() - createdTs;
@@ -540,16 +607,17 @@ export class PredictionService {
 
         // 2. 瞬时速度 (Instant Velocity) - 基于 MetricsHistory
         let instantVelocity = 0;
-        let acceleration = 0; // 加速度
 
-        if (tweet.metricsHistory && tweet.metricsHistory.length >= 2) {
+        const history = tweet.metricsHistory || [];
+        if (history.length >= 2) {
             // 取最近两个快照
-            const last = tweet.metricsHistory[tweet.metricsHistory.length - 1];
-            const prev = tweet.metricsHistory[tweet.metricsHistory.length - 2];
+            const last = history[history.length - 1];
+            const prev = history[history.length - 2];
 
             const timeDeltaMin = (last.capturedAt - prev.capturedAt) / (1000 * 60);
 
-            if (timeDeltaMin > 0) {
+            // 过滤采样噪声：如果两次采样间隔过短（< 1.5分钟），瞬时速度不可靠
+            if (timeDeltaMin > 1.5) {
                 const engLast = last.favoriteCount + last.retweetCount * 3 + last.replyCount * 2;
                 const engPrev = prev.favoriteCount + prev.retweetCount * 3 + prev.replyCount * 2;
 
@@ -558,9 +626,21 @@ export class PredictionService {
             }
         }
 
-        // 3. 最终速度取两个维度的最高值 (捕捉"虽老但火"的情况)
-        // 瞬时速度给予更高权重，因为它是当下正在发生的事实
-        const finalVelocity = Math.max(avgVelocity, instantVelocity * 2);
+        // 3. 补齐逻辑：理论潜在速度 (Potential Velocity for Cold Start)
+        // 如果发布时间很短 (< 30min) 且数据点不多，给予一个基于质量的“爆发潜力”初速度
+        let potentialVelocity = 0;
+        if (ageMin < 30 && history.length < 3) {
+            // 优质内容即使没有数据，也具备更高的初始动能预期
+            potentialVelocity = qualityScore * 5;
+        }
+
+        // 4. 最终速度取三个维度的加权/最大值
+        // 瞬时速度权重最高，平均速度次之，潜在速度作为冷启动保底
+        const finalVelocity = Math.max(
+            avgVelocity,
+            instantVelocity * 1.5,
+            potentialVelocity
+        );
 
         // 归一化 (经验值：每分钟10个互动视为极快)
         // 使用 Logistic 函数平滑映射到 0-1

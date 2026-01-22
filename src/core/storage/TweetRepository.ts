@@ -50,52 +50,65 @@ export const TweetRepository = {
                     : tweet.text;
 
                 // --- 历史趋势快照逻辑 (Snapshot Logic) ---
-                const history = existingTweet.metricsHistory || [];
-                const lastSnapshot = history.length > 0 ? history[history.length - 1] : null;
+                let history = existingTweet.metricsHistory || [];
+                const createdAtTs = typeof existingTweet.createdAt === 'string'
+                    ? new Date(existingTweet.createdAt).getTime()
+                    : Number(existingTweet.createdAt);
+
+                // 确保有 P0 (发布时的 0 数据点)
+                if (history.length === 0 || history[0].capturedAt > createdAtTs + 1000) {
+                    history.unshift({
+                        capturedAt: createdAtTs,
+                        favoriteCount: 0,
+                        retweetCount: 0,
+                        replyCount: 0,
+                        viewCount: 0
+                    });
+                }
+
+                const lastSnapshot = history[history.length - 1];
                 const now = Date.now();
 
                 // 构造当前快照
                 const currentSnapshot = {
                     capturedAt: now,
-                    favoriteCount: tweet.favoriteCount || 0,
-                    retweetCount: tweet.retweetCount || 0,
-                    replyCount: tweet.replyCount || 0,
-                    viewCount: tweet.viewCount || 0
+                    favoriteCount: Math.max(tweet.favoriteCount || 0, existingTweet.favoriteCount || 0),
+                    retweetCount: Math.max(tweet.retweetCount || 0, existingTweet.retweetCount || 0),
+                    replyCount: Math.max(tweet.replyCount || 0, existingTweet.replyCount || 0),
+                    viewCount: Math.max(tweet.viewCount || 0, existingTweet.viewCount || 0)
                 };
 
                 let shouldAppend = false;
 
-                if (!lastSnapshot) {
+                if (history.length <= 1) { // 只有 P0 时，强制推入当前点作为 P1
                     shouldAppend = true;
                 } else {
                     const timeDiff = now - lastSnapshot.capturedAt;
-                    // 策略：每小时至少存一次 OR 关键互动量变化超过 10%
-                    const isTimeDue = timeDiff > 1000 * 60 * 60; // 1 hour
+                    // 策略：每 4 小时至少存一次 OR 关键互动量变化超过 5% (更灵敏一点)
+                    const isTimeDue = timeDiff > 1000 * 60 * 60 * 4;
                     const isSignificantChange = (
-                        Math.abs(currentSnapshot.favoriteCount - lastSnapshot.favoriteCount) > (lastSnapshot.favoriteCount * 0.1) ||
-                        Math.abs(currentSnapshot.retweetCount - lastSnapshot.retweetCount) > (lastSnapshot.retweetCount * 0.1)
+                        Math.abs(currentSnapshot.favoriteCount - lastSnapshot.favoriteCount) > Math.max(5, lastSnapshot.favoriteCount * 0.05) ||
+                        Math.abs(currentSnapshot.retweetCount - lastSnapshot.retweetCount) > Math.max(2, lastSnapshot.retweetCount * 0.05) ||
+                        Math.abs(currentSnapshot.viewCount - lastSnapshot.viewCount) > Math.max(100, lastSnapshot.viewCount * 0.05)
                     );
 
-                    // 只有当至少有一个值是非零时才记录变化（避免从0到0的无效记录）
-                    const hasValue = currentSnapshot.favoriteCount > 0 || currentSnapshot.retweetCount > 0;
-
-                    shouldAppend = hasValue && (isTimeDue || isSignificantChange);
+                    shouldAppend = isTimeDue || isSignificantChange;
                 }
 
                 if (shouldAppend) {
                     history.push(currentSnapshot);
-                    // 限制历史记录最大长度，避免无限膨胀 (比如保留最近 50 个点)
-                    if (history.length > 50) history.shift();
+                    // 限制历史记录最大长度，保留最近 100 个点，足以覆盖较长的追踪期
+                    if (history.length > 100) history = history.slice(-100);
                 }
 
                 await db.tweets.update(tweet.id, {
                     // 保留更长的文本
                     text: keepLongerText,
 
-                    favoriteCount: Math.max(tweet.favoriteCount || 0, existingTweet.favoriteCount || 0),
-                    retweetCount: Math.max(tweet.retweetCount || 0, existingTweet.retweetCount || 0),
-                    replyCount: Math.max(tweet.replyCount || 0, existingTweet.replyCount || 0),
-                    viewCount: Math.max(tweet.viewCount || 0, existingTweet.viewCount || 0),
+                    favoriteCount: currentSnapshot.favoriteCount,
+                    retweetCount: currentSnapshot.retweetCount,
+                    replyCount: currentSnapshot.replyCount,
+                    viewCount: currentSnapshot.viewCount,
 
                     // 更新趋势数据
                     metricsHistory: history,
@@ -106,21 +119,41 @@ export const TweetRepository = {
                     // 媒体可能有更完整的数据
                     media: (tweet.media?.length > (existingTweet.media?.length || 0)) ? tweet.media : existingTweet.media,
                 });
-                console.log(`[ThatTweet] Tweet ${tweet.id} stats updated. Snapshot captured: ${shouldAppend}`);
+                console.log(`[ThatTweet] Tweet ${tweet.id} stats updated. Snapshot captured: ${shouldAppend} (Total: ${history.length})`);
             } else {
-                // 新推文：完整写入 + 初始化历史快照
-                await db.tweets.put({
-                    ...tweet,
-                    authorAvatarUrl: user.avatar || tweet.authorAvatarUrl,
-                    metricsHistory: [{
-                        capturedAt: Date.now(),
+                // 新推文：完整写入 + 初始化历史快照 (P0 + P1)
+                const createdAtTs = typeof tweet.createdAt === 'string'
+                    ? new Date(tweet.createdAt).getTime()
+                    : Number(tweet.createdAt);
+
+                const now = Date.now();
+                const history = [
+                    {
+                        capturedAt: createdAtTs,
+                        favoriteCount: 0,
+                        retweetCount: 0,
+                        replyCount: 0,
+                        viewCount: 0
+                    }
+                ];
+
+                // 如果当前时间明显晚于发布时间，且已有数据，则存入 P1
+                if (now > createdAtTs + 60000) {
+                    history.push({
+                        capturedAt: now,
                         favoriteCount: tweet.favoriteCount || 0,
                         retweetCount: tweet.retweetCount || 0,
                         replyCount: tweet.replyCount || 0,
                         viewCount: tweet.viewCount || 0
-                    }]
+                    });
+                }
+
+                await db.tweets.put({
+                    ...tweet,
+                    authorAvatarUrl: user.avatar || tweet.authorAvatarUrl,
+                    metricsHistory: history
                 });
-                console.log(`[ThatTweet] Tweet ${tweet.id} saved (new)`);
+                console.log(`[ThatTweet] Tweet ${tweet.id} saved (new) with P0 baseline.`);
             }
 
             return tweet.id;
