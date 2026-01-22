@@ -439,7 +439,7 @@ export const SimulationView: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="flex-1 min-h-0 relative">
+                                            <div className="w-full h-[500px] relative">
                                                 <TrendChart
                                                     key={`${selectedTweet.id}-${selectedTweet.prediction?.source || 'local'}`}
                                                     history={selectedTweet.metricsHistory}
