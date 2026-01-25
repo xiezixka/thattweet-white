@@ -236,6 +236,42 @@ export const TweetRepository = {
     },
 
     /**
+     * 按作者导出数据
+     * @param authorId 作者 ID
+     */
+    async exportByAuthor(authorId: string) {
+        const user = await db.users.get(authorId);
+        if (!user) {
+            throw new Error(`Author not found: ${authorId}`);
+        }
+        const tweets = await db.tweets.where('authorId').equals(authorId).toArray();
+        return {
+            tweets,
+            users: [user],
+            version: 1,
+            exportedAt: Date.now(),
+            exportType: 'author',
+            authorHandle: user.handle
+        };
+    },
+
+    /**
+     * 获取所有作者列表 (用于导出选择)
+     */
+    async getAllAuthors() {
+        const users = await db.users.toArray();
+        // 为每个用户计算推文数量
+        const authorsWithCount = await Promise.all(
+            users.map(async (user) => {
+                const tweetCount = await db.tweets.where('authorId').equals(user.id).count();
+                return { ...user, tweetCount };
+            })
+        );
+        // 按推文数量降序排列
+        return authorsWithCount.sort((a, b) => b.tweetCount - a.tweetCount);
+    },
+
+    /**
      * 导入数据
      */
     async importData(data: any) {

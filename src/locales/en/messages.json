@@ -412,5 +412,32 @@
   },
   "stats_score_low": {
     "message": "Low Value"
+  },
+  "export_by_author_title": {
+    "message": "Export by Author"
+  },
+  "export_by_author_desc": {
+    "message": "Export all tweets from a specific author"
+  },
+  "btn_load_authors": {
+    "message": "Load Authors"
+  },
+  "loading_authors": {
+    "message": "Loading..."
+  },
+  "search_author_placeholder": {
+    "message": "Search authors..."
+  },
+  "tweets_count": {
+    "message": "{{count}} tweets"
+  },
+  "more_authors_hidden": {
+    "message": "{{count}} more authors hidden..."
+  },
+  "export_author_tweets": {
+    "message": "Export @{{handle}}'s tweets"
+  },
+  "select_author_first": {
+    "message": "Select an author first"
   }
 }

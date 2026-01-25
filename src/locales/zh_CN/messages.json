@@ -988,5 +988,32 @@
   },
   "sim_metric_decay_short": {
     "message": "衰减"
+  },
+  "export_by_author_title": {
+    "message": "按作者导出"
+  },
+  "export_by_author_desc": {
+    "message": "导出特定作者的所有推文"
+  },
+  "btn_load_authors": {
+    "message": "加载作者"
+  },
+  "loading_authors": {
+    "message": "加载中..."
+  },
+  "search_author_placeholder": {
+    "message": "搜索作者..."
+  },
+  "tweets_count": {
+    "message": "{{count}} 条"
+  },
+  "more_authors_hidden": {
+    "message": "还有 {{count}} 位作者未显示..."
+  },
+  "export_author_tweets": {
+    "message": "导出 @{{handle}} 的推文"
+  },
+  "select_author_first": {
+    "message": "请先选择一位作者"
   }
 }

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "version": "4.5.3",
+  "version": "4.5.4",
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https:; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:;"
   },

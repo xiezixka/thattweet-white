@@ -4,7 +4,7 @@ import {
     RefreshCw, Search, Settings, Sparkles, Terminal,
     X, Plus, Zap, ChevronDown, Check, ScanFace, BookOpen, AlertCircle, Loader2,
     BrainCircuit, HardDrive, Info, Sliders, PlayCircle, PauseCircle, Fingerprint, FolderOpen,
-    Download, Upload, Save
+    Download, Upload, Save, User
 } from 'lucide-react';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { cn } from '../../shared/utils/cn';
@@ -66,6 +66,12 @@ export const SettingsView: React.FC = () => {
     const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
     const [embedStats, setEmbedStats] = useState<any>(null);
     const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Author Export States
+    const [authors, setAuthors] = useState<Array<{ id: string; handle: string; name: string; avatar?: string; tweetCount: number }>>([]);
+    const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
+    const [isLoadingAuthors, setIsLoadingAuthors] = useState(false);
+    const [authorSearchQuery, setAuthorSearchQuery] = useState('');
 
     // Initial Load & Migration
     useEffect(() => {
@@ -238,6 +244,50 @@ export const SettingsView: React.FC = () => {
             setStatus('ERROR');
         }
     };
+
+    // Load authors for export selection
+    const handleLoadAuthors = async () => {
+        setIsLoadingAuthors(true);
+        try {
+            const allAuthors = await TweetRepository.getAllAuthors();
+            setAuthors(allAuthors);
+        } catch (error) {
+            console.error('Failed to load authors:', error);
+        } finally {
+            setIsLoadingAuthors(false);
+        }
+    };
+
+    // Export tweets by specific author
+    const handleAuthorExport = async () => {
+        if (!selectedAuthorId) return;
+
+        try {
+            setStatus('EXPORTING...');
+            const data = await TweetRepository.exportByAuthor(selectedAuthorId);
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ThatTweet-${data.authorHandle}-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setStatus('EXPORTED');
+            setTimeout(() => setStatus(''), 2000);
+        } catch (error) {
+            console.error('Author export failed:', error);
+            setStatus('ERROR');
+        }
+    };
+
+    // Filter authors by search query
+    const filteredAuthors = authors.filter(author =>
+        author.handle.toLowerCase().includes(authorSearchQuery.toLowerCase()) ||
+        author.name.toLowerCase().includes(authorSearchQuery.toLowerCase())
+    );
 
     const handleRestoreFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -686,6 +736,111 @@ export const SettingsView: React.FC = () => {
                                             />
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Export by Author */}
+                                <div className="mt-4 p-6 bg-white/[0.02] border border-white/5 rounded-xl space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-500">
+                                                <User size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-white uppercase tracking-widest">按作者导出</p>
+                                                <p className="text-xs text-zinc-500 font-mono mt-0.5">导出特定作者的所有推文</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={handleLoadAuthors}
+                                            disabled={isLoadingAuthors}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all border",
+                                                isLoadingAuthors
+                                                    ? "bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed"
+                                                    : "bg-white/5 text-zinc-400 hover:text-white border-white/5 hover:border-white/20"
+                                            )}
+                                        >
+                                            {isLoadingAuthors ? (
+                                                <Loader2 size={12} className="animate-spin" />
+                                            ) : (
+                                                <RefreshCw size={12} />
+                                            )}
+                                            {isLoadingAuthors ? '加载中...' : '加载作者'}
+                                        </button>
+                                    </div>
+
+                                    {authors.length > 0 && (
+                                        <div className="space-y-3">
+                                            {/* Search Bar */}
+                                            <input
+                                                type="text"
+                                                value={authorSearchQuery}
+                                                onChange={e => setAuthorSearchQuery(e.target.value)}
+                                                placeholder="搜索作者..."
+                                                className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/30 outline-none"
+                                            />
+
+                                            {/* Author List */}
+                                            <div className="max-h-48 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-zinc-700">
+                                                {filteredAuthors.slice(0, 20).map(author => (
+                                                    <div
+                                                        key={author.id}
+                                                        onClick={() => setSelectedAuthorId(author.id)}
+                                                        className={cn(
+                                                            "flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all",
+                                                            selectedAuthorId === author.id
+                                                                ? "bg-cyan-500/20 border border-cyan-500/30"
+                                                                : "bg-white/[0.02] border border-transparent hover:border-white/10"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            {author.avatar ? (
+                                                                <img
+                                                                    src={author.avatar}
+                                                                    alt={author.name}
+                                                                    className="w-8 h-8 rounded-full object-cover"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
+                                                                    <User size={14} className="text-zinc-500" />
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <p className="text-xs font-bold text-white">{author.name}</p>
+                                                                <p className="text-[10px] text-zinc-500 font-mono">@{author.handle}</p>
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-[10px] font-mono text-zinc-400 bg-white/5 px-2 py-0.5 rounded">
+                                                            {author.tweetCount} 条
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                                {filteredAuthors.length > 20 && (
+                                                    <p className="text-[10px] text-zinc-600 text-center py-2">
+                                                        还有 {filteredAuthors.length - 20} 位作者未显示...
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Export Button */}
+                                            <button
+                                                onClick={handleAuthorExport}
+                                                disabled={!selectedAuthorId}
+                                                className={cn(
+                                                    "w-full py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all border",
+                                                    selectedAuthorId
+                                                        ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/30"
+                                                        : "bg-zinc-800 text-zinc-600 border-zinc-700 cursor-not-allowed"
+                                                )}
+                                            >
+                                                <Download size={14} />
+                                                {selectedAuthorId
+                                                    ? `导出 @${authors.find(a => a.id === selectedAuthorId)?.handle} 的推文`
+                                                    : '请先选择一位作者'
+                                                }
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </Card>
 
