@@ -439,5 +439,8 @@
   },
   "select_author_first": {
     "message": "Select an author first"
+  },
+  "btn_backup_download": {
+    "message": "Download Backup"
   }
 }

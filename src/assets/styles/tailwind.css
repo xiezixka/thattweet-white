@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 @theme {
+    --color-brand: #1d9bf0;
+    --color-brand-muted: #1d9bf022;
+
     --animate-spin-slow: spin 20s linear infinite;
 
     @keyframes spin {

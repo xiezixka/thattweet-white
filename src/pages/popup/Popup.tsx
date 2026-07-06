@@ -1,13 +1,53 @@
 import React, { useEffect, useState } from 'react';
-import { Bird, ArrowRight, Download, History } from 'lucide-react';
+import { Bird, ArrowRight, Download, History, Loader2 } from 'lucide-react';
 import { db } from '../../core/storage/db';
 import { liveQuery } from 'dexie';
 import { useTranslation } from '../../shared/hooks/useTranslation';
+import { TweetRepository } from '../../core/storage/TweetRepository';
 
 export default function Popup() {
   const { t } = useTranslation();
   const [count, setCount] = useState(0);
   const [recent, setRecent] = useState<{ id: string, text: string, author: string }[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (isExporting) return;
+    try {
+      setIsExporting(true);
+      const data: any = await TweetRepository.exportAllData();
+
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const storageData = await new Promise<Record<string, any>>((resolve) => {
+          chrome.storage.local.get(null, (res) => resolve(res || {}));
+        });
+        if (storageData.aiSettings) {
+          data.settings = storageData.aiSettings;
+        }
+      }
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const filename = `ThatTweet-Backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+      if (typeof chrome !== 'undefined' && chrome.downloads?.download) {
+        chrome.downloads.download({ url, filename, saveAs: true });
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   useEffect(() => {
     // 实时监听总数
@@ -57,8 +97,16 @@ export default function Popup() {
             {count} <span className="text-xs font-normal text-zinc-600">{t('popup_unit')}</span>
           </div>
         </div>
-        <button className="absolute right-5 top-5 p-2 rounded-lg bg-zinc-800 text-zinc-500 hover:text-white transition-colors">
-          <Download size={18} />
+        <button
+          onClick={handleExport}
+          disabled={isExporting}
+          className="absolute right-5 top-5 z-20 p-2 rounded-lg bg-zinc-800 text-zinc-500 hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isExporting ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : (
+            <Download size={18} />
+          )}
         </button>
         <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-brand/5 rounded-full blur-2xl group-hover:bg-brand/10 transition-colors" />
       </div>

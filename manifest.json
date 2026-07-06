@@ -24,7 +24,8 @@
     "storage",
     "unlimitedStorage",
     "activeTab",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
   "host_permissions": [
     "https://twitter.com/*",
