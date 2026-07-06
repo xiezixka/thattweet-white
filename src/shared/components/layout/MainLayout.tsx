@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sidebar } from './Sidebar';
+import { Sidebar, SIDEBAR_NARROW, SIDEBAR_WIDE } from './Sidebar';
 import { useUIStore } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,67 +11,19 @@ interface MainLayoutProps {
 export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const { activeView } = useUIStore();
     const { t } = useTranslation();
-    const [isHovered, setIsHovered] = React.useState(false);
     const [isPinned, setIsPinned] = React.useState(false);
-    const hoverTimeoutRef = React.useRef<number | null>(null);
-
-    const handleMouseEnter = () => {
-        if (isPinned) return; // 已固定时不响应悬停
-        if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
-        setIsHovered(true);
-    };
-
-    const handleMouseLeave = () => {
-        if (isPinned) return; // 已固定时不自动收起
-
-        hoverTimeoutRef.current = window.setTimeout(() => {
-            setIsHovered(false);
-        }, 300);
-    };
 
     const handleTogglePin = () => {
         setIsPinned(prev => !prev);
-        setIsHovered(false); // 切换时关闭悬浮状态
     };
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100">
-            {/* 固定模式：侧边栏占据实际空间 */}
-            {isPinned && (
-                <div className="shrink-0">
-                    <Sidebar
-                        forceExpand={true}
-                        isPinned={isPinned}
-                        onTogglePin={handleTogglePin}
-                    />
-                </div>
-            )}
-
-            {/* 悬浮模式：作为 Overlay 浮层 */}
-            {!isPinned && (
-                <>
-                    {/* 边缘触发感应区 (最左侧 16px) */}
-                    <div
-                        className="fixed left-0 top-0 bottom-0 w-4 z-[60]"
-                        onMouseEnter={handleMouseEnter}
-                    />
-
-                    {/* 侧边导航浮层 */}
-                    <div
-                        className="fixed left-0 top-0 bottom-0 z-50 pointer-events-none"
-                        onMouseEnter={handleMouseEnter}
-                        onMouseLeave={handleMouseLeave}
-                    >
-                        <div className="pointer-events-auto h-full">
-                            <Sidebar
-                                forceExpand={isHovered}
-                                isPinned={isPinned}
-                                onTogglePin={handleTogglePin}
-                            />
-                        </div>
-                    </div>
-                </>
-            )}
+            {/* Sidebar — always in layout flow, width pushes main content */}
+            <Sidebar
+                isPinned={isPinned}
+                onTogglePin={handleTogglePin}
+            />
 
             {/* 主画布 */}
             <main

@@ -7,7 +7,9 @@ import {
     Settings2,
     Network,
     Image as ImageIcon,
-    Zap
+    Zap,
+    ChevronsRight,
+    ChevronsLeft
 } from 'lucide-react';
 import { useUIStore, ViewType } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -19,13 +21,45 @@ function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
+// Width constants
+const SIDEBAR_NARROW = 64;  // px – icons only
+const SIDEBAR_WIDE = 200;   // px – icons + labels
+
+// Icon positioning: keep icons centered within the narrow-width zone (64px)
+// Nav has 8px horizontal padding → button content starts at 8px from sidebar edge
+// 18px icon centered in 64px → icon left = (64-18)/2 = 23px → paddingLeft = 23-8 = 15px
+const ICON_PAD_LEFT = 15;
+// 32px logo icon centered in 64px → logo left = (64-32)/2 = 16px
+const LOGO_PAD_LEFT = 16;
+
+const TRANSITION = 'width 0.25s ease';
+
+// Gap between icon and text: calculated so text starts exactly at SIDEBAR_NARROW boundary.
+// sidebar overflow:hidden clips text when narrow, reveals it as width grows.
+// Nav: 8(nav pad) + 15(icon pad) + 18(icon) + gap = 64  →  gap = 23
+const TEXT_GAP = SIDEBAR_NARROW - 8 - ICON_PAD_LEFT - 18;
+// Logo: 16(logo pad) + 32(logo icon) + gap = 64  →  gap = 16
+const LOGO_GAP = SIDEBAR_NARROW - LOGO_PAD_LEFT - 32;
+
+// Text reveal: delayed fade-in on expand; on collapse stays visible while sidebar clips it
+const labelRevealStyle = (expanded: boolean): React.CSSProperties => ({
+    opacity: expanded ? 1 : 0,
+    transition: expanded
+        ? 'opacity 0.3s ease 0.15s'    // expand: fade in over 0.3s, delayed 0.15s
+        : 'opacity 0.01s ease 0.25s',   // collapse: snap to 0 after sidebar finishes closing
+});
+
 interface SidebarProps {
-    forceExpand?: boolean;
-    isPinned?: boolean;
-    onTogglePin?: () => void;
+    isPinned: boolean;
+    onTogglePin: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false, isPinned = false, onTogglePin }) => {
+export { SIDEBAR_NARROW, SIDEBAR_WIDE };
+
+export const Sidebar: React.FC<SidebarProps> = ({
+    isPinned,
+    onTogglePin,
+}) => {
     const { activeView, setActiveView } = useUIStore();
     const { t } = useTranslation();
 
@@ -40,56 +74,67 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false, isPinned 
         { id: 'settings', icon: Settings2, label: t('nav_settings') },
     ];
 
-    const shouldExpand = forceExpand || isPinned;
+    const isExpanded = isPinned;
 
     return (
         <aside
-            className={cn(
-                "h-screen flex flex-col relative transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] bg-zinc-900/95 backdrop-blur-xl border-r border-white/10 select-none shrink-0 overflow-hidden shadow-[20px_0_50px_rgba(0,0,0,0.5)]",
-                shouldExpand ? "w-[200px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-full"
-            )}
+            className="h-screen flex flex-col relative bg-zinc-900/95 backdrop-blur-xl border-r border-white/10 select-none shrink-0 overflow-hidden"
+            style={{
+                width: isExpanded ? SIDEBAR_WIDE : SIDEBAR_NARROW,
+                transition: TRANSITION,
+            }}
         >
-            {/* Header: Logo (Click to Pin) */}
+            {/* Header: Logo — icon always at the same X position */}
             <div
                 className={cn(
-                    "h-20 flex items-center px-6 shrink-0 border-b transition-all cursor-pointer group",
+                    "h-16 flex items-center shrink-0 border-b",
                     isPinned
                         ? "border-brand/20 bg-brand/5"
-                        : "border-white/[0.05] hover:bg-white/[0.02]"
+                        : "border-white/[0.05]"
                 )}
-                onClick={onTogglePin}
-                title={isPinned ? "点击取消固定 / Click to unpin" : "点击固定侧边栏 / Click to pin"}
+                style={{ paddingLeft: LOGO_PAD_LEFT }}
             >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center" style={{ gap: LOGO_GAP }}>
                     <div className={cn(
-                        "w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-xl transition-all",
+                        "w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-xl",
                         isPinned && "ring-2 ring-brand/50"
                     )}>
                         <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
                     </div>
-                    <span className={cn(
-                        "font-bold text-base tracking-tight transition-colors",
-                        isPinned ? "text-brand" : "text-white group-hover:text-brand/80"
-                    )}>
+                    <span
+                        className={cn(
+                            "font-bold text-base tracking-tight whitespace-nowrap",
+                            isPinned ? "text-brand" : "text-white"
+                        )}
+                        style={labelRevealStyle(isExpanded)}
+                    >
                         ThatTweet
                     </span>
                 </div>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 px-3 space-y-1 mt-6">
+            {/* Navigation — icons always at fixed left position */}
+            <nav className="flex-1 py-4 space-y-1" style={{ paddingLeft: 8, paddingRight: 8 }}>
                 {navItems.map((item) => {
                     const isActive = activeView === item.id;
                     return (
                         <button
                             key={item.id}
                             onClick={() => setActiveView(item.id as ViewType)}
+                            title={!isExpanded ? item.label : undefined}
                             className={cn(
-                                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all relative group",
+                                "w-full flex items-center rounded-xl relative group",
                                 isActive
                                     ? "text-brand"
                                     : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"
                             )}
+                            style={{
+                                paddingTop: 10,
+                                paddingBottom: 10,
+                                paddingLeft: ICON_PAD_LEFT,
+                                paddingRight: 12,
+                                gap: TEXT_GAP,
+                            }}
                         >
                             {isActive && (
                                 <motion.div
@@ -104,18 +149,50 @@ export const Sidebar: React.FC<SidebarProps> = ({ forceExpand = false, isPinned 
                                 size={18}
                                 strokeWidth={isActive ? 2.5 : 2}
                                 className={cn(
-                                    "shrink-0 transition-transform duration-300 z-10",
-                                    isActive ? "scale-100" : "group-hover:translate-x-0.5"
+                                    "shrink-0 z-10",
+                                    !isActive && "group-hover:translate-x-0.5 transition-transform duration-200"
                                 )}
                             />
 
-                            <span className="text-sm font-medium whitespace-nowrap z-10">
+                            <span
+                                className="text-sm font-medium whitespace-nowrap z-10"
+                                style={labelRevealStyle(isExpanded)}
+                            >
                                 {item.label}
                             </span>
                         </button>
                     );
                 })}
             </nav>
+
+            {/* Collapse / Expand toggle button — icon at same fixed position */}
+            <div className="shrink-0 border-t border-white/[0.05]" style={{ padding: 8 }}>
+                <button
+                    onClick={onTogglePin}
+                    title={isPinned ? "收起侧边栏" : "展开侧边栏"}
+                    className={cn(
+                        "w-full flex items-center rounded-xl py-2.5",
+                        "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.05]"
+                    )}
+                    style={{
+                        paddingLeft: ICON_PAD_LEFT,
+                        paddingRight: 12,
+                        gap: TEXT_GAP,
+                    }}
+                >
+                    {isPinned ? (
+                        <ChevronsLeft size={18} strokeWidth={2} className="shrink-0 z-10" />
+                    ) : (
+                        <ChevronsRight size={18} strokeWidth={2} className="shrink-0 z-10" />
+                    )}
+                    <span
+                        className="text-sm font-medium whitespace-nowrap z-10"
+                        style={labelRevealStyle(isExpanded)}
+                    >
+                        {isPinned ? "收起" : "展开"}
+                    </span>
+                </button>
+            </div>
         </aside>
     );
 };
