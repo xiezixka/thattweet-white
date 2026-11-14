@@ -27,12 +27,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     }, []);
 
     const handleMouseEnter = () => {
+        if (isSafariIOS) return;
         if (isPinned) return; // 已固定时不响应悬停
         if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
         setIsHovered(true);
     };
 
     const handleMouseLeave = () => {
+        if (isSafariIOS) return;
         if (isPinned) return; // 已固定时不自动收起
 
         hoverTimeoutRef.current = window.setTimeout(() => {
@@ -48,6 +50,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100">
+            {isSafariIOS && <header className="safari-app-header">ThatTweet <span>Safari</span></header>}
             {/* 固定模式：侧边栏占据实际空间 */}
             {isPinned && (
                 <div className="shrink-0">
@@ -116,6 +119,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
                 {/* 全局状态条 (极简) */}
                 <footer className="h-8 shrink-0 border-t border-white/5 bg-black/20 backdrop-blur-sm flex items-center px-3 md:px-6 text-[10px] text-zinc-600 gap-3 md:gap-4">
+                    {isSafariIOS ? <span>后台可能暂停，返回 Safari 后继续处理待办</span> : <>
                     <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="uppercase tracking-wider font-medium">{t('status_interceptor_active')}</span>
@@ -124,6 +128,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         <div className="w-1.5 h-1.5 rounded-full bg-brand" />
                         <span className="uppercase tracking-wider font-medium">{t('status_ai_idle')}</span>
                     </div>
+                    </>}
                     <div className="flex-1" />
                     <span className="opacity-40">{t('status_version_prefix')}{version}</span>
                 </footer>

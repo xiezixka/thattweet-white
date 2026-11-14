@@ -457,7 +457,7 @@ export const AnalyticsView: React.FC = () => {
     );
 
     return (
-        <div className="flex h-full w-full bg-[#050505] selection:bg-brand/20 overflow-hidden">
+        <div className="analytics-workspace flex h-full w-full bg-[#050505] selection:bg-brand/20 overflow-hidden">
             {/* === 1. RANKING COLUMN (Left) === */}
             <aside className="w-[var(--sidebar-width,280px)] xl:w-[320px] flex flex-col shrink-0 bg-black/40 border-r border-white/5 z-20">
                 <div className="p-6 border-b border-white/5">

@@ -4,18 +4,24 @@ import { crx, type ManifestV3Export } from '@crxjs/vite-plugin';
 import baseConfig, { baseManifest, baseBuildOptions } from './vite.config.base';
 import manifest from './manifest.json';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { build as bundle } from 'esbuild';
 
 export default mergeConfig(baseConfig, defineConfig({
     define: { __SAFARI_IOS__: true },
     plugins: [{
         name: 'safari-ios-resources',
         transformIndexHtml: html => html.replace('<html ', '<html data-platform="safari-ios" '),
-        writeBundle() {
-            // CRXJS removes Firefox's MV2-only key while producing MV3 output;
-            // Safari explicitly accepts it for its nonpersistent background page.
+        async writeBundle() {
+            // MV3 defaults to a nonpersistent document in Safari. Flatten the
+            // background into a classic script so older packagers need no type key.
+            await bundle({ entryPoints: [resolve(__dirname, 'src/pages/background/index.ts')], bundle: true,
+                format: 'iife', platform: 'browser', target: 'safari17', minify: true,
+                define: { __SAFARI_IOS__: 'true', 'process.env.NODE_ENV': '"production"' },
+                outfile: resolve(__dirname, 'dist_safari/background.js') });
             const path = resolve(__dirname, 'dist_safari/manifest.json');
             const output = JSON.parse(readFileSync(path, 'utf8'));
-            output.background.persistent = false;
+            output.background = { scripts: ['background.js'] };
+            delete output.options_ui.open_in_tab;
             writeFileSync(path, JSON.stringify(output, null, 2));
         },
     }, crx({

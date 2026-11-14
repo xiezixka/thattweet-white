@@ -175,6 +175,7 @@ export class VisionService {
         }
 
         console.log(`[VisionService] Forcing immediate perception analysis for ${tweetId}`);
+        await this.updateTweetsStatus([tweet], ProcessStatus.Processing);
         await this.processBatch([tweet], apiKey, settings);
     }
 

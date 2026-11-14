@@ -5,7 +5,10 @@ html[data-platform="safari-ios"] { -webkit-text-size-adjust: 100%; }
 html[data-platform="safari-ios"] :is(.h-screen, .intelligence-workspace) { height: 100dvh; }
 html[data-platform="safari-ios"] body { padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 html[data-platform="safari-ios"] main > footer { padding-bottom: env(safe-area-inset-bottom); height: calc(2rem + env(safe-area-inset-bottom)); }
-html[data-platform="safari-ios"] button[aria-label="打开导航菜单"] { bottom: calc(3rem + env(safe-area-inset-bottom)); }
+html[data-platform="safari-ios"] button[aria-label="打开导航菜单"] { top: calc(6px + env(safe-area-inset-top)); bottom: auto; }
+.safari-app-header { position: fixed; inset: 0 0 auto; height: calc(56px + env(safe-area-inset-top)); padding: calc(12px + env(safe-area-inset-top)) 20px 12px 72px; z-index: 65; background: var(--theme-canvas); border-bottom: 1px solid var(--color-zinc-800); font-size: 18px; font-weight: 700; }
+.safari-app-header span { color: var(--theme-muted); font-size: 14px; font-weight: 400; margin-left: 8px; }
+html[data-platform="safari-ios"] body > #__root > div > main { padding-top: calc(56px + env(safe-area-inset-top)); }
 
 @media (max-width: 1023px) {
     .intelligence-workspace { flex-direction: column; height: 100% !important; min-height: 0; }
@@ -24,6 +27,7 @@ html[data-platform="safari-ios"] button[aria-label="打开导航菜单"] { botto
     [data-mobile-panel="note"] .intelligence-note { display: flex; }
     .intelligence-chat header { min-height: 56px; height: auto; flex-wrap: wrap; padding: 8px; gap: 4px; }
     .intelligence-chat header > div { flex-wrap: wrap; }
+    .intelligence-chat textarea { min-width: 0; min-height: 48px; }
     .note-editor > header { height: auto; min-height: 56px; padding: 8px; overflow-x: auto; gap: 12px; }
     .note-editor > header > div { flex-shrink: 0; }
     .note-editor > .flex-1 { display: block; overflow-y: auto; }
@@ -31,10 +35,26 @@ html[data-platform="safari-ios"] button[aria-label="打开导航菜单"] { botto
     .note-editor [class~="cursor-col-resize"] { display: none; }
     .note-editor textarea { min-height: 45dvh; padding: 48px 20px 20px; }
     .note-editor .wechat-body { padding: 24px 20px; }
+    html[data-platform="safari-ios"] .analytics-workspace { height: auto; flex-direction: column; overflow: visible; }
+    html[data-platform="safari-ios"] .analytics-workspace > aside { width: 100% !important; flex: none; }
+    html[data-platform="safari-ios"] .analytics-workspace > aside:first-child { height: 300px; }
+    html[data-platform="safari-ios"] .analytics-workspace > main { overflow: visible; flex: none; }
+    html[data-platform="safari-ios"] .analytics-workspace > main > div { padding: 24px 16px; }
+    html[data-platform="safari-ios"] .analytics-workspace > aside:last-child { min-height: 480px; }
+    html[data-platform="safari-ios"] .analytics-workspace .cursor-col-resize { display: none; }
+    html[data-platform="safari-ios"] .simulation-workspace { height: auto; overflow: visible; }
+    html[data-platform="safari-ios"] .simulation-columns { flex-direction: column; overflow: visible; min-width: 0; }
+    html[data-platform="safari-ios"] .simulation-list { width: 100%; height: 300px; }
+    html[data-platform="safari-ios"] .simulation-detail { min-height: 560px; overflow: visible; }
+    html[data-platform="safari-ios"] .simulation-result { height: auto; max-height: none; overflow: visible; padding: 16px; }
+    html[data-platform="safari-ios"] .simulation-result > .flex-1 { flex-direction: column; }
+    html[data-platform="safari-ios"] .simulation-result [class~="w-[300px]"] { width: 100%; }
+    html[data-platform="safari-ios"] [data-view="connections"] [class~="w-[420px]"] { max-width: 100vw; top: calc(56px + env(safe-area-inset-top)); height: calc(100dvh - 56px - env(safe-area-inset-top)); }
 }
 
 @media (pointer: coarse) {
     html[data-platform="safari-ios"] :is(button, select, input:not([type="checkbox"])) { min-height: 44px; }
+    html[data-platform="safari-ios"] button { min-width: 44px; }
     html[data-platform="safari-ios"] :is(input:not([type="checkbox"]), textarea, select) { font-size: 16px !important; }
     html[data-platform="safari-ios"] :is(.group:hover, .group) > [class*="group-hover:opacity-100"] { opacity: 1; }
     html[data-platform="safari-ios"] .assistant-bubble + div { opacity: 1; }

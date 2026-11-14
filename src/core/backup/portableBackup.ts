@@ -3,6 +3,7 @@ import { db } from '../storage/db';
 import { GraphService } from '../../features/connections/services/graphService';
 import type { ChatSession } from '../../features/intelligence/store/useChatStore';
 import { getSafeAISettings } from '../../shared/types/settings';
+import { parseBackup } from './compactBackup';
 
 const workspaceKey = (key: string) => ['chat_sessions', 'current_session_id', 'note_content', 'note_dual_pane', 'note_width'].includes(key) || key.startsWith('fallingPenHistory_');
 
@@ -58,6 +59,9 @@ export function mergeWorkspace(current: Record<string, any>, incoming: Record<st
     const sessions: ChatSession[] = [...(current.chat_sessions || [])];
     const mapping = new Map<string, string>();
     for (const imported of incoming.chat_sessions || []) {
+        const { id: _id, ...content } = imported;
+        const identical = sessions.find(({ id: _existingId, ...existing }) => JSON.stringify(existing) === JSON.stringify(content));
+        if (identical) { mapping.set(imported.id, identical.id); continue; }
         const previous = sessions.find(s => s.id === imported.id);
         if (previous && JSON.stringify(previous) === JSON.stringify(imported)) { mapping.set(imported.id, imported.id); continue; }
         const id = previous ? crypto.randomUUID() : imported.id;
@@ -77,7 +81,7 @@ export function mergeWorkspace(current: Record<string, any>, incoming: Record<st
             result[target] = merged;
         }
     }
-    if (incoming.note_content && current.note_content && incoming.note_content !== current.note_content) {
+    if (incoming.note_content && current.note_content && incoming.note_content !== current.note_content && !sessions.some(s => s.messages.length === 0 && s.noteContent === incoming.note_content)) {
         sessions.push({ id: crypto.randomUUID(), title: '导入的独立笔记', createdAt: Date.now(), updatedAt: Date.now(), messages: [], noteContent: incoming.note_content });
     } else if (!current.note_content && incoming.note_content !== undefined) result.note_content = incoming.note_content;
     for (const key of ['note_dual_pane', 'note_width']) if (current[key] === undefined && incoming[key] !== undefined) result[key] = incoming[key];
@@ -86,7 +90,8 @@ export function mergeWorkspace(current: Record<string, any>, incoming: Record<st
 }
 
 export async function importPortableBackup(raw: unknown) {
-    const data = validatePortableBackup(raw);
+    const legacy = raw as { v?: number } | null;
+    const data = validatePortableBackup(legacy?.v === 2 ? { ...parseBackup(raw), version: 1 } : raw);
     const current = await chrome.storage.local.get<Record<string, any>>(null);
     const merged = mergeWorkspace(current, data.workspace);
     let tweetsAdded = 0;

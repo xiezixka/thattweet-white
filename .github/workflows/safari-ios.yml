@@ -21,6 +21,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run typecheck && npm test && npm run build:safari
+      - run: node scripts/validate-safari.mjs
       - run: npm run package:safari
       - name: Compile iPhone simulator app without signing
         run: node scripts/build-safari-simulator.mjs

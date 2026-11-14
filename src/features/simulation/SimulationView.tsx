@@ -143,11 +143,11 @@ export const SimulationView: React.FC = () => {
     useEffect(() => { runSimulation(); }, []);
 
     return (
-        <div className="flex h-screen w-full bg-[#050507] text-zinc-300 overflow-hidden font-sans">
+        <div className="simulation-workspace flex h-screen w-full bg-[#050507] text-zinc-300 overflow-hidden font-sans">
             {/* Main Content: Split View */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="simulation-columns flex-1 flex overflow-hidden">
                 {/* List View */}
-                <div className="w-[320px] flex flex-col border-r border-white/5 bg-zinc-900/10 relative shrink-0">
+                <div className="simulation-list w-[320px] flex flex-col border-r border-white/5 bg-zinc-900/10 relative shrink-0">
                     {/* List Header */}
                     <div className="p-4 space-y-4 border-b border-white/5 bg-zinc-900/20 backdrop-blur-sm z-20">
                         <div className="flex items-center justify-between">
@@ -215,7 +215,7 @@ export const SimulationView: React.FC = () => {
                 </div>
 
                 {/* Detail Insight View */}
-                <div className="flex-1 overflow-hidden bg-[#050507] relative">
+                <div className="simulation-detail flex-1 overflow-hidden bg-[#050507] relative">
                     {/* Background Grid Decoration */}
                     <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
                         style={{
@@ -234,7 +234,7 @@ export const SimulationView: React.FC = () => {
                                 initial={{ opacity: 0, x: 10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -10 }}
-                                className="h-full flex flex-col p-6 gap-6 overflow-hidden max-h-screen"
+                                className="simulation-result h-full flex flex-col p-6 gap-6 overflow-hidden max-h-screen"
                             >
                                 {/* 1. New Compact Top Metrics Bar (Glassmorphic) */}
                                 <div className="flex-none flex items-stretch gap-px bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden backdrop-blur-md h-16">

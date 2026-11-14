@@ -8,7 +8,7 @@ const resources = resolve(root, 'dist_safari');
 const output = resolve(root, process.argv[2] || 'artifacts/safari-ios');
 if (!existsSync(resolve(resources, 'manifest.json'))) throw new Error('先运行 npm run build:safari。');
 const manifest = JSON.parse(readFileSync(resolve(resources, 'manifest.json'), 'utf8'));
-if (manifest.background?.persistent !== false || manifest.background?.service_worker) throw new Error('iOS 构建必须使用非持久后台页面。');
+if (manifest.manifest_version !== 3 || manifest.background?.persistent === true || manifest.background?.service_worker || !manifest.background?.scripts?.length || manifest.background?.type) throw new Error('iOS 构建必须使用 MV3 非持久后台页面。');
 const tool = ['safari-web-extension-packager', 'safari-web-extension-converter'].find(name =>
     spawnSync('xcrun', ['--find', name], { encoding: 'utf8' }).status === 0);
 if (!tool) {

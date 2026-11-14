@@ -6,6 +6,7 @@ import { useIntelligenceStore } from './store/useIntelligenceStore';
 import { useChatStore } from './store/useChatStore';
 import { cn } from '../../shared/utils/cn';
 import { Tweet } from '../../shared/types/tweet';
+import { useSearchStore } from './store/useSearchStore';
 
 export const IntelligenceView: React.FC = () => {
     const { isNoteOpen, noteWidth, setNoteWidth, dualPane, loadNote } = useIntelligenceStore();
@@ -84,7 +85,7 @@ export const IntelligenceView: React.FC = () => {
     if (!ready) return <p role="status" className="p-6">正在读取聊天和笔记…</p>;
     return (
         <div ref={containerRef} data-mobile-panel={panel} className="intelligence-workspace h-full bg-[#0d0d0d] text-zinc-200 flex overflow-hidden no-scrollbar">
-            <nav className="intelligence-tabs" aria-label="入微工作区">
+            <nav className="intelligence-tabs" aria-label="聊天与笔记工作区">
                 {(['history', 'chat', 'note'] as const).map((name, i) => <button key={name} type="button" aria-pressed={panel === name} onClick={() => {
                     setPanel(name);
                     if (name !== 'history') useIntelligenceStore.getState().setNoteOpen(name === 'note');
@@ -97,7 +98,7 @@ export const IntelligenceView: React.FC = () => {
             <div className="intelligence-main flex-1 flex relative min-w-0 bg-[#0d0d0d]">
                 {/* 2a. Chat Area */}
                 <div className="intelligence-chat flex-1 flex flex-col min-w-[900px] relative z-0">
-                    <ChatArea citationToAttach={citation} onCitationAttached={() => setCitation(null)} />
+                    <ChatArea citationToAttach={citation} onCitationAttached={() => setCitation(null)} onOpenLibrary={() => { useSearchStore.getState().setActiveTab('library'); setPanel('history'); }} />
                 </div>
 
                 {/* Resizer Handle */}
@@ -125,7 +126,7 @@ export const IntelligenceView: React.FC = () => {
                     )}
                     style={{
                         width: isNoteOpen ? `${noteWidth}px` : 0,
-                        transition: isDragging ? 'none' : 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                        transition: 'none'
                     }}
                 >
                     <NoteEditor />

@@ -11,7 +11,7 @@ import { AISettings, DEFAULT_AI_SETTINGS } from '../../../../shared/types/settin
 import { Tweet } from '../../../../shared/types/tweet';
 import { useTranslation } from '../../../../shared/hooks/useTranslation';
 
-export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAttached?: () => void }> = ({ citationToAttach, onCitationAttached }) => {
+export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAttached?: () => void; onOpenLibrary?: () => void }> = ({ citationToAttach, onCitationAttached, onOpenLibrary }) => {
     const { currentSession, sendMessage, isGenerating, statusMessage, createSession, searchMode, setSearchMode, loadSessions } = useChatStore();
     const { isNoteOpen, toggleNote, insertToNote } = useIntelligenceStore();
     const { t } = useTranslation();
@@ -375,7 +375,7 @@ export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAtt
                     )}
 
                     <div className="flex items-end p-2 px-3 gap-2">
-                        <button className="flex items-center justify-center w-8 h-8 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all mb-1 shrink-0">
+                        <button onClick={onOpenLibrary} aria-label="选择要附加的推文" className="flex items-center justify-center w-8 h-8 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all mb-1 shrink-0">
                             <Plus size={20} strokeWidth={2.5} />
                         </button>
 

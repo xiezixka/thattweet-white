@@ -131,6 +131,7 @@ export class AIJobQueue {
         console.log(`[AIJobQueue] Forcing immediate analysis for ${tweetId}`);
 
         try {
+            await db.tweets.update(tweetId, { aiStatus: ProcessStatus.Processing, aiProcessingStartedAt: Date.now() });
             const result = await TweetAnalyzer.analyze(tweet, settings);
             if (result) {
                 await db.tweets.update(tweet.id, {

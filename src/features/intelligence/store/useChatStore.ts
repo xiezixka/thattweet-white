@@ -129,7 +129,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     createSession: () => {
-        useIntelligenceStore.getState().setNoteContent('');
+        const initialNote = get().currentSessionId ? '' : useIntelligenceStore.getState().noteContent;
+        useIntelligenceStore.getState().setNoteContent(initialNote);
         const newId = crypto.randomUUID();
         const newSession: ChatSession = {
             id: newId,
@@ -137,7 +138,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             createdAt: Date.now(),
             updatedAt: Date.now(),
             messages: [],
-            noteContent: ""
+            noteContent: initialNote
         };
         set(state => ({
             sessions: [newSession, ...state.sessions],

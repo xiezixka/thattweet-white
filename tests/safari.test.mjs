@@ -25,6 +25,7 @@ function backupHarness(storage = {}, tweets = [], users = []) {
         '../../features/connections/services/graphService': { GraphService: { processTweet: async () => {} } },
         '../../shared/types/settings': { getSafeAISettings: v => v },
         idb: {},
+        './compactBackup': { parseBackup: () => { throw new Error('Unexpected compact backup in this fixture'); } },
     };
     const api = load('../src/core/backup/portableBackup.ts', {
         require: name => { assert.ok(name in modules, name); return modules[name]; },
@@ -73,6 +74,8 @@ test('conflicting session IDs, notes and history versions survive a merge', () =
     assert.equal(merged.note_content, undefined);
     assert.ok(merged.chat_sessions.some(s => s.noteContent === '电脑笔记'));
     assert.equal(current.chat_sessions.length, 1);
+    const repeated = h.mergeWorkspace({ ...current, ...merged }, incoming);
+    assert.equal(repeated.chat_sessions.length, 3);
 });
 
 test('legacy tweet backup import adds missing records without overwriting current annotations', async () => {
