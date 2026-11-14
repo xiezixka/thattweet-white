@@ -21,6 +21,7 @@ import { VisionService } from '../../core/vision/visionService';
 import { version } from '../../../package.json';
 import { isSafariIOS } from '../../shared/utils/platform';
 import { SafariBackupPanel } from './SafariBackupPanel';
+import { PreparedDownloadLink, usePreparedDownload } from '../../shared/components/PreparedDownload';
 
 type SettingsGroup = 'neural' | 'memory' | 'system';
 
@@ -66,6 +67,7 @@ export const SettingsView: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const restoreInputRef = useRef<HTMLInputElement>(null);
     const [includeSettings, setIncludeSettings] = useState(false);
+    const authorDownload = usePreparedDownload();
     const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
     const [embedStats, setEmbedStats] = useState<any>(null);
     const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,10 +270,16 @@ export const SettingsView: React.FC = () => {
     // Export tweets by specific author
     const handleAuthorExport = async () => {
         if (!selectedAuthorId) return;
+        authorDownload.clear();
 
         try {
             setStatus('EXPORTING...');
             const data = await TweetRepository.exportByAuthor(selectedAuthorId);
+            if (isSafariIOS) {
+                authorDownload.prepare(JSON.stringify(data, null, 2), `ThatTweet-${data.authorHandle}-${new Date().toISOString().slice(0, 10)}.json`);
+                setStatus('备份已生成，请点击保存');
+                return;
+            }
 
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -753,6 +761,7 @@ export const SettingsView: React.FC = () => {
                                 </>}
 
                                 {/* Export by Author */}
+                                {isSafariIOS && <PreparedDownloadLink file={authorDownload.file} />}
                                 <div className="mt-4 p-6 bg-white/[0.02] border border-white/5 rounded-xl space-y-4">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
@@ -799,7 +808,7 @@ export const SettingsView: React.FC = () => {
                                                 {filteredAuthors.slice(0, 20).map(author => (
                                                     <div
                                                         key={author.id}
-                                                        onClick={() => setSelectedAuthorId(author.id)}
+                                                        onClick={() => { setSelectedAuthorId(author.id); authorDownload.clear(); }}
                                                         className={cn(
                                                             "flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all",
                                                             selectedAuthorId === author.id

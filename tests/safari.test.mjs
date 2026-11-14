@@ -5,10 +5,13 @@ import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 import ts from 'typescript';
 import { create } from 'zustand';
+import * as jsxRuntime from 'react/jsx-runtime';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 function load(path, globals) {
     const { outputText } = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
-        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+        fileName: path,
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
     });
     const exports = {};
     vm.runInNewContext(outputText, { exports, crypto: { randomUUID }, console, ...globals });
@@ -137,4 +140,28 @@ test('new chats preserve an independent note and switching restores each session
     const stored = JSON.parse(local.get('chat_sessions'));
     assert.equal(stored.find(s => s.id === first).noteContent, '第一个会话笔记');
     assert.equal(stored.find(s => s.id === second).noteContent, '第二个会话笔记');
+});
+
+test('async export prepares an explicit download link and can clear sensitive prepared files', async () => {
+    let file;
+    let blob;
+    const modules = {
+        react: { useState: () => [null, value => { file = value; }], useEffect() {} },
+        'react/jsx-runtime': jsxRuntime,
+    };
+    const api = load('../src/shared/components/PreparedDownload.tsx', {
+        Blob, URL: { createObjectURL: value => { blob = value; return 'blob:qa-file'; } },
+        require: name => { assert.ok(name in modules, name); return modules[name]; },
+    });
+    const download = api.usePreparedDownload();
+    download.prepare('{"chat_sessions":[]}', 'backup.json');
+    assert.equal(await blob.text(), '{"chat_sessions":[]}');
+    assert.equal(blob.type, 'application/json');
+    const html = renderToStaticMarkup(api.PreparedDownloadLink({ file }));
+    assert.match(html, /href="blob:qa-file"/);
+    assert.match(html, /download="backup.json"/);
+    assert.match(html, /保存备份文件/);
+    download.clear();
+    assert.equal(file, null);
+    assert.equal(api.PreparedDownloadLink({ file }), null);
 });

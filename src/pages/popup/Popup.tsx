@@ -5,7 +5,8 @@ import { liveQuery } from 'dexie';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { useColorTheme } from '../../shared/hooks/useColorTheme';
 import { TweetRepository } from '../../core/storage/TweetRepository';
-import { isSafariIOS, downloadFile, openDashboard } from '../../shared/utils/platform';
+import { isSafariIOS, openDashboard } from '../../shared/utils/platform';
+import { PreparedDownloadLink, usePreparedDownload } from '../../shared/components/PreparedDownload';
 import { exportPortableBackup } from '../../core/backup/portableBackup';
 
 export default function Popup() {
@@ -15,13 +16,15 @@ export default function Popup() {
   const [recent, setRecent] = useState<{ id: string, text: string, author: string }[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const preparedDownload = usePreparedDownload();
 
   const downloadBackup = async () => {
     setExporting(true);
     setExportError('');
     try {
       if (isSafariIOS) {
-        downloadFile(JSON.stringify(await exportPortableBackup()), `ThatTweet-iPhone-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+        preparedDownload.clear();
+        preparedDownload.prepare(JSON.stringify(await exportPortableBackup()), `ThatTweet-iPhone-${new Date().toISOString().slice(0, 10)}.json`);
         return;
       }
       const data = await TweetRepository.exportAllData();
@@ -95,6 +98,7 @@ export default function Popup() {
 
       {/* Recent Activity */}
       {exportError && <p role="alert" className="text-xs text-red-500 mb-4">{exportError}</p>}
+      {isSafariIOS && <PreparedDownloadLink file={preparedDownload.file} />}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3 px-1">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
