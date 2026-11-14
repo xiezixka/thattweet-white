@@ -1,0 +1,24 @@
+[
+  {
+    "browser": "chrome",
+    "version": "4.5.5",
+    "files": 113,
+    "archive": "ThatTweet-4.5.5-white-chrome.zip",
+    "bytes": 2421452,
+    "sha256": "91775ba1b739f28da65830c7e925afa010c43aa096035902ef1658635591f967",
+    "manifestAndEntryAssets": "passed",
+    "productionExcludesQa": "passed",
+    "themeNotInjectedIntoX": "passed"
+  },
+  {
+    "browser": "firefox",
+    "version": "4.5.5",
+    "files": 112,
+    "archive": "ThatTweet-4.5.5-white-firefox.zip",
+    "bytes": 2420224,
+    "sha256": "6096ee12947cdc0648ccb9d9962a069dd00c1b0dcb0f1154d5c16863a8bfebef",
+    "manifestAndEntryAssets": "passed",
+    "productionExcludesQa": "passed",
+    "themeNotInjectedIntoX": "passed"
+  }
+]

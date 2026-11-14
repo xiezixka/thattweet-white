@@ -5,6 +5,7 @@ import { forceX, forceY, forceManyBody, forceRadial } from 'd3-force';
 import * as THREE from 'three';
 import { useGraphData } from './hooks/useGraphData';
 import { useUIStore } from '../../shared/store/useUIStore';
+import { useSettingsStore } from '../../shared/store/useSettingsStore';
 import { Heart, RefreshCw } from 'lucide-react';
 
 import { GraphSettingsPanel, GraphSettings } from './components/GraphSettingsPanel';
@@ -12,6 +13,11 @@ import { GraphSearch } from './components/GraphSearch';
 
 const ConnectionsView: React.FC = () => {
     const { data, loading } = useGraphData();
+    const isLight = useSettingsStore(state => state.settings.themeMode !== 'dark');
+    const graphBackground = isLight ? '#ffffff' : '#09090b';
+    const graphForeground = isLight ? '#27272a' : '#ffffff';
+    const graphInk = useCallback((opacity: number) =>
+        `rgba(${isLight ? '39, 39, 42' : '255, 255, 255'}, ${isLight ? Math.max(opacity, 0.16) : opacity})`, [isLight]);
     const containerRef = useRef<HTMLDivElement>(null);
     const fgRef = useRef<any>(null);
     const hasInitialZoomRef = useRef(false);
@@ -124,13 +130,13 @@ const ConnectionsView: React.FC = () => {
             const y = Math.random() * 1024;
             const size = Math.random() * 1.5 + 0.2;
             const opacity = Math.random() * 0.4 + 0.1;
-            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+            ctx.fillStyle = graphInk(opacity);
             ctx.beginPath();
             ctx.arc(x, y, size, 0, 2 * Math.PI);
             ctx.fill();
         }
         return canvas;
-    }, []);
+    }, [graphInk]);
 
     // 绘制无限平铺星空
     const drawStarfield = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -181,7 +187,7 @@ const ConnectionsView: React.FC = () => {
                 const x = 32;
                 const y = 32;
                 const gradient = ctx.createRadialGradient(x, y, 4, x, y, r);
-                gradient.addColorStop(0, '#ffffff');
+                gradient.addColorStop(0, graphForeground);
                 gradient.addColorStop(0.3, color);
                 gradient.addColorStop(1, 'rgba(0,0,0,0)');
                 ctx.fillStyle = gradient;
@@ -734,7 +740,7 @@ const ConnectionsView: React.FC = () => {
                                 width={dimensions.w}
                                 height={dimensions.h}
                                 graphData={filteredData}
-                                backgroundColor="#09090b"
+                                backgroundColor={graphBackground}
                                 showNavInfo={false}
                                 enableNodeDrag={false}
                                 enableNavigationControls={true}
@@ -764,13 +770,13 @@ const ConnectionsView: React.FC = () => {
                                             const ctx = canvas.getContext('2d');
                                             if (ctx) {
                                                 // ??????
-                                                ctx.fillStyle = '#18181b';
+                                                ctx.fillStyle = isLight ? '#e4e4e7' : '#18181b';
                                                 ctx.beginPath();
                                                 ctx.arc(64, 64, 60, 0, Math.PI * 2);
                                                 ctx.fill();
 
                                                 // ??????
-                                                ctx.fillStyle = '#a1a1aa';
+                                                ctx.fillStyle = isLight ? '#52525b' : '#a1a1aa';
                                                 ctx.font = 'bold 40px Arial';
                                                 ctx.textAlign = 'center';
                                                 ctx.textBaseline = 'middle';
@@ -793,11 +799,11 @@ const ConnectionsView: React.FC = () => {
 
                                                     // ?????? (????)
                                                     ctx.save();
-                                                    ctx.shadowColor = 'rgba(255, 255, 255, 0.25)'; // ??????
+                                                    ctx.shadowColor = graphInk(0.25); // ??????
                                                     ctx.shadowBlur = 6; // ??????
                                                     ctx.beginPath();
                                                     ctx.arc(64, 64, 60, 0, Math.PI * 2);
-                                                    ctx.fillStyle = '#0a0a0a'; // ???????
+                                                    ctx.fillStyle = isLight ? '#f4f4f5' : '#0a0a0a'; // ???????
                                                     ctx.fill();
                                                     ctx.restore();
 
@@ -809,7 +815,7 @@ const ConnectionsView: React.FC = () => {
                                                     ctx.drawImage(img, 0, 0, 128, 128);
 
                                                     // ???? (????)
-                                                    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; // ??????
+                                                    ctx.strokeStyle = graphInk(0.4); // ??????
                                                     ctx.lineWidth = 2; // ???
                                                     ctx.stroke();
                                                     ctx.restore();
@@ -901,7 +907,7 @@ const ConnectionsView: React.FC = () => {
                                     // 🌟 语义/同好: 青绿色
                                     if (l.linkType === 'semantic') return isHighlighted ? "#00f5d4" : "rgba(0, 245, 212, 0.08)";
 
-                                    return isHighlighted ? "rgba(255, 255, 255, 0.45)" : "rgba(255, 255, 255, 0.03)";
+                                    return isHighlighted ? graphInk(0.45) : graphInk(0.03);
                                 }}
                                 linkWidth={link => {
                                     const l = link as any;
@@ -976,7 +982,7 @@ const ConnectionsView: React.FC = () => {
                                 }}
 
                                 // --- 视觉风格: 纯粹 ---
-                                backgroundColor="#09090b"
+                                backgroundColor={graphBackground}
 
                                 // --- 自定义渲染 ---
                                 nodeCanvasObject={(node: any, ctx, globalScale) => {
@@ -1005,9 +1011,9 @@ const ConnectionsView: React.FC = () => {
                                     let temporalPulse = 0;
 
                                     // 氛围色计算
-                                    let auraColor = 'rgba(255,255,255,0.08)';
+                                    let auraColor = graphInk(0.08);
                                     if (node.type === 'user') auraColor = 'rgba(255, 255, 240, 0.12)'; // 暖白色/微金
-                                    if (node.type === 'tag') auraColor = 'rgba(255, 255, 255, 0.05)';
+                                    if (node.type === 'tag') auraColor = graphInk(0.05);
                                     if (node.data?.aiScore > 80) auraColor = 'rgba(234, 179, 8, 0.15)'; // 优质内容金光
 
                                     // 1. User ??: ???? + ?? (???)
@@ -1037,7 +1043,7 @@ const ConnectionsView: React.FC = () => {
 
                                         // 发光效果使用动画插值
                                         if (isHover || glowIntensity > 0.01) {
-                                            ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+                                            ctx.shadowColor = graphInk(0.9);
                                             ctx.shadowBlur = ((isHover ? 25 : 18 * glowIntensity)) / globalScale;
                                         }
 
@@ -1067,16 +1073,16 @@ const ConnectionsView: React.FC = () => {
                                                 ctx.clip();
                                                 ctx.drawImage(cachedImg, x - r, y - r, size, size);
                                             } else if (cachedImg === 'error') {
-                                                ctx.fillStyle = '#18181b';
+                                                ctx.fillStyle = isLight ? '#e4e4e7' : '#18181b';
                                                 ctx.fill();
-                                                ctx.fillStyle = '#a1a1aa';
+                                                ctx.fillStyle = isLight ? '#52525b' : '#a1a1aa';
                                                 ctx.font = `bold ${Math.max(10, size * 0.4)}px sans-serif`;
                                                 ctx.textAlign = 'center';
                                                 ctx.textBaseline = 'middle';
                                                 const initial = (node.label || '?').charAt(0).toUpperCase();
                                                 ctx.fillText(initial, x, y);
                                             } else {
-                                                ctx.fillStyle = '#18181b';
+                                                ctx.fillStyle = isLight ? '#e4e4e7' : '#18181b';
                                                 ctx.fill();
                                             }
                                         }
@@ -1088,7 +1094,7 @@ const ConnectionsView: React.FC = () => {
                                         ctx.arc(x, y, r, 0, 2 * Math.PI);
                                         // 使用动画插值的边框透明度
                                         const ringAlpha = 0.2 + glowIntensity * 0.6;
-                                        const ringColor = isHover ? '#fff' : `rgba(255, 255, 255, ${ringAlpha})`;
+                                        const ringColor = isHover ? graphForeground : graphInk(ringAlpha);
                                         ctx.strokeStyle = ringColor;
                                         ctx.lineWidth = ((isHover || glowIntensity > 0.1) ? (1 + glowIntensity * 2) : 1) / globalScale;
                                         ctx.stroke();
@@ -1106,13 +1112,13 @@ const ConnectionsView: React.FC = () => {
                                             ctx.textBaseline = 'middle';
                                             // 使用动画插值的文字透明度
                                             const textAlpha = 0.7 + glowIntensity * 0.25;
-                                            const textColor = isHover ? '#fff' : `rgba(255, 255, 255, ${textAlpha})`;
+                                            const textColor = isHover ? graphForeground : graphInk(textAlpha);
                                             ctx.fillStyle = textColor;
                                             ctx.fillText(node.label, x, y);
                                         } else {
                                             ctx.beginPath();
                                             const dotAlpha = 0.1 + glowIntensity * 0.2;
-                                            ctx.fillStyle = `rgba(255,255,255,${dotAlpha})`;
+                                            ctx.fillStyle = graphInk(dotAlpha);
                                             ctx.arc(x, y, (3 * s) / globalScale, 0, 2 * Math.PI);
                                             ctx.fill();
                                         }
@@ -1129,7 +1135,7 @@ const ConnectionsView: React.FC = () => {
                                     // 使用动画插值的填充色
                                     let fillColor = node.color || '#404040';
                                     if (isHover) {
-                                        fillColor = '#fff';
+                                        fillColor = graphForeground;
                                     } else if (glowIntensity > 0.01) {
                                         // 渐变到白色
                                         const r = Math.round(64 + glowIntensity * (255 - 64));
@@ -1140,7 +1146,7 @@ const ConnectionsView: React.FC = () => {
                                     ctx.fillStyle = fillColor;
 
                                     if (isHover || glowIntensity > 0.01 || temporalPulse > 0.1) {
-                                        ctx.shadowColor = temporalPulse > 0.1 ? 'rgba(59, 130, 246, 0.8)' : 'rgba(255, 255, 255, 0.8)';
+                                        ctx.shadowColor = temporalPulse > 0.1 ? 'rgba(59, 130, 246, 0.8)' : graphInk(0.8);
                                         ctx.shadowBlur = ((isHover ? 15 : 12 * (glowIntensity + temporalPulse))) / globalScale;
                                     }
                                     ctx.fill();
@@ -1167,13 +1173,13 @@ const ConnectionsView: React.FC = () => {
 
                                 // 连线配置
                                 linkColor={(link: any) => {
-                                    if (highlightNodes.size === 0) return "rgba(255,255,255,0.05)";
+                                    if (highlightNodes.size === 0) return graphInk(0.05);
                                     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
                                     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
                                     const linkKey = `${sourceId}-${targetId}`;
                                     const reverseLinkKey = `${targetId}-${sourceId}`;
                                     const isLinkHighlighted = highlightLinks.has(linkKey) || highlightLinks.has(reverseLinkKey);
-                                    return isLinkHighlighted ? "rgba(255, 255, 255, 0.4)" : "rgba(255,255,255,0.02)";
+                                    return isLinkHighlighted ? graphInk(0.4) : graphInk(0.02);
                                 }}
                                 linkWidth={0.6}
                                 // 🌟 动态粒子流：仅在开启且高亮时显示
@@ -1195,7 +1201,7 @@ const ConnectionsView: React.FC = () => {
                                     return isHighlighted ? 0.012 : 0.003;
                                 }}
                                 linkDirectionalParticleWidth={2}
-                                linkDirectionalParticleColor={() => "rgba(255,255,255,0.6)"}
+                                linkDirectionalParticleColor={() => graphInk(0.6)}
 
                                 d3VelocityDecay={0.4}
                                 d3AlphaDecay={0.01}

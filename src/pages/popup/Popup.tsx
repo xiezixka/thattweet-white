@@ -3,11 +3,35 @@ import { Bird, ArrowRight, Download, History } from 'lucide-react';
 import { db } from '../../core/storage/db';
 import { liveQuery } from 'dexie';
 import { useTranslation } from '../../shared/hooks/useTranslation';
+import { useColorTheme } from '../../shared/hooks/useColorTheme';
+import { TweetRepository } from '../../core/storage/TweetRepository';
 
 export default function Popup() {
+  useColorTheme();
   const { t } = useTranslation();
   const [count, setCount] = useState(0);
   const [recent, setRecent] = useState<{ id: string, text: string, author: string }[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+
+  const downloadBackup = async () => {
+    setExporting(true);
+    setExportError('');
+    try {
+      const data = await TweetRepository.exportAllData();
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ThatTweet-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error('[ThatTweet] Backup download failed:', error);
+      setExportError('备份下载失败，请在管理页面重试。');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     // 实时监听总数
@@ -57,13 +81,14 @@ export default function Popup() {
             {count} <span className="text-xs font-normal text-zinc-600">{t('popup_unit')}</span>
           </div>
         </div>
-        <button className="absolute right-5 top-5 p-2 rounded-lg bg-zinc-800 text-zinc-500 hover:text-white transition-colors">
+        <button onClick={downloadBackup} disabled={exporting} aria-label="下载推文备份" title="下载推文备份" className="absolute z-20 right-5 top-5 p-2 rounded-lg bg-zinc-800 text-zinc-500 hover:text-white transition-colors disabled:opacity-50">
           <Download size={18} />
         </button>
         <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-brand/5 rounded-full blur-2xl group-hover:bg-brand/10 transition-colors" />
       </div>
 
       {/* Recent Activity */}
+      {exportError && <p role="alert" className="text-xs text-red-500 mb-4">{exportError}</p>}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3 px-1">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">

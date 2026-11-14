@@ -3,6 +3,8 @@ import { Sidebar } from './Sidebar';
 import { useUIStore } from '../../store/useUIStore';
 import { useTranslation } from '../../hooks/useTranslation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { version } from '../../../../package.json';
+import { Menu } from 'lucide-react';
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -14,6 +16,14 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const [isPinned, setIsPinned] = React.useState(false);
     const hoverTimeoutRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        setIsHovered(false);
+    }, [activeView]);
+
+    React.useEffect(() => () => {
+        if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
+    }, []);
 
     const handleMouseEnter = () => {
         if (isPinned) return; // 已固定时不响应悬停
@@ -50,6 +60,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             {/* 悬浮模式：作为 Overlay 浮层 */}
             {!isPinned && (
                 <>
+                    <button
+                        type="button"
+                        aria-label="打开导航菜单"
+                        aria-expanded={isHovered}
+                        className="fixed left-3 bottom-12 z-[70] w-11 h-11 flex items-center justify-center rounded-xl bg-zinc-900 border border-white/20 text-zinc-200 shadow-md"
+                        onClick={() => setIsHovered(value => !value)}
+                    ><Menu size={20} /></button>
                     {/* 边缘触发感应区 (最左侧 16px) */}
                     <div
                         className="fixed left-0 top-0 bottom-0 w-4 z-[60]"
@@ -82,6 +99,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeView}
+                        data-view={activeView}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
@@ -95,7 +113,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 </AnimatePresence>
 
                 {/* 全局状态条 (极简) */}
-                <footer className="h-8 border-t border-white/5 bg-black/20 backdrop-blur-sm flex items-center px-6 text-[10px] text-zinc-600 gap-4">
+                <footer className="h-8 shrink-0 border-t border-white/5 bg-black/20 backdrop-blur-sm flex items-center px-3 md:px-6 text-[10px] text-zinc-600 gap-3 md:gap-4">
                     <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         <span className="uppercase tracking-wider font-medium">{t('status_interceptor_active')}</span>
@@ -105,7 +123,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         <span className="uppercase tracking-wider font-medium">{t('status_ai_idle')}</span>
                     </div>
                     <div className="flex-1" />
-                    <span className="opacity-40">{t('status_version_prefix')}4.5.3</span>
+                    <span className="opacity-40">{t('status_version_prefix')}{version}</span>
                 </footer>
             </main>
         </div>

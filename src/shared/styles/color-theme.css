@@ -1,0 +1,122 @@
+/* Shared only by Options and Popup. Do not import into the content script. */
+:root {
+    color-scheme: dark;
+    --theme-canvas: #09090b;
+    --theme-surface: #0a0a0a;
+    --theme-foreground: #fafafa;
+    --theme-muted: #a1a1aa;
+}
+
+:root[data-color-theme="light"] {
+    color-scheme: light;
+    /* The existing utilities use dark surfaces and light ink. Remap those roles. */
+    --color-white: #18181b;
+    --color-black: #fff;
+    --color-zinc-50: #09090b;
+    --color-zinc-100: #18181b;
+    --color-zinc-200: #27272a;
+    --color-zinc-300: #3f3f46;
+    --color-zinc-400: #52525b;
+    --color-zinc-500: #5f5f69;
+    --color-zinc-600: #64646e;
+    --color-zinc-700: #d4d4d8;
+    --color-zinc-800: #e4e4e7;
+    --color-zinc-900: #f4f4f5;
+    --color-zinc-950: #fff;
+    --color-brand: #0877bd;
+    --color-brand-muted: #0877bd22;
+    --color-glass-bg: #fff;
+    --color-glass-border: #dedee3;
+    --theme-canvas: #fff;
+    --theme-surface: #fff;
+    --theme-foreground: #18181b;
+    --theme-muted: #64646e;
+    background: var(--theme-canvas);
+    color: var(--theme-foreground);
+}
+
+:root[data-color-theme="light"] body {
+    background: var(--theme-canvas);
+    color: var(--theme-foreground);
+    caret-color: var(--color-brand);
+}
+
+/* Literal backgrounds are outside Tailwind's neutral palette. */
+:root[data-color-theme="light"] :is(
+    [class~="bg-[#050505]"], [class~="bg-[#050507]"], [class~="bg-[#080808]"],
+    [class~="bg-[#0A0A0A]"], [class~="bg-[#0a0a0a]"], [class~="bg-[#0c0c0c]"],
+    [class~="bg-[#0d0d0d]"], [class~="bg-[#0f0f0f]"], [class~="bg-[#212121]"]
+) { background-color: var(--theme-surface); }
+
+:root[data-color-theme="light"] :is(
+    [class~="bg-[#0a0a0a]/80"], [class~="bg-[#0d0d0d]/90"], [class~="bg-[#0f0f0f]/95"]
+) { background-color: color-mix(in srgb, var(--theme-surface) 95%, transparent); }
+
+:root[data-color-theme="light"] [class~="focus-within:bg-[#262626]"]:focus-within {
+    background-color: #f4f4f5;
+}
+
+:root[data-color-theme="light"] [class~="from-[#18181b]"] { --tw-gradient-from: #fafafa; }
+:root[data-color-theme="light"] [class~="from-[#0a0a0b]"] { --tw-gradient-from: #fafafa; }
+:root[data-color-theme="light"] [class~="via-[#09090b]"] { --tw-gradient-via: #fff; }
+:root[data-color-theme="light"] :is([class~="to-[#000000]"], [class~="to-[#050505]"]) { --tw-gradient-to: #fff; }
+
+:root[data-color-theme="light"] :is(.glass-card, .glass-panel) {
+    background-color: var(--theme-surface);
+    border-color: #dedee3;
+    --tw-shadow-color: #18181b0d;
+}
+:root[data-color-theme="light"] .glass-card:hover { border-color: #a1a1aa; }
+:root[data-color-theme="light"] aside { box-shadow: 4px 0 20px #18181b0a; }
+:root[data-color-theme="light"] input.shadow-2xl { box-shadow: 0 5px 18px #18181b0a; }
+
+/* Small secondary copy stays legible on white rather than inheriting low alpha. */
+:root[data-color-theme="light"] :is(
+    [class~="text-white/10"], [class~="text-white/20"], [class~="text-white/30"],
+    [class~="text-white/40"], [class~="text-white/50"], [class~="text-white/60"],
+    [class~="text-white/70"], [class~="text-white/80"],
+    [class~="text-zinc-700"], [class~="text-zinc-800"]
+) { color: var(--theme-muted); }
+
+:root[data-color-theme="light"] :is(input, textarea)::placeholder { color: var(--theme-muted); opacity: 1; }
+:root[data-color-theme="light"] :is(button, a, input, textarea, select):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 3px;
+}
+:root[data-color-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb { background: #a1a1aa; }
+:root[data-color-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #71717a; }
+:root[data-color-theme="light"] ::selection { background: #d6eefe; color: #18181b; }
+
+/* Semantic ink needs more contrast on a light surface; fills retain brand hues. */
+:root[data-color-theme="light"] :is([class~="text-amber-400"], [class~="text-amber-500"], [class~="text-yellow-400"], [class~="text-yellow-500"]) { color: #8a5700; }
+:root[data-color-theme="light"] :is([class~="text-blue-400"], [class~="text-blue-500"], [class~="text-sky-400"], [class~="text-cyan-400"]) { color: #086aa6; }
+:root[data-color-theme="light"] :is([class~="text-emerald-400"], [class~="text-emerald-500"], [class~="text-green-400"]) { color: #08764f; }
+:root[data-color-theme="light"] :is([class~="text-rose-400"], [class~="text-red-400"], [class~="text-pink-400"]) { color: #bb264b; }
+
+/* Media controls keep white ink over dark scrims; photographs are never filtered. */
+:root[data-color-theme="light"] .media-surface {
+    color-scheme: dark;
+    --color-white: #fff;
+    --color-black: #000;
+    --color-zinc-100: #f4f4f5;
+    --color-zinc-200: #e4e4e7;
+    --color-zinc-300: #d4d4d8;
+    --color-zinc-400: #a1a1aa;
+    --color-zinc-500: #71717a;
+    --color-zinc-600: #52525b;
+    --color-zinc-700: #3f3f46;
+    --color-zinc-800: #27272a;
+    --color-zinc-900: #18181b;
+    --color-zinc-950: #09090b;
+    --theme-surface: #0a0a0a;
+    --theme-foreground: #fafafa;
+    --theme-muted: #a1a1aa;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root :is(*, *::before, *::after) {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}

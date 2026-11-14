@@ -275,12 +275,13 @@ export const TweetRepository = {
      * 导入数据
      */
     async importData(data: any) {
-        return await db.transaction('rw', [db.tweets, db.users], async () => {
+        return await db.transaction('rw', [db.tweets, db.users, db.graphEdges], async () => {
             if (data.users && Array.isArray(data.users)) {
                 await db.users.bulkPut(data.users);
             }
             if (data.tweets && Array.isArray(data.tweets)) {
                 await db.tweets.bulkPut(data.tweets);
+                for (const tweet of data.tweets) await GraphService.processTweet(tweet);
             }
         });
     },
@@ -293,14 +294,15 @@ export const TweetRepository = {
         const tweetCount = await db.tweets.count();
         const userCount = await db.users.count();
 
-        await db.transaction('rw', [db.tweets, db.users, db.graphEdges, db.tagMappings], async () => {
+        await db.transaction('rw', [db.tweets, db.users, db.graphEdges, db.tagMappings, db.embeddings], async () => {
             await db.tweets.clear();
             await db.users.clear();
             await db.graphEdges.clear();
             await db.tagMappings.clear();
+            await db.embeddings.clear();
         });
 
-        console.log(`[TweetRepository] Cleared all data: ${tweetCount} tweets, ${userCount} users, and all graph data.`);
+        console.log(`[TweetRepository] Cleared all data: ${tweetCount} tweets, ${userCount} users, graph data, and embeddings.`);
         return { tweets: tweetCount, users: userCount };
     }
 

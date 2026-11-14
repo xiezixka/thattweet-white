@@ -50,6 +50,7 @@ const domObserver = new DomObserver(shouldSaveTweet);
  * 监听来自拦截器的自定义事件
  */
 window.addEventListener('thattweet-tweet-data', (event: any) => {
+  if (!Array.isArray(event.detail?.tweets) || !Array.isArray(event.detail?.users)) return;
   const { tweets, users } = event.detail;
 
   // Filter tweets based on current page context (Enable saving replies!)

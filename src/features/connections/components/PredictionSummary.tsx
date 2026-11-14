@@ -96,8 +96,8 @@ export const PredictionSummary: React.FC<Props> = ({ tweet }) => {
                     color="bg-blue-500"
                 />
                 <ProbBar
-                    label="P(Viral)"
-                    value={result.components.viralPotential}
+                    label="P(Repost)"
+                    value={result.components.repostProb}
                     icon={<TrendingUp size={12} />}
                     color="bg-emerald-500"
                 />

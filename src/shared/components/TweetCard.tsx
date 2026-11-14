@@ -297,7 +297,7 @@ export const TweetCard: React.FC<TweetCardProps> = React.memo(({ tweet, author, 
 
             {/* Media Area */}
             {hasMedia && (
-                <div className="relative group/media mt-1">
+                <div className="media-surface relative group/media mt-1">
                     <div
                         className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar rounded-xl bg-zinc-900/50 border border-white/5 transition-colors group-hover:border-white/10"
                         onScroll={(e) => {

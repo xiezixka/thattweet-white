@@ -39,7 +39,7 @@ async function getSettings(): Promise<AISettings> {
 async function getSyncState(): Promise<SyncState> {
     return new Promise((resolve) => {
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            chrome.storage.local.get([SYNC_STATE_KEY], (res) => {
+            chrome.storage.local.get<{ embedding_sync_state?: SyncState }>([SYNC_STATE_KEY], (res) => {
                 resolve(res[SYNC_STATE_KEY] || { lastSyncAt: 0, isRunning: false });
             });
         } else {

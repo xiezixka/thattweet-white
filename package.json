@@ -1,6 +1,6 @@
 {
   "name": "thattweet-vite",
-  "version": "4.5.4",
+  "version": "4.5.5",
   "description": "ThatTweet - A powerful twitter backup and intelligence tool.",
   "license": "MIT",
   "repository": {
@@ -13,7 +13,10 @@
     "build:firefox": "vite build --config vite.config.firefox.ts",
     "dev": "nodemon --config nodemon.chrome.json",
     "dev:chrome": "nodemon --config nodemon.chrome.json",
-    "dev:firefox": "nodemon --config nodemon.firefox.json"
+    "dev:firefox": "nodemon --config nodemon.firefox.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "preview:ui": "vite --config qa/vite.config.ts"
   },
   "type": "module",
   "dependencies": {
@@ -73,5 +76,8 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vite-tsconfig-paths": "^5.1.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

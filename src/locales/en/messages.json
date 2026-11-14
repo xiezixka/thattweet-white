@@ -1,6 +1,6 @@
 {
   "extName": {
-    "message": "ThatTweet"
+    "message": "ThatTweet White"
   },
   "extDescription": {
     "message": "Intelligence agency for your captured tweets."
@@ -439,5 +439,248 @@
   },
   "select_author_first": {
     "message": "Select an author first"
+  },
+  "btn_docs": {
+    "message": "Documentation"
+  },
+  "delete": {
+    "message": "Delete"
+  },
+  "edit": {
+    "message": "Edit"
+  },
+  "desc_embedding_model": {
+    "message": "Model used to convert text into embeddings"
+  },
+  "desc_endpoint": {
+    "message": "Full API endpoint for your provider"
+  },
+  "desc_reranker_model": {
+    "message": "Model used to rerank search results"
+  },
+  "feed_end_reached": {
+    "message": "You have reached the end"
+  },
+  "int_bookmark": {
+    "message": "Bookmarks"
+  },
+  "int_note_editor": {
+    "message": "Note editor"
+  },
+  "label_embedding_model": {
+    "message": "Embedding model"
+  },
+  "label_endpoint": {
+    "message": "API endpoint"
+  },
+  "label_reranker_model": {
+    "message": "Reranker model"
+  },
+  "pipeline_arch": {
+    "message": "Processing pipeline"
+  },
+  "placeholder_new_tag": {
+    "message": "New tag"
+  },
+  "section_taxonomy": {
+    "message": "Tag management"
+  },
+  "status_enabled": {
+    "message": "Enabled"
+  },
+  "system_about_desc": {
+    "message": "Save, organize, and search your tweets locally."
+  },
+  "system_connect_title": {
+    "message": "Project and documentation"
+  },
+  "system_paused": {
+    "message": "Paused"
+  },
+  "system_sponsor_desc": {
+    "message": "If this tool helps you, consider supporting the original author."
+  },
+  "system_sponsor_title": {
+    "message": "Support the original author"
+  },
+  "backup_manual_desc": {
+    "message": "Download a complete data backup now"
+  },
+  "backup_manual_title": {
+    "message": "Manual backup"
+  },
+  "btn_backup_download": {
+    "message": "Download backup"
+  },
+  "btn_backup_upload": {
+    "message": "Restore backup"
+  },
+  "btn_reset_default": {
+    "message": "Reset to default instructions"
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "confirm_delete_engine": {
+    "message": "Delete this provider?"
+  },
+  "desc_auto_backup": {
+    "message": "Periodically back up data to local storage"
+  },
+  "desc_directive": {
+    "message": "These instructions guide content relevance throughout the processing pipeline."
+  },
+  "desc_include_settings": {
+    "message": "Includes API keys and personal settings in the backup"
+  },
+  "desc_max_images": {
+    "message": "Maximum images to process for each tweet"
+  },
+  "desc_performance": {
+    "message": "Batch size"
+  },
+  "edit_prompt": {
+    "message": "Configure prompt"
+  },
+  "engine_add_custom": {
+    "message": "Custom"
+  },
+  "engine_add_new": {
+    "message": "Add provider"
+  },
+  "engine_edit": {
+    "message": "Edit configuration"
+  },
+  "engine_empty_title": {
+    "message": "No providers configured"
+  },
+  "engine_hub_title": {
+    "message": "Provider configuration"
+  },
+  "engine_name": {
+    "message": "Instance name"
+  },
+  "engine_primary_label": {
+    "message": "Primary engine"
+  },
+  "engine_provider": {
+    "message": "Service provider"
+  },
+  "engine_status_inactive": {
+    "message": "Inactive"
+  },
+  "engine_test_connection": {
+    "message": "Test connection"
+  },
+  "engine_use_primary": {
+    "message": "Set as primary"
+  },
+  "fallback_global": {
+    "message": "Global default"
+  },
+  "label_auto_backup": {
+    "message": "Automatic backup"
+  },
+  "label_include_settings": {
+    "message": "Include settings"
+  },
+  "label_location": {
+    "message": "Backup location"
+  },
+  "label_max_images": {
+    "message": "Images per tweet"
+  },
+  "label_model": {
+    "message": "Model"
+  },
+  "label_performance": {
+    "message": "Performance"
+  },
+  "label_provider": {
+    "message": "Provider"
+  },
+  "nav_analytics": {
+    "message": "Analytics"
+  },
+  "nav_gallery": {
+    "message": "Gallery"
+  },
+  "nav_memory": {
+    "message": "Memory"
+  },
+  "nav_neural": {
+    "message": "AI engines"
+  },
+  "nav_system": {
+    "message": "System information"
+  },
+  "node_status_active": {
+    "message": "Active"
+  },
+  "node_status_disabled": {
+    "message": "Disabled"
+  },
+  "pipeline_desc": {
+    "message": "Assign a model to each processing stage. Leave empty to use the default."
+  },
+  "pipeline_status_online": {
+    "message": "Online"
+  },
+  "pipeline_title": {
+    "message": "AI workflow"
+  },
+  "placeholder_directive": {
+    "message": "For example: focus on architecture and implementation details…"
+  },
+  "prompt_deploy": {
+    "message": "Apply instructions"
+  },
+  "prompt_hub_title": {
+    "message": "Prompt configuration"
+  },
+  "prompt_placeholder": {
+    "message": "Write your AI system instructions here…"
+  },
+  "prompt_variables": {
+    "message": "Available variables"
+  },
+  "rag_offline": {
+    "message": "Offline mode"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "section_backup": {
+    "message": "Backup and restore"
+  },
+  "section_directive": {
+    "message": "Global instructions"
+  },
+  "section_rag": {
+    "message": "Knowledge base (RAG)"
+  },
+  "select_model": {
+    "message": "Select model"
+  },
+  "setting_api_key": {
+    "message": "API key"
+  },
+  "setting_base_url": {
+    "message": "API endpoint"
+  },
+  "status_disabled": {
+    "message": "Disabled"
+  },
+  "sub_memory": {
+    "message": "Knowledge base and backups"
+  },
+  "sub_neural": {
+    "message": "Engines and processing"
+  },
+  "sub_system": {
+    "message": "Version and support"
+  },
+  "system_active": {
+    "message": "Active"
   }
 }

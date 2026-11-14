@@ -73,7 +73,7 @@ export const ChatArea: React.FC = () => {
     useEffect(() => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             // 获取设置和模型
-            chrome.storage.local.get(['aiSettings', 'availableModels'], (res) => {
+            chrome.storage.local.get<{ aiSettings?: AISettings; availableModels?: string[] }>(['aiSettings', 'availableModels'], (res) => {
                 if (res.aiSettings) setAiSettings(res.aiSettings);
 
                 // 智能合并可用模型：1. 存储在 availableModels 里的 2. settings 各个 provider 缓存里的

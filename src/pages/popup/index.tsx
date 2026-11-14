@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '@pages/popup/index.css';
 import '@assets/styles/tailwind.css';
+import '../../shared/styles/color-theme.css';
 import Popup from '@pages/popup/Popup';
 
 function init() {

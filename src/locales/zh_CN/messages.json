@@ -1,6 +1,6 @@
-﻿{
+{
   "extName": {
-    "message": "ThatTweet 那条推文"
+    "message": "ThatTweet 白色版"
   },
   "extDescription": {
     "message": "记录并分析每一条触动你的推文。"
@@ -1015,5 +1015,68 @@
   },
   "select_author_first": {
     "message": "请先选择一位作者"
+  },
+  "btn_docs": {
+    "message": "使用文档"
+  },
+  "delete": {
+    "message": "删除"
+  },
+  "edit": {
+    "message": "编辑"
+  },
+  "desc_embedding_model": {
+    "message": "用于将文本转换为向量的模型"
+  },
+  "desc_endpoint": {
+    "message": "兼容服务商的完整 API 接口地址"
+  },
+  "desc_reranker_model": {
+    "message": "用于对检索结果重新排序的模型"
+  },
+  "feed_end_reached": {
+    "message": "已浏览全部内容"
+  },
+  "int_bookmark": {
+    "message": "收藏"
+  },
+  "int_note_editor": {
+    "message": "笔记编辑器"
+  },
+  "label_embedding_model": {
+    "message": "向量模型"
+  },
+  "label_endpoint": {
+    "message": "接口地址"
+  },
+  "label_reranker_model": {
+    "message": "重排序模型"
+  },
+  "pipeline_arch": {
+    "message": "处理流水线"
+  },
+  "placeholder_new_tag": {
+    "message": "新增标签"
+  },
+  "section_taxonomy": {
+    "message": "标签管理"
+  },
+  "status_enabled": {
+    "message": "已启用"
+  },
+  "system_about_desc": {
+    "message": "在本地保存、整理和检索你的推文资料。"
+  },
+  "system_connect_title": {
+    "message": "项目与文档"
+  },
+  "system_paused": {
+    "message": "已暂停"
+  },
+  "system_sponsor_desc": {
+    "message": "如果这个工具对你有帮助，可以支持原作者继续维护。"
+  },
+  "system_sponsor_title": {
+    "message": "支持原作者"
   }
 }

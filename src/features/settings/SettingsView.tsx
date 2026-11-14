@@ -9,7 +9,7 @@ import {
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { cn } from '../../shared/utils/cn';
 import { useSettingsStore, SettingsState } from '../../shared/store/useSettingsStore';
-import { AISettings, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
+import { AISettings, DEFAULT_AI_SETTINGS, getSafeAISettings } from '../../shared/types/settings';
 import { AIEngineManager } from './AIEngineManager';
 import { AIPipelineDesigner } from './AIPipelineDesigner';
 import { TweetRepository } from '../../core/storage/TweetRepository';
@@ -18,6 +18,7 @@ import { embeddingSyncManager } from '../intelligence/services/embeddingSyncMana
 import { SyncProgress } from '../intelligence/services/embeddingService';
 import logoPng from '../../assets/img/icon.png';
 import { VisionService } from '../../core/vision/visionService';
+import { version } from '../../../package.json';
 
 type SettingsGroup = 'neural' | 'memory' | 'system';
 
@@ -152,7 +153,7 @@ export const SettingsView: React.FC = () => {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.get(['aiSettings'], (result) => {
                 if (result.aiSettings) {
-                    let loaded = { ...result.aiSettings };
+                    let loaded = getSafeAISettings(result.aiSettings);
 
                     // Legacy Migration
                     const legacy = result.aiSettings as any;
@@ -192,9 +193,13 @@ export const SettingsView: React.FC = () => {
             clearTimeout(autoSaveTimeoutRef.current);
         }
         autoSaveTimeoutRef.current = setTimeout(() => {
-            handleSave(newSettings);
+            handleSave(useSettingsStore.getState().settings);
         }, 5000);
     };
+
+    useEffect(() => () => {
+        if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    }, []);
 
     const handleManualSave = () => {
         if (autoSaveTimeoutRef.current) {
@@ -326,6 +331,10 @@ export const SettingsView: React.FC = () => {
         setStatus('SAVING...');
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             chrome.storage.local.set({ aiSettings: newSettings }, () => {
+                if (chrome.runtime.lastError) {
+                    setStatus('ERROR');
+                    return;
+                }
                 setIsDirty(false);
                 setTimeout(() => setStatus('SAVED'), 300);
                 setTimeout(() => setStatus(''), 2000);
@@ -340,10 +349,10 @@ export const SettingsView: React.FC = () => {
     ];
 
     return (
-        <div className="flex h-full bg-black font-sans selection:bg-white selection:text-black">
+        <div className="flex flex-col md:flex-row h-full min-w-0 bg-black font-sans selection:bg-white selection:text-black">
             {/* --- SIDEBAR --- */}
-            <aside className="w-[260px] border-r border-white/10 flex flex-col bg-black shrink-0 relative z-20">
-                <div className="p-8 pb-10">
+            <aside className="w-full md:w-[260px] border-b md:border-b-0 md:border-r border-white/10 flex flex-col bg-black shrink-0 relative z-20">
+                <div className="hidden md:block p-8 pb-10">
                     <div className="flex items-center gap-3 mb-1">
                         <div className="w-6 h-6 bg-white rounded flex items-center justify-center overflow-hidden p-0.5">
                             <img src={logoPng} className="w-full h-full object-contain" alt="Logo" />
@@ -353,13 +362,13 @@ export const SettingsView: React.FC = () => {
                     <p className="text-[11px] text-zinc-600 font-mono pl-9 tracking-widest">INTELLIGENCE CONSOLE</p>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-2">
+                <nav className="flex md:block md:flex-1 px-3 md:px-4 py-3 md:py-0 gap-2 md:space-y-2">
                     {groups.map((group) => (
                         <button
                             key={group.id}
                             onClick={() => setActiveGroup(group.id as SettingsGroup)}
                             className={cn(
-                                "w-full flex items-center gap-4 px-4 py-4 rounded-xl transition-all duration-300 group relative overflow-hidden",
+                                "flex-1 md:w-full flex items-center justify-center md:justify-start gap-2 md:gap-4 px-2 md:px-4 py-3 md:py-4 rounded-xl transition-all duration-300 group relative overflow-hidden",
                                 activeGroup === group.id
                                     ? "bg-white text-black"
                                     : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"
@@ -368,13 +377,13 @@ export const SettingsView: React.FC = () => {
                             <group.icon size={18} className={cn("relative z-10 transition-colors", activeGroup === group.id ? "text-black" : "text-zinc-600 group-hover:text-zinc-400")} />
                             <div className="text-left relative z-10">
                                 <p className="text-[13px] font-black tracking-[0.1em] leading-tight">{group.label}</p>
-                                <p className={cn("text-[10px] font-mono mt-0.5", activeGroup === group.id ? "text-neutral-500" : "text-zinc-600")}>{group.sub}</p>
+                                <p className={cn("hidden md:block text-[10px] font-mono mt-0.5", activeGroup === group.id ? "text-neutral-500" : "text-zinc-600")}>{group.sub}</p>
                             </div>
                         </button>
                     ))}
                 </nav>
 
-                <div className="p-6 space-y-4">
+                <div className="flex md:block items-center gap-4 px-4 pb-3 md:p-6 md:space-y-4">
                     {/* Save Button */}
                     <button
                         onClick={handleManualSave}
@@ -408,8 +417,8 @@ export const SettingsView: React.FC = () => {
             </aside>
 
             {/* --- MAIN CONTENT --- */}
-            <main className="flex-1 overflow-y-auto no-scrollbar bg-[#050505] relative" ref={scrollContainerRef}>
-                <div className="p-8 min-h-full">
+            <main className="flex-1 min-h-0 min-w-0 overflow-y-auto no-scrollbar bg-[#050505] relative" ref={scrollContainerRef}>
+                <div className="p-4 md:p-8 min-h-full">
 
                     {/* === TAB: NEURAL FORGE === */}
                     {activeGroup === 'neural' && (
@@ -919,7 +928,7 @@ export const SettingsView: React.FC = () => {
                                     <h1 className="text-4xl font-black text-white tracking-widest mb-2">THATTWEET</h1>
                                     <div className="flex items-center gap-3 mb-6">
                                         <div className="px-2 py-1 rounded bg-white/10 border border-white/10 text-[10px] font-mono text-white">
-                                            v1.1.0
+                                            v{version}
                                         </div>
                                         <div className="px-2 py-1 rounded bg-emerald-900/30 border border-emerald-500/30 text-[10px] font-mono text-emerald-500 uppercase">
                                             Stable Channel
@@ -933,6 +942,27 @@ export const SettingsView: React.FC = () => {
                                 {/* Appearance Settings */}
                                 <Card className="border-white/10 space-y-6 md:col-span-2">
                                     <SectionHeader title="界面设置" icon={ScanFace} />
+                                    <Field label="颜色主题" description="默认使用白色背景，也可以切换回原版深色主题。设置会自动保存。">
+                                        <div className="grid grid-cols-2 gap-4" role="group" aria-label="颜色主题">
+                                            {([
+                                                { value: 'light', label: '浅色 · 白底' },
+                                                { value: 'dark', label: '深色 · 原版' }
+                                            ] as const).map(theme => (
+                                                <button
+                                                    key={theme.value}
+                                                    type="button"
+                                                    aria-pressed={settings.themeMode === theme.value}
+                                                    onClick={() => handleChange('themeMode', theme.value)}
+                                                    className={cn(
+                                                        "p-4 rounded-xl border text-sm font-bold transition-colors",
+                                                        settings.themeMode === theme.value
+                                                            ? "bg-brand/10 border-brand text-brand"
+                                                            : "bg-black border-white/10 text-zinc-400 hover:border-brand/50"
+                                                    )}
+                                                >{theme.label}</button>
+                                            ))}
+                                        </div>
+                                    </Field>
                                     <Field label="字体风格" description="选择您喜欢的界面字体风格">
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                             {[

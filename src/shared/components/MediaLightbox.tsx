@@ -16,7 +16,7 @@ export const MediaLightbox: React.FC = () => {
     const { t } = useTranslation();
 
     useEffect(() => {
-        chrome.storage.local.get(['aiSettings'], (res) => {
+        chrome.storage.local.get<{ aiSettings?: { visionProvider?: string } }>(['aiSettings'], (res) => {
             if (res.aiSettings?.visionProvider === 'openrouter') {
                 setProvider('OpenRouter');
             } else {
@@ -92,7 +92,7 @@ export const MediaLightbox: React.FC = () => {
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-950/90 backdrop-blur-2xl animate-in fade-in duration-300 ease-out"
+            className="media-surface fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-950/90 backdrop-blur-2xl animate-in fade-in duration-300 ease-out"
             onClick={closeLightbox}
         >
             {/* Close Button Top Right */}

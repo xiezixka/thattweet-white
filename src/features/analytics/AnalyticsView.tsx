@@ -846,7 +846,7 @@ export const AnalyticsView: React.FC = () => {
                                                                 initial={{ scale: 0.5, opacity: 0 }}
                                                                 animate={{ scale: 1, opacity: 0.4 + ratio * 0.6 }}
                                                                 className="font-black tracking-tight cursor-default hover:text-white transition-colors"
-                                                                style={{ fontSize: `calc(var(--font-fluid-base) * ${1.2 + ratio * 2})`, color: ratio > 0.6 ? '#fff' : 'rgba(255,255,255,0.4)' }}
+                                                                style={{ fontSize: `calc(var(--font-fluid-base) * ${1.2 + ratio * 2})`, color: ratio > 0.6 ? 'var(--theme-foreground)' : 'var(--theme-muted)' }}
                                                             >
                                                                 {tag}
                                                             </motion.span>

@@ -1,3 +1,44 @@
+# ThatTweet 白色优化版 · 4.5.5
+
+基于 [mu-zi-lee/thattweet-vite](https://github.com/mu-zi-lee/thattweet-vite) 的 4.5.4 源码（提交 `8b0c37c`）维护，保留原有推文采集、本地管理、图谱、AI 与笔记功能。
+
+本版默认使用白色背景，可在「实验室 → 系统信息 → 颜色主题」切回深色。主题适用于管理页和弹窗；媒体预览保留深色遮罩，图片原始颜色不变。白色主题样式不注入 X 网页。
+
+主要修复：后台休眠后的队列唤醒、旧设置合并、预测字段错误、弹窗备份下载、导入后的图谱恢复、清空数据遗漏向量缓存、缺失的中英文翻译。图谱、统计和编辑器改为按需加载，并补充键盘/触控导航入口与列表、设置页的窄屏布局。
+
+## 本地构建
+
+使用 Node.js 22 或更高版本。本维护分支以 npm 和 `package-lock.json` 为准。
+
+```sh
+npm ci --ignore-scripts
+npm run typecheck
+npm test
+npm run build:chrome
+```
+
+Chrome 打开 `chrome://extensions`，开启开发者模式，选择「加载已解压的扩展程序」，选择项目的 `dist_chrome` 目录。不要直接选择源代码根目录或 ZIP 文件。
+
+## 从原版迁移
+
+新加载的扩展拥有独立的数据空间。先在原版「实验室 → 记忆皮层」下载备份，再到新版同一位置上传恢复。确认推文、作者和标签恢复后再停用原版。迁移验收前保留原版，不要卸载。包含配置的备份可能含 API 密钥，应保存在自己的电脑中，不要提交到仓库。
+
+## 验收与预览
+
+```sh
+npm run preview:ui
+```
+
+打开 `http://127.0.0.1:5187/qa/preview.html` 或 `http://127.0.0.1:5187/qa/popup.html`。这是独立的离线验收入口，使用模拟扩展 API 和示例数据库，不读取已安装扩展的数据，也不进入生产构建。
+
+[验收记录与限制](qa/ACCEPTANCE.md) · [桌面列表](qa/evidence/feed-desktop.png) · [窄屏列表](qa/evidence/feed-mobile.png) · [主题设置](qa/evidence/settings-desktop.png)
+
+真实 X 采集、用户 API 服务、浏览器长期后台行为仍需安装扩展后在真实账号环境确认；离线检查不代表这些外部链路已经通过。
+
+---
+
+以下保留上游模板说明供参考；本分支的环境、依赖安装和验收命令以上文为准。
+
 <div align="center">
 <img src="public/icon-128.png" alt="logo"/>
 <h1> 基于 React + Vite + TypeScript + TailwindCSS 的<br/>极简 Chrome/Firefox 浏览器扩展模板</h1>

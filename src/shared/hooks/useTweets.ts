@@ -6,6 +6,7 @@ import { liveQuery } from 'dexie';
 export function useTweets() {
     const [tweets, setTweets] = useState<TweetWithUser[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let timer: any;
@@ -66,9 +67,14 @@ export function useTweets() {
                 timer = setTimeout(() => {
                     setTweets(val);
                     setLoading(false);
+                    setError(null);
                 }, 500); // 500ms 的更新缓冲
             },
-            error: (err) => console.error(err)
+            error: (err) => {
+                console.error('[ThatTweet] Failed to read local tweets:', err);
+                setLoading(false);
+                setError('读取本地推文失败，请刷新重试。已有数据不会被删除。');
+            }
         });
 
         return () => {
@@ -77,5 +83,5 @@ export function useTweets() {
         };
     }, []);
 
-    return { tweets, loading };
+    return { tweets, loading, error };
 }

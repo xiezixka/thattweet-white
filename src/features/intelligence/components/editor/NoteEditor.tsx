@@ -281,8 +281,8 @@ export const NoteEditor: React.FC = () => {
 
     useEffect(() => {
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            chrome.storage.local.get([historyKey], (res) => {
-                setHistory(res[historyKey] || []);
+            chrome.storage.local.get<Record<string, HistoryItem[] | undefined>>([historyKey], (res) => {
+                setHistory(Array.isArray(res[historyKey]) ? res[historyKey]! : []);
             });
         }
     }, [historyKey]);

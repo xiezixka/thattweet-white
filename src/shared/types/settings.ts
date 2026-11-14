@@ -136,6 +136,7 @@ export interface AISettings {
   visionBatchSize: 3;
 
   // === 6. Appearance ===
+  themeMode: 'light' | 'dark';
   themeFont: string;
 }
 
@@ -359,6 +360,7 @@ Return ONLY a valid JSON object:
   visionBatchSize: 3,
 
   // === 6. Appearance ===
+  themeMode: 'light',
   themeFont: 'Noto Sans SC' // Default font
 };
 
@@ -366,15 +368,22 @@ Return ONLY a valid JSON object:
  * 确保配置对象结构完整 (Safe Merge)
  */
 export function getSafeAISettings(loaded: any): AISettings {
-  if (!loaded) return DEFAULT_AI_SETTINGS;
+  if (!loaded || typeof loaded !== 'object' || Array.isArray(loaded)) return DEFAULT_AI_SETTINGS;
 
-  const settings = { ...DEFAULT_AI_SETTINGS, ...loaded };
+  const settings: AISettings = { ...DEFAULT_AI_SETTINGS, ...loaded };
+  settings.themeMode = loaded.themeMode === 'dark' ? 'dark' : 'light';
 
   // 深层合并工作流节点
   settings.workflowNodes = {
     ...DEFAULT_AI_SETTINGS.workflowNodes,
     ...(loaded.workflowNodes || {})
   };
+  for (const key of Object.keys(DEFAULT_AI_SETTINGS.workflowNodes) as Array<keyof typeof settings.workflowNodes>) {
+    settings.workflowNodes[key] = {
+      ...DEFAULT_AI_SETTINGS.workflowNodes[key],
+      ...loaded.workflowNodes?.[key]
+    };
+  }
 
   // 确保 providers 是数组
   if (!Array.isArray(settings.providers)) {

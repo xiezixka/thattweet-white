@@ -72,8 +72,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     loadSessions: async () => {
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            const res = await chrome.storage.local.get(['chat_sessions', 'current_session_id']);
-            let sessions = res.chat_sessions || [];
+            const res = await chrome.storage.local.get<{ chat_sessions?: ChatSession[]; current_session_id?: string | null }>(['chat_sessions', 'current_session_id']);
+            let sessions = Array.isArray(res.chat_sessions) ? res.chat_sessions : [];
             let currentId = res.current_session_id;
 
             if (sessions.length === 0) {

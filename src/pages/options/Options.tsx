@@ -4,16 +4,19 @@ import { MainLayout } from '../../shared/components/layout/MainLayout';
 import { useUIStore } from '../../shared/store/useUIStore';
 import { useSettingsStore } from '../../shared/store/useSettingsStore';
 import { FeedView } from '../../features/feed/FeedView';
-import { IntelligenceView } from '../../features/intelligence/IntelligenceView';
-import { SettingsView } from '../../features/settings/SettingsView';
-import { StatsView } from '../../features/stats/StatsView';
-import { AnalyticsView } from '../../features/analytics/AnalyticsView';
-import { GalleryView } from '../../features/gallery/GalleryView';
 import { MediaLightbox } from '../../shared/components/MediaLightbox';
-import ConnectionsView from '../../features/connections/ConnectionsView';
-import { SimulationView } from '../../features/simulation/SimulationView';
+import { useColorTheme } from '../../shared/hooks/useColorTheme';
+
+const IntelligenceView = React.lazy(() => import('../../features/intelligence/IntelligenceView').then(m => ({ default: m.IntelligenceView })));
+const SettingsView = React.lazy(() => import('../../features/settings/SettingsView').then(m => ({ default: m.SettingsView })));
+const StatsView = React.lazy(() => import('../../features/stats/StatsView').then(m => ({ default: m.StatsView })));
+const AnalyticsView = React.lazy(() => import('../../features/analytics/AnalyticsView').then(m => ({ default: m.AnalyticsView })));
+const GalleryView = React.lazy(() => import('../../features/gallery/GalleryView').then(m => ({ default: m.GalleryView })));
+const ConnectionsView = React.lazy(() => import('../../features/connections/ConnectionsView'));
+const SimulationView = React.lazy(() => import('../../features/simulation/SimulationView').then(m => ({ default: m.SimulationView })));
 
 const Options: React.FC = () => {
+  useColorTheme();
   const { activeView } = useUIStore();
   const settings = useSettingsStore(s => s.settings);
 
@@ -30,7 +33,7 @@ const Options: React.FC = () => {
       case 'intelligence':
         return <IntelligenceView />;
       case 'connections':
-        return <ConnectionsView />;
+        return <ConnectionsView key={settings.themeMode} />;
       case 'simulation':
         return <SimulationView />;
       case 'gallery':
@@ -48,7 +51,9 @@ const Options: React.FC = () => {
 
   return (
     <MainLayout>
-      {renderView()}
+      <React.Suspense fallback={<div className="flex flex-1 items-center justify-center p-8 text-zinc-500" role="status">正在加载…</div>}>
+        {renderView()}
+      </React.Suspense>
       <MediaLightbox />
     </MainLayout>
   );

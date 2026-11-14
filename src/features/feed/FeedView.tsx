@@ -18,7 +18,7 @@ const FilterItem: React.FC<{ active: boolean; onClick: () => void; children: Rea
 );
 
 export const FeedView: React.FC = () => {
-    const { tweets, loading } = useTweets();
+    const { tweets, loading, error } = useTweets();
     const { t } = useTranslation();
     const [searchQuery, setSearchQuery] = React.useState('');
     const [showSyntaxHelp, setShowSyntaxHelp] = React.useState(false);
@@ -108,9 +108,9 @@ export const FeedView: React.FC = () => {
     return (
         <div ref={containerRef} className="p-4 lg:p-8 w-full min-h-screen flex flex-col">
             {/* Header Area ... */}
-            <header className="relative w-full flex items-center justify-between mb-12 px-2">
+            <header className="relative w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 sm:gap-0 mb-8 sm:mb-12 px-2">
                 {/* Left Area */}
-                <div className="w-1/4 shrink-0">
+                <div className="w-full sm:w-1/4 shrink-0">
                     <h1 className="text-3xl font-black bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent italic tracking-tight">
                         {t('feed_title')}
                     </h1>
@@ -120,7 +120,7 @@ export const FeedView: React.FC = () => {
                 </div>
 
                 {/* Center Search Area */}
-                <div className="flex-1 flex justify-center px-4">
+                <div className="flex-1 flex justify-center px-0 sm:px-4">
                     <div className="relative w-full max-w-xl group">
                         <div className={cn(
                             "absolute inset-0 bg-brand/20 blur-2xl rounded-full transition-opacity duration-500",
@@ -223,7 +223,12 @@ export const FeedView: React.FC = () => {
             </header>
 
             {/* Masonry Grid */}
-            {loading ? (
+            {error ? (
+                <div role="alert" className="p-6 text-center text-zinc-400">
+                    <p>{error}</p>
+                    <button type="button" onClick={() => window.location.reload()} className="mt-4 px-4 py-2 rounded-lg bg-brand/10 text-brand border border-brand/20">刷新重试</button>
+                </div>
+            ) : loading ? (
                 <div className="flex-1 flex flex-col items-center justify-center">
                     <Loader2 className="animate-spin text-brand/50" size={32} />
                 </div>

@@ -7,6 +7,7 @@ import { db } from '../storage/db';
 import { openDB, IDBPDatabase } from 'idb';
 import { compressBackup, parseBackup, CompactBackup } from './compactBackup';
 import { Tweet, UserCache } from '../../shared/types/tweet';
+import { GraphService } from '../../features/connections/services/graphService';
 
 // Type augmentation for File System Access API (not fully in standard TS defs)
 declare global {
@@ -280,6 +281,7 @@ export async function importBackupFromJson(jsonString: string): Promise<ImportRe
                 const existing = await db.tweets.get(tweet.id);
                 if (!existing) {
                     await db.tweets.add(tweet);
+                    await GraphService.processTweet(tweet);
                     imported++;
                 } else {
                     // Merge: keep newer data, but preserve user notes/bookmarks
@@ -305,6 +307,7 @@ export async function importBackupFromJson(jsonString: string): Promise<ImportRe
                         imageProcessedAt: existing.imageProcessedAt ?? tweet.imageProcessedAt,
                     };
                     await db.tweets.put(merged);
+                    await GraphService.processTweet(merged);
                     skipped++;
                 }
             } catch (e) {

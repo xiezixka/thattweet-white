@@ -60,7 +60,7 @@ export const useIntelligenceStore = create<IntelligenceState>((set, get) => ({
 
     loadNote: async () => {
         if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-            const res = await chrome.storage.local.get(['note_content', 'note_dual_pane', 'note_width']);
+            const res = await chrome.storage.local.get<{ note_content?: string; note_dual_pane?: boolean; note_width?: number }>(['note_content', 'note_dual_pane', 'note_width']);
             set({
                 noteContent: res.note_content || "",
                 dualPane: res.note_dual_pane ?? true,

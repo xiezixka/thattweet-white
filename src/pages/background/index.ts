@@ -7,14 +7,33 @@ import { triggerFullBackup, hasBackupDirectory } from '../../core/backup/backupS
 /**
  * [ThatTweet] Background Service Worker
  */
-console.log('%c[ThatTweet] Background Script Active v4.5.3', 'color: #1d9bf0; font-weight: bold');
+console.log(`[ThatTweet] Background Script Active v${chrome.runtime.getManifest().version}`);
 
 // ============ Backup Alarm Setup ============
 const BACKUP_ALARM_NAME = "thattweet-full-backup";
 const BACKUP_INTERVAL_MINUTES = 10;
+const QUEUE_ALARM_NAME = 'thattweet-process-queues';
+
+function processQueues() {
+    AIJobQueue.processNextBatch().catch(console.error);
+    VisionService.processQueue().catch(console.error);
+}
+
+function ensureQueueAlarm() {
+    chrome.alarms.get(QUEUE_ALARM_NAME, alarm => {
+        if (!alarm) {
+            chrome.alarms.create(QUEUE_ALARM_NAME, { delayInMinutes: 1, periodInMinutes: 1 });
+        }
+    });
+}
+
+// A timer alone cannot wake a suspended Manifest V3 service worker.
+ensureQueueAlarm();
+chrome.runtime.onStartup.addListener(ensureQueueAlarm);
 
 // Create alarm on install/startup
 chrome.runtime.onInstalled.addListener(() => {
+    ensureQueueAlarm();
     chrome.alarms.create(BACKUP_ALARM_NAME, {
         delayInMinutes: BACKUP_INTERVAL_MINUTES,
         periodInMinutes: BACKUP_INTERVAL_MINUTES
@@ -35,6 +54,10 @@ chrome.alarms.get(BACKUP_ALARM_NAME, (alarm) => {
 
 // Handle backup alarm
 chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === QUEUE_ALARM_NAME) {
+        processQueues();
+        return;
+    }
     if (alarm.name === BACKUP_ALARM_NAME) {
         console.log('[ThatTweet] Backup alarm triggered');
         triggerFullBackup('alarm').then(result => {
@@ -51,8 +74,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // ============ Message Listeners ============
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || typeof message !== 'object') return false;
     // Handle tweet batch save
     if (message.type === 'SAVE_TWEETS_BATCH') {
+        if (!Array.isArray(message.payload?.tweets) || !Array.isArray(message.payload?.users)) {
+            sendResponse({ success: false, error: 'Invalid tweet batch payload' });
+            return false;
+        }
         const { tweets, users } = message.payload;
         handleBatchSave(tweets, users).then(() => {
             sendResponse({ success: true });
@@ -87,6 +115,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // Handle manual re-analyze trigger
     if (message.type === 'REANALYZE_TWEET') {
+        if (typeof message.payload?.tweetId !== 'string' || !message.payload.tweetId.trim()) {
+            sendResponse({ success: false, error: 'Invalid tweet ID' });
+            return false;
+        }
         const { tweetId } = message.payload;
         handleReanalyze(tweetId).then(() => {
             sendResponse({ success: true });
@@ -100,10 +132,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // ============ AI Job Queue Timer ============
 // 自动化定时：检查 AI 队列与图片队列
-setInterval(() => {
-    AIJobQueue.processNextBatch().catch(console.error);
-    VisionService.processQueue().catch(console.error);
-}, 10 * 1000);
+setInterval(processQueues, 10 * 1000);
 
 async function handleBatchSave(tweets: Tweet[], users: UserCache[]) {
     try {
