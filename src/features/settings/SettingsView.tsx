@@ -19,6 +19,8 @@ import { SyncProgress } from '../intelligence/services/embeddingService';
 import logoPng from '../../assets/img/icon.png';
 import { VisionService } from '../../core/vision/visionService';
 import { version } from '../../../package.json';
+import { isSafariIOS } from '../../shared/utils/platform';
+import { SafariBackupPanel } from './SafariBackupPanel';
 
 type SettingsGroup = 'neural' | 'memory' | 'system';
 
@@ -241,7 +243,7 @@ export const SettingsView: React.FC = () => {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
             setStatus('EXPORTED');
             setTimeout(() => setStatus(''), 2000);
         } catch (error) {
@@ -279,7 +281,7 @@ export const SettingsView: React.FC = () => {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
             setStatus('EXPORTED');
             setTimeout(() => setStatus(''), 2000);
         } catch (error) {
@@ -659,6 +661,7 @@ export const SettingsView: React.FC = () => {
                             {/* Backup Section */}
                             <Card className="border-white/10">
                                 <SectionHeader title={t('section_backup')} icon={RefreshCw} />
+                                {isSafariIOS ? <SafariBackupPanel /> : <>
                                 <div className="flex items-center justify-between p-6 bg-white/[0.02] border border-white/5 rounded-xl mb-6">
                                     <div className="flex items-center gap-4">
                                         <div className={cn("p-2 rounded-lg", settings.autoBackupEnabled ? "bg-emerald-900/20 text-emerald-500" : "bg-white/5 text-zinc-600")}>
@@ -746,6 +749,8 @@ export const SettingsView: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
+
+                                </>}
 
                                 {/* Export by Author */}
                                 <div className="mt-4 p-6 bg-white/[0.02] border border-white/5 rounded-xl space-y-4">

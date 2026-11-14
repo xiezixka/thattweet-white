@@ -1,0 +1,41 @@
+.intelligence-tabs { display: none; }
+.intelligence-history { flex-shrink: 0; }
+
+html[data-platform="safari-ios"] { -webkit-text-size-adjust: 100%; }
+html[data-platform="safari-ios"] :is(.h-screen, .intelligence-workspace) { height: 100dvh; }
+html[data-platform="safari-ios"] body { padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+html[data-platform="safari-ios"] main > footer { padding-bottom: env(safe-area-inset-bottom); height: calc(2rem + env(safe-area-inset-bottom)); }
+html[data-platform="safari-ios"] button[aria-label="打开导航菜单"] { bottom: calc(3rem + env(safe-area-inset-bottom)); }
+
+@media (max-width: 1023px) {
+    .intelligence-workspace { flex-direction: column; height: 100% !important; min-height: 0; }
+    .intelligence-tabs { display: flex; flex-shrink: 0; gap: 4px; padding: 8px; border-bottom: 1px solid var(--color-zinc-800); }
+    .intelligence-tabs button { flex: 1; min-height: 44px; padding: 8px; font-size: 15px; border-radius: 8px; color: var(--theme-muted); }
+    .intelligence-tabs button[aria-pressed="true"] { color: var(--color-brand); background: var(--color-brand-muted); }
+    .intelligence-main { min-height: 0; }
+    .intelligence-history { display: none; min-height: 0; overflow-y: auto; }
+    .intelligence-history aside { width: 100%; height: 100%; }
+    [data-mobile-panel="history"] .intelligence-history { display: flex; flex: 1; }
+    [data-mobile-panel="history"] .intelligence-main { display: none; }
+    .intelligence-chat { min-width: 0; }
+    .intelligence-note { display: none; width: 100% !important; border-left: 0; }
+    .intelligence-resizer { display: none; }
+    [data-mobile-panel="note"] .intelligence-chat { display: none; }
+    [data-mobile-panel="note"] .intelligence-note { display: flex; }
+    .intelligence-chat header { min-height: 56px; height: auto; flex-wrap: wrap; padding: 8px; gap: 4px; }
+    .intelligence-chat header > div { flex-wrap: wrap; }
+    .note-editor > header { height: auto; min-height: 56px; padding: 8px; overflow-x: auto; gap: 12px; }
+    .note-editor > header > div { flex-shrink: 0; }
+    .note-editor > .flex-1 { display: block; overflow-y: auto; }
+    .note-editor [class~="min-w-[500px]"] { min-width: 0; width: 100% !important; min-height: 50dvh; }
+    .note-editor [class~="cursor-col-resize"] { display: none; }
+    .note-editor textarea { min-height: 45dvh; padding: 48px 20px 20px; }
+    .note-editor .wechat-body { padding: 24px 20px; }
+}
+
+@media (pointer: coarse) {
+    html[data-platform="safari-ios"] :is(button, select, input:not([type="checkbox"])) { min-height: 44px; }
+    html[data-platform="safari-ios"] :is(input:not([type="checkbox"]), textarea, select) { font-size: 16px !important; }
+    html[data-platform="safari-ios"] :is(.group:hover, .group) > [class*="group-hover:opacity-100"] { opacity: 1; }
+    html[data-platform="safari-ios"] .assistant-bubble + div { opacity: 1; }
+}

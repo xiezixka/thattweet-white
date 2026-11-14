@@ -5,6 +5,7 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { version } from '../../../../package.json';
 import { Menu } from 'lucide-react';
+import { isSafariIOS } from '../../utils/platform';
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -40,6 +41,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     };
 
     const handleTogglePin = () => {
+        if (isSafariIOS && window.matchMedia('(max-width: 1023px)').matches) return;
         setIsPinned(prev => !prev);
         setIsHovered(false); // 切换时关闭悬浮状态
     };

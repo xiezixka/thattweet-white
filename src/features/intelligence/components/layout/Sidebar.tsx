@@ -5,8 +5,9 @@ import { useChatStore } from '../../store/useChatStore';
 import { useSearchStore } from '../../store/useSearchStore';
 import { useTranslation } from '../../../../shared/hooks/useTranslation';
 import { useTweets } from '../../../../shared/hooks/useTweets';
+import { Tweet } from '../../../../shared/types/tweet';
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<{ onSelectChat?: () => void; onAttachTweet?: (tweet: Tweet) => void }> = ({ onSelectChat, onAttachTweet }) => {
     const { sessions, currentSessionId, createSession, switchSession, deleteSession } = useChatStore();
     const { query, results, isSearching, activeTab, setQuery, setActiveTab, performSearch } = useSearchStore();
     const { tweets, loading: tweetsLoading } = useTweets();
@@ -67,7 +68,7 @@ export const Sidebar: React.FC = () => {
             {/* Header / New Chat */}
             <div className="p-4" title={t('int_new_chat')}>
                 <button
-                    onClick={() => createSession()}
+                    onClick={() => { createSession(); onSelectChat?.(); }}
                     className="w-full flex items-center justify-between px-3 py-3 rounded-xl hover:bg-white/5 text-zinc-100 transition-all border border-white/5 group"
                 >
                     <div className="flex items-center gap-2">
@@ -126,7 +127,7 @@ export const Sidebar: React.FC = () => {
                         sessions.map(session => (
                             <div
                                 key={session.id}
-                                onClick={() => switchSession(session.id)}
+                                onClick={() => { switchSession(session.id); onSelectChat?.(); }}
                                 className={cn(
                                     "group flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
                                     currentSessionId === session.id
@@ -193,6 +194,7 @@ export const Sidebar: React.FC = () => {
                                     <p className="text-[11px] text-zinc-400 line-clamp-3 leading-relaxed group-hover:text-zinc-200 transition-colors">
                                         {res.tweet.text}
                                     </p>
+                                    {onAttachTweet && <button type="button" className="mt-3 px-3 py-2 text-sm text-brand border border-brand/30 rounded-lg" onClick={() => onAttachTweet(res.tweet)}>附加到聊天</button>}
                                 </div>
                             ))}
                         </div>

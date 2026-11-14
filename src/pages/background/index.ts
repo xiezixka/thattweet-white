@@ -3,6 +3,8 @@ import { Tweet, UserCache } from '../../shared/types/tweet';
 import { AIJobQueue } from '../../core/ai/AIJobQueue';
 import { VisionService } from '../../core/vision/visionService';
 import { triggerFullBackup, hasBackupDirectory } from '../../core/backup/backupService';
+import { isSafariIOS } from '../../shared/utils/platform';
+import { recoverInterruptedTasks } from '../../core/ai/interruptedTasks';
 
 /**
  * [ThatTweet] Background Service Worker
@@ -14,7 +16,16 @@ const BACKUP_ALARM_NAME = "thattweet-full-backup";
 const BACKUP_INTERVAL_MINUTES = 10;
 const QUEUE_ALARM_NAME = 'thattweet-process-queues';
 
-function processQueues() {
+let checkingInterrupted = false;
+async function processQueues() {
+    if (isSafariIOS && !checkingInterrupted) {
+        checkingInterrupted = true;
+        try {
+            const count = await recoverInterruptedTasks();
+            if (count) console.warn(`[ThatTweet] ${count} interrupted tasks need a manual retry.`);
+        } catch (error) { console.error('[ThatTweet] Task recovery failed:', error); }
+        finally { checkingInterrupted = false; }
+    }
     AIJobQueue.processNextBatch().catch(console.error);
     VisionService.processQueue().catch(console.error);
 }
@@ -75,6 +86,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ============ Message Listeners ============
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || typeof message !== 'object') return false;
+    if (message.type === 'RESUME_QUEUES' && isSafariIOS) {
+        processQueues().then(() => sendResponse({ success: true }));
+        return true;
+    }
     // Handle tweet batch save
     if (message.type === 'SAVE_TWEETS_BATCH') {
         if (!Array.isArray(message.payload?.tweets) || !Array.isArray(message.payload?.users)) {

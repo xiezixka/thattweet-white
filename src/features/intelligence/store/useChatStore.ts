@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Tweet } from '../../../shared/types/tweet';
 import { ragService } from '../services/ragService';
 import { llmService } from '../services/llmService';
+import { useIntelligenceStore } from './useIntelligenceStore';
 
 export interface ChatMessage {
     id: string;
@@ -128,6 +129,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     createSession: () => {
+        useIntelligenceStore.getState().setNoteContent('');
         const newId = crypto.randomUUID();
         const newSession: ChatSession = {
             id: newId,
@@ -149,6 +151,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     switchSession: (sessionId) => {
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
+            useIntelligenceStore.getState().setNoteContent(session.noteContent || '');
             set({
                 currentSessionId: sessionId,
                 currentSession: session

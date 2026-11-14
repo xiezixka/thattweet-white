@@ -315,7 +315,7 @@ export class VisionService {
      */
     private static async updateTweetsStatus(tweets: Tweet[], status: ProcessStatus): Promise<void> {
         await Promise.all(tweets.map(t =>
-            db.tweets.update(t.id, { imageProcessStatus: status })
+            db.tweets.update(t.id, { imageProcessStatus: status, ...(status === ProcessStatus.Processing ? { imageProcessingStartedAt: Date.now() } : {}) })
         ));
     }
 

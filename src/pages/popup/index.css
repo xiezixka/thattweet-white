@@ -1,6 +1,6 @@
 body {
   margin: 0;
-  width: 360px;
+  width: min(360px, 100vw);
   min-height: 500px;
   background-color: #09090b;
 }

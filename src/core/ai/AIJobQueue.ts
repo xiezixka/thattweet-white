@@ -65,7 +65,7 @@ export class AIJobQueue {
 
             // 🚀 核心修复：立即标记为 Processing，防止重复进入队列
             for (const t of toProcess) {
-                await db.tweets.update(t.id, { aiStatus: ProcessStatus.Processing });
+                await db.tweets.update(t.id, { aiStatus: ProcessStatus.Processing, aiProcessingStartedAt: Date.now() });
             }
 
             console.log(`[ThatTweet] AI Queue starting batch process for ${toProcess.length} tweets.`);

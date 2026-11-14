@@ -5,6 +5,8 @@ import { liveQuery } from 'dexie';
 import { useTranslation } from '../../shared/hooks/useTranslation';
 import { useColorTheme } from '../../shared/hooks/useColorTheme';
 import { TweetRepository } from '../../core/storage/TweetRepository';
+import { isSafariIOS, downloadFile, openDashboard } from '../../shared/utils/platform';
+import { exportPortableBackup } from '../../core/backup/portableBackup';
 
 export default function Popup() {
   useColorTheme();
@@ -18,6 +20,10 @@ export default function Popup() {
     setExporting(true);
     setExportError('');
     try {
+      if (isSafariIOS) {
+        downloadFile(JSON.stringify(await exportPortableBackup()), `ThatTweet-iPhone-${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+        return;
+      }
       const data = await TweetRepository.exportAllData();
       const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
       const link = document.createElement('a');
@@ -57,7 +63,7 @@ export default function Popup() {
   }, []);
 
   const openOptions = () => {
-    chrome.runtime.openOptionsPage();
+    openDashboard();
   };
 
   return (

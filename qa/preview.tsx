@@ -28,6 +28,8 @@ const storage = {
     }
 };
 (window as any).chrome = {
+    permissions: { request: async () => true },
+    tabs: { create: async () => { location.href = '/qa/preview.html'; } },
     storage: { local: storage, onChanged: { addListener: (fn: any) => listeners.add(fn), removeListener: (fn: any) => listeners.delete(fn) } },
     runtime: {
         getManifest: () => ({ version }),

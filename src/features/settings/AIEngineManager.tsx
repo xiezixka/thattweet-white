@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { requestAIHostPermission } from '../../shared/utils/platform';
 import {
     Plus, Trash2, Edit2, CheckCircle2, XCircle, Loader2,
     Server, Eye, Activity
@@ -57,8 +58,10 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!formState.id || !formState.name || !formState.apiKey) return;
+        try { await requestAIHostPermission(formState.baseUrl || ''); }
+        catch (error) { setTestResult({ success: false, msg: String(error) }); return; }
 
         const newProvider = formState as AIServiceProvider;
         if (testResult?.success) {
@@ -90,6 +93,7 @@ export const AIEngineManager: React.FC<AIEngineManagerProps> = ({ settings, onUp
 
         const start = Date.now();
         try {
+            await requestAIHostPermission(formState.baseUrl);
             const response = await fetch(`${formState.baseUrl.replace(/\/$/, '')}/models`, {
                 headers: { 'Authorization': `Bearer ${formState.apiKey}` }
             });

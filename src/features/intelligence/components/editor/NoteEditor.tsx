@@ -10,6 +10,7 @@ import rehypeRaw from "rehype-raw";
 import 'katex/dist/katex.min.css';
 import { diffLines } from 'diff';
 import { useChatStore } from "../../store/useChatStore";
+import { downloadFile } from '../../../../shared/utils/platform';
 import {
     Pen,
     Layout,
@@ -253,6 +254,8 @@ export const NoteEditor: React.FC = () => {
     const [saveStatus, setSaveStatus] = useState<"saved" | "dirty" | "error" | "readonly" | "idle">("idle");
 
     const editorRef = useRef<HTMLTextAreaElement>(null);
+    const importFileRef = useRef<HTMLInputElement>(null);
+    const [fileError, setFileError] = useState('');
     const previewContainerRef = useRef<HTMLDivElement>(null);
     const mobilePreviewRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -330,6 +333,15 @@ export const NoteEditor: React.FC = () => {
     }, [historyKey]);
 
     const handleSaveFile = async (manual = false) => {
+        if (typeof (window as any).showSaveFilePicker !== 'function') {
+            if (manual) {
+                downloadFile(contentRef.current, 'ThatTweet-note.md', 'text/markdown');
+                saveVersion(contentRef.current);
+                // A download request is not evidence the file was saved.
+                setFileError('已发起导出，请在 Safari 下载列表或「文件」中确认。笔记继续保存在本机。');
+            }
+            return;
+        }
         let handle = fileHandle;
         if (!handle) {
             if (!manual) return;
@@ -415,6 +427,10 @@ export const NoteEditor: React.FC = () => {
     }, []);
 
     const handleOpenFile = async () => {
+        if (typeof (window as any).showOpenFilePicker !== 'function') {
+            importFileRef.current?.click();
+            return;
+        }
         try {
             const [h] = await (window as any).showOpenFilePicker({ types: [{ description: "Markdown", accept: { "text/markdown": [".md"] } }] });
             if (!h) return;
@@ -507,7 +523,17 @@ export const NoteEditor: React.FC = () => {
     }, [content]);
 
     return (
-        <div className="h-full flex flex-col bg-[#0d0d0d] overflow-hidden no-scrollbar">
+        <div className="note-editor h-full flex flex-col bg-[#0d0d0d] overflow-hidden no-scrollbar">
+            <input ref={importFileRef} type="file" accept=".md,.txt,text/markdown,text/plain" className="hidden" onChange={async e => {
+                const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
+                try {
+                    const text = await file.text();
+                    if (contentRef.current.trim() && contentRef.current !== text && !confirm('导入将替换当前编辑内容。请先导出当前笔记；是否继续？')) return;
+                    saveVersion(contentRef.current);
+                    onChange(text); setFileError('已导入并保存在本机，导出后可保存到「文件」。');
+                } catch (error) { setFileError(`导入失败：${String(error)}`); }
+            }} />
+            {fileError && <p role="status" className="px-4 py-2 text-sm text-zinc-400">{fileError}</p>}
             <style>{MARVEL_DEVICES_CSS}</style>
             <style>{customCss}</style>
 

@@ -11,7 +11,7 @@ import { AISettings, DEFAULT_AI_SETTINGS } from '../../../../shared/types/settin
 import { Tweet } from '../../../../shared/types/tweet';
 import { useTranslation } from '../../../../shared/hooks/useTranslation';
 
-export const ChatArea: React.FC = () => {
+export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAttached?: () => void }> = ({ citationToAttach, onCitationAttached }) => {
     const { currentSession, sendMessage, isGenerating, statusMessage, createSession, searchMode, setSearchMode, loadSessions } = useChatStore();
     const { isNoteOpen, toggleNote, insertToNote } = useIntelligenceStore();
     const { t } = useTranslation();
@@ -20,6 +20,11 @@ export const ChatArea: React.FC = () => {
 
     const [inputValue, setInputValue] = useState('');
     const [attachments, setAttachments] = useState<Tweet[]>([]);
+    useEffect(() => {
+        if (!citationToAttach) return;
+        setAttachments(previous => previous.some(t => t.id === citationToAttach.id) ? previous : [...previous, citationToAttach]);
+        onCitationAttached?.();
+    }, [citationToAttach]);
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const [showSearchModeDropdown, setShowSearchModeDropdown] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -67,7 +72,8 @@ export const ChatArea: React.FC = () => {
 
     useEffect(() => {
         document.addEventListener('mouseup', handleTextSelection);
-        return () => document.removeEventListener('mouseup', handleTextSelection);
+        document.addEventListener('touchend', handleTextSelection);
+        return () => { document.removeEventListener('mouseup', handleTextSelection); document.removeEventListener('touchend', handleTextSelection); };
     }, []);
 
     useEffect(() => {

@@ -6,6 +6,8 @@ import { useSettingsStore } from '../../shared/store/useSettingsStore';
 import { FeedView } from '../../features/feed/FeedView';
 import { MediaLightbox } from '../../shared/components/MediaLightbox';
 import { useColorTheme } from '../../shared/hooks/useColorTheme';
+import { isSafariIOS } from '../../shared/utils/platform';
+import '../../shared/styles/mobile.css';
 
 const IntelligenceView = React.lazy(() => import('../../features/intelligence/IntelligenceView').then(m => ({ default: m.IntelligenceView })));
 const SettingsView = React.lazy(() => import('../../features/settings/SettingsView').then(m => ({ default: m.SettingsView })));
@@ -19,6 +21,16 @@ const Options: React.FC = () => {
   useColorTheme();
   const { activeView } = useUIStore();
   const settings = useSettingsStore(s => s.settings);
+  React.useEffect(() => {
+    if (!isSafariIOS) return;
+    document.documentElement.dataset.platform = 'safari-ios';
+    const resume = () => {
+      if (!document.hidden) chrome.runtime.sendMessage({ type: 'RESUME_QUEUES' }).catch(console.error);
+    };
+    resume();
+    document.addEventListener('visibilitychange', resume);
+    return () => document.removeEventListener('visibilitychange', resume);
+  }, []);
 
   React.useEffect(() => {
     if (settings.themeFont) {

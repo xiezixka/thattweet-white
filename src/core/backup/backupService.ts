@@ -8,6 +8,8 @@ import { openDB, IDBPDatabase } from 'idb';
 import { compressBackup, parseBackup, CompactBackup } from './compactBackup';
 import { Tweet, UserCache } from '../../shared/types/tweet';
 import { GraphService } from '../../features/connections/services/graphService';
+import { isSafariIOS } from '../../shared/utils/platform';
+import { saveLocalCheckpoint } from './portableBackup';
 
 // Type augmentation for File System Access API (not fully in standard TS defs)
 declare global {
@@ -153,6 +155,12 @@ export async function exportFullBackup(source: 'alarm' | 'manual'): Promise<Comp
  */
 export async function triggerFullBackup(source: 'alarm' | 'manual'): Promise<BackupResult> {
     try {
+        if (isSafariIOS) {
+            const { aiSettings } = await chrome.storage.local.get<{ aiSettings?: { autoBackupEnabled?: boolean } }>('aiSettings');
+            if (source === 'alarm' && !aiSettings?.autoBackupEnabled) return { ok: false, usedHandle: false, reason: 'no-change' };
+            const timestamp = await saveLocalCheckpoint();
+            return { ok: true, usedHandle: false, timestamp };
+        }
         // 1. Export all data
         const backup = await exportFullBackup(source);
         const json = JSON.stringify(backup, null, 2);

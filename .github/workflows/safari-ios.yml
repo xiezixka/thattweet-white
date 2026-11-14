@@ -1,0 +1,36 @@
+name: Safari iOS build
+
+on:
+  push:
+    branches: [feat/safari-ios]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run typecheck && npm test && npm run build:safari
+      - run: npm run package:safari
+      - name: Compile iPhone simulator app without signing
+        run: node scripts/build-safari-simulator.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ThatTweet-Safari-iOS-Xcode
+          path: artifacts/safari-ios
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ThatTweet-Safari-iOS-Simulator
+          path: artifacts/ios-derived/Build/Products/Debug-iphonesimulator/*.app
+          if-no-files-found: error

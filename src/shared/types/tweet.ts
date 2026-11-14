@@ -98,6 +98,8 @@ export interface Tweet {
   aiCategory?: string;         // AI 智能分类
   aiStatus: ProcessStatus;     // AI 处理状态
   aiProcessedAt?: number;      // AI 处理完成时间
+  aiProcessingStartedAt?: number;
+  imageProcessingStartedAt?: number;
   prediction?: any;            // 完整的 AI 预测结果对象 (PredictionResult)
 
   // --- 图像视觉数据 ---

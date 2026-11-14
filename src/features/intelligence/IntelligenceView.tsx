@@ -5,17 +5,32 @@ import { NoteEditor } from './components/editor/NoteEditor';
 import { useIntelligenceStore } from './store/useIntelligenceStore';
 import { useChatStore } from './store/useChatStore';
 import { cn } from '../../shared/utils/cn';
+import { Tweet } from '../../shared/types/tweet';
 
 export const IntelligenceView: React.FC = () => {
     const { isNoteOpen, noteWidth, setNoteWidth, dualPane, loadNote } = useIntelligenceStore();
     const { loadSessions } = useChatStore();
     const [isDragging, setIsDragging] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [ready, setReady] = useState(false);
+    const [loadError, setLoadError] = useState('');
+    const [panel, setPanel] = useState<'history' | 'chat' | 'note'>('chat');
+    const [citation, setCitation] = useState<Tweet | null>(null);
 
     useEffect(() => {
-        loadNote();
-        loadSessions();
+        let cancelled = false;
+        (async () => {
+            await loadSessions();
+            await loadNote();
+            const session = useChatStore.getState().currentSession;
+            if (session?.noteContent !== undefined) useIntelligenceStore.getState().setNoteContent(session.noteContent);
+            if (window.matchMedia('(max-width: 1023px)').matches) useIntelligenceStore.getState().setNoteOpen(false);
+            if (!cancelled) setReady(true);
+        })().catch(error => { if (!cancelled) setLoadError(String(error)); });
+        return () => { cancelled = true; };
     }, []);
+
+    useEffect(() => { if (isNoteOpen) setPanel('note'); else setPanel('chat'); }, [isNoteOpen]);
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
@@ -65,16 +80,24 @@ export const IntelligenceView: React.FC = () => {
         };
     }, [isDragging, handleMouseMove, handleMouseUp]);
 
+    if (loadError) return <p role="alert" className="p-6">聊天和笔记加载失败，请重新打开页面：{loadError}</p>;
+    if (!ready) return <p role="status" className="p-6">正在读取聊天和笔记…</p>;
     return (
-        <div ref={containerRef} className="h-full bg-[#0d0d0d] text-zinc-200 flex overflow-hidden no-scrollbar">
+        <div ref={containerRef} data-mobile-panel={panel} className="intelligence-workspace h-full bg-[#0d0d0d] text-zinc-200 flex overflow-hidden no-scrollbar">
+            <nav className="intelligence-tabs" aria-label="入微工作区">
+                {(['history', 'chat', 'note'] as const).map((name, i) => <button key={name} type="button" aria-pressed={panel === name} onClick={() => {
+                    setPanel(name);
+                    if (name !== 'history') useIntelligenceStore.getState().setNoteOpen(name === 'note');
+                }}>{['历史与资料', '聊天', '笔记'][i]}</button>)}
+            </nav>
             {/* 1. Left Sidebar (History) */}
-            <Sidebar />
+            <div className="intelligence-history"><Sidebar onSelectChat={() => setPanel('chat')} onAttachTweet={tweet => { setCitation(tweet); setPanel('chat'); }} /></div>
 
             {/* 2. Main Workspace */}
-            <div className="flex-1 flex relative min-w-0 bg-[#0d0d0d]">
+            <div className="intelligence-main flex-1 flex relative min-w-0 bg-[#0d0d0d]">
                 {/* 2a. Chat Area */}
-                <div className="flex-1 flex flex-col min-w-[900px] relative z-0">
-                    <ChatArea />
+                <div className="intelligence-chat flex-1 flex flex-col min-w-[900px] relative z-0">
+                    <ChatArea citationToAttach={citation} onCitationAttached={() => setCitation(null)} />
                 </div>
 
                 {/* Resizer Handle */}
@@ -82,7 +105,7 @@ export const IntelligenceView: React.FC = () => {
                     <div
                         onMouseDown={handleMouseDown}
                         className={cn(
-                            "absolute top-0 bottom-0 w-1 z-50 cursor-col-resize transition-colors group",
+                            "intelligence-resizer absolute top-0 bottom-0 w-1 z-50 cursor-col-resize transition-colors group",
                             isDragging ? "bg-brand/50" : "bg-transparent hover:bg-brand/30"
                         )}
                         style={{ right: `${noteWidth}px`, transform: 'translateX(50%)' }}
@@ -97,7 +120,7 @@ export const IntelligenceView: React.FC = () => {
                 {/* 2b. Note Editor (Right Side) */}
                 <div
                     className={cn(
-                        "h-full border-l border-white/5 bg-[#0d0d0d] overflow-hidden flex flex-col shrink-0 relative z-10",
+                        "intelligence-note h-full border-l border-white/5 bg-[#0d0d0d] overflow-hidden flex flex-col shrink-0 relative z-10",
                         !isNoteOpen && "hidden"
                     )}
                     style={{
