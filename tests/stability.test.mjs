@@ -20,7 +20,128 @@ function loadTypeScript(path, globals = {}) {
     return exports;
 }
 
-const { DEFAULT_AI_SETTINGS, getSafeAISettings } = loadTypeScript('../src/shared/types/settings.ts');
+const settingsModule = loadTypeScript('../src/shared/types/settings.ts');
+const { DEFAULT_AI_SETTINGS, getSafeAISettings } = settingsModule;
+
+function configuredAISettings() {
+    return getSafeAISettings({
+        providers: [{ id: 'qa', provider: 'custom', name: 'QA', apiKey: 'qa-not-a-real-key', baseUrl: 'https://qa.invalid/v1' }],
+        defaultProviderId: 'qa'
+    });
+}
+
+test('analyzer rejects an empty model before making any API request', async () => {
+    let requests = 0;
+    const { TweetAnalyzer } = loadTypeScript('../src/core/ai/analyzer.ts', { fetch: async () => { requests++; } });
+    const settings = configuredAISettings();
+    settings.workflowNodes.textAnalysis.model = '   ';
+    await assert.rejects(TweetAnalyzer.analyzeBatch([{ id: 'qa', text: 'test' }], settings), /尚未选择模型/);
+    assert.equal(requests, 0);
+});
+
+test('analyzer sends the chosen model and still parses a valid response', async () => {
+    let request;
+    const { TweetAnalyzer } = loadTypeScript('../src/core/ai/analyzer.ts', { fetch: async (_url, options) => {
+        request = JSON.parse(options.body);
+        return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify([{ id: 'qa', summary: 'ok', score: 75, category: '其他', tags: [] }]) } }] }) };
+    } });
+    const settings = configuredAISettings();
+    settings.workflowNodes.textAnalysis.model = ' chosen-model ';
+    const result = await TweetAnalyzer.analyzeBatch([{ id: 'qa', text: 'test' }], settings);
+    assert.equal(request.model, 'chosen-model');
+    assert.equal(result[0].summary, 'ok');
+});
+
+test('automatic AI queue leaves pending tweets untouched for empty or disabled models', async () => {
+    for (const mode of ['empty', 'disabled', 'configured']) {
+        const settings = configuredAISettings();
+        settings.workflowNodes.textAnalysis.model = mode === 'empty' ? '' : 'chosen-model';
+        settings.workflowNodes.textAnalysis.enabled = mode !== 'disabled';
+        let pendingReads = 0;
+        const modules = {
+            '../storage/db': { db: { tweets: {} } },
+            '../storage/TweetRepository': { TweetRepository: { getPendingAITweets: async () => { pendingReads++; return []; } } },
+            './analyzer': { TweetAnalyzer: {} },
+            '../../shared/types/settings': settingsModule,
+            '../../shared/types/tweet': { ProcessStatus: { Pending: 'pending', Processing: 'processing' } },
+            '../../shared/store/useSettingsStore': { useSettingsStore: { getState: () => ({ settings }) } }
+        };
+        const { AIJobQueue } = loadTypeScript('../src/core/ai/AIJobQueue.ts', {
+            require: name => { assert.ok(name in modules, name); return modules[name]; }
+        });
+        await AIJobQueue.processNextBatch();
+        assert.equal(pendingReads, mode === 'configured' ? 1 : 0, mode);
+    }
+});
+
+test('queue distinguishes HTTP failures from digits inside provider request IDs', async () => {
+    for (const [message, expected] of [
+        ['400 {"request_id":"contains-50-in-id","message":"Invalid model"}', 'failed'],
+        ['500 Upstream failure', 'pending'],
+        ['429 Rate limit', 'pending']
+    ]) {
+        const settings = configuredAISettings();
+        settings.batchSize = 1;
+        settings.workflowNodes.textAnalysis.model = 'chosen-model';
+        const writes = [];
+        const modules = {
+            '../storage/db': { db: { tweets: { bulkGet: async () => [{ id: 'qa', aiStatus: 'pending', media: [] }], update: async (_id, value) => writes.push(value) } } },
+            '../storage/TweetRepository': { TweetRepository: { getPendingAITweets: async () => ['qa'] } },
+            './analyzer': { TweetAnalyzer: { analyzeBatch: async () => { throw new Error(message); } } },
+            '../../shared/types/settings': settingsModule,
+            '../../shared/types/tweet': { ProcessStatus: { Pending: 'pending', Processing: 'processing', Failed: 'failed' } },
+            '../../shared/store/useSettingsStore': { useSettingsStore: { getState: () => ({ settings }) } }
+        };
+        const { AIJobQueue } = loadTypeScript('../src/core/ai/AIJobQueue.ts', {
+            require: name => { assert.ok(name in modules, name); return modules[name]; },
+            console: { log() {}, error() {} }
+        });
+        await AIJobQueue.processNextBatch();
+        assert.equal(writes[0].aiStatus, 'processing');
+        assert.equal(writes.at(-1).aiStatus, expected, message);
+    }
+});
+
+test('a late model list response preserves the latest workflow selection', async () => {
+    const initial = configuredAISettings();
+    initial.workflowNodes.perception.model = 'vision-model';
+    let latest = initial;
+    let finishFetch;
+    let updates = 0;
+    const ModelSelector = () => {};
+    const element = (type, props) => ({ type, props });
+    const modules = {
+        react: { useState: value => [value, () => {}], useCallback: fn => fn, useRef: value => ({ current: value }), useEffect() {} },
+        'react/jsx-runtime': { jsx: element, jsxs: element },
+        'lucide-react': new Proxy({}, { get: () => () => {} }),
+        '../../shared/hooks/useTranslation': { useTranslation: () => ({ t: key => key }) },
+        '../../shared/utils/cn': { cn: (...values) => values.filter(Boolean).join(' ') },
+        '../../shared/types/settings': settingsModule,
+        '../../shared/components/ModelSelector': { ModelSelector },
+        '../../shared/store/useSettingsStore': { useSettingsStore: { getState: () => ({ settings: latest }) } }
+    };
+    const { AIPipelineDesigner } = loadTypeScript('../src/features/settings/AIPipelineDesigner.tsx', {
+        require: name => { assert.ok(name in modules, name); return modules[name]; },
+        fetch: () => new Promise(resolve => { finishFetch = resolve; })
+    });
+    const tree = AIPipelineDesigner({ settings: initial, onUpdate: value => { latest = value; updates++; } });
+    const selectors = [];
+    function visit(node) {
+        if (Array.isArray(node)) return node.forEach(visit);
+        if (!node || typeof node !== 'object') return;
+        if (node.type === ModelSelector) selectors.push(node);
+        visit(node.props?.children);
+    }
+    visit(tree);
+    selectors.find(node => node.props.value === '').props.onOpen();
+    assert.equal(typeof finishFetch, 'function');
+    latest = getSafeAISettings({ ...initial, workflowNodes: { ...initial.workflowNodes, textAnalysis: { ...initial.workflowNodes.textAnalysis, model: 'chosen-model' } } });
+    finishFetch({ ok: true, json: async () => ({ data: [{ id: 'chosen-model' }] }) });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(updates, 1);
+    assert.equal(latest.workflowNodes.textAnalysis.model, 'chosen-model');
+    assert.equal(latest.providers[0].cachedModels[0], 'chosen-model');
+});
 
 test('updated Markdown and math dependencies still render formulas', () => {
     const html = renderToStaticMarkup(createElement(ReactMarkdown, {

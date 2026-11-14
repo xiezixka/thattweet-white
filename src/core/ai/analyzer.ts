@@ -190,10 +190,20 @@ class OpenAIAdapter implements AIProviderAdapter {
             throw new Error(msg);
         }
 
+        const model = node.model?.trim();
+        if (!model) {
+            throw new Error(`工作流节点 ${String(nodeKey)} 尚未选择模型，请在「实验室 → 神经中枢 → AI 工作流」中选择模型后重试。`);
+        }
+        const apiKey = provider.apiKey?.trim();
+        const baseUrl = provider.baseUrl?.trim().replace(/\/$/, '');
+        if (!apiKey || !baseUrl) {
+            throw new Error('AI 服务商的 API Key 或接口地址未配置，请先完成服务商配置。');
+        }
+
         return {
-            apiKey: provider.apiKey.trim(),
-            baseUrl: provider.baseUrl.trim().replace(/\/$/, ''),
-            model: node.model?.trim() || '',
+            apiKey,
+            baseUrl,
+            model,
             prompt: node.prompt || ''
         };
     }

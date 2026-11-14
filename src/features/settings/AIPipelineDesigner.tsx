@@ -5,6 +5,7 @@ import {
     Server, Activity, Edit3, Zap, X, Terminal, Search, Check, ChevronDown, Cpu, User, Lock
 } from 'lucide-react';
 import { useTranslation } from '../../shared/hooks/useTranslation';
+import { useSettingsStore } from '../../shared/store/useSettingsStore';
 import { cn } from '../../shared/utils/cn';
 import { AISettings, AIServiceProvider, WorkflowNodeConfig, PROVIDER_PRESETS, DEFAULT_AI_SETTINGS } from '../../shared/types/settings';
 import { ModelSelector } from '../../shared/components/ModelSelector';
@@ -129,12 +130,16 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
             if (response.ok) {
                 const data = await response.json();
                 const models = (data.data || []).map((m: any) => m.id);
+                const latest = useSettingsStore.getState().settings;
+                const currentProvider = latest.providers.find(p => p.id === providerId);
+                // A late response must not undo model selection or changed credentials.
+                if (!currentProvider || currentProvider.baseUrl !== provider.baseUrl || currentProvider.apiKey !== provider.apiKey) return [];
                 setModelCache(prev => ({ ...prev, [providerId]: models }));
 
-                const updatedProviders = settings.providers.map(p =>
+                const updatedProviders = latest.providers.map(p =>
                     p.id === providerId ? { ...p, cachedModels: models, modelsCachedAt: Date.now() } : p
                 );
-                onUpdate({ ...settings, providers: updatedProviders });
+                onUpdate({ ...latest, providers: updatedProviders });
                 return models;
             }
         } catch (e) {
@@ -248,6 +253,9 @@ export const AIPipelineDesigner: React.FC<AIPipelineDesignerProps> = ({ settings
                                 if (currentProviderId && !modelCache[currentProviderId]) fetchModels(currentProviderId);
                             }}
                         />
+                        {isEnabled && !nodeConfig.model?.trim() && (
+                            <p role="status" className="px-1 text-[11px] leading-relaxed text-amber-500">{t('workflow_model_required')}</p>
+                        )}
                         {meta.hasPrompt && isEnabled && (
                             <button
                                 onClick={() => setPromptModal(meta.key)}

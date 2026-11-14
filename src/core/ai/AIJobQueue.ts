@@ -27,7 +27,8 @@ export class AIJobQueue {
             const providerId = node.providerId || settings.defaultProviderId;
             const provider = settings.providers.find(p => p.id === providerId);
 
-            if (!settings.autoAnalyze || !provider || !provider.apiKey) {
+            if (!settings.autoAnalyze || node.enabled === false || !provider ||
+                !provider.apiKey?.trim() || !provider.baseUrl?.trim() || !node.model?.trim()) {
                 this.isProcessing = false;
                 return;
             }
@@ -95,7 +96,11 @@ export class AIJobQueue {
             } catch (err: any) {
                 console.error(`[ThatTweet] Batch AI Processing Failed:`, err);
                 // 如果是网络错误或 50x，重置为 Pending 以便重试，并进入冷却
-                const isRetriable = err.message?.includes('fetch') || err.message?.includes('50') || err.message?.includes('busy');
+                const message = String(err?.message || err);
+                const status = Number(message.match(/^(\d{3})\b/)?.[1]);
+                const isRetriable = status
+                    ? status === 429 || (status >= 500 && status < 600)
+                    : /fetch|network|timeout|busy/i.test(message);
 
                 if (isRetriable) {
                     this.BUSY_COOLDOWN_UNTIL = Date.now() + 60 * 1000;

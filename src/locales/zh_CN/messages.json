@@ -624,7 +624,7 @@
     "message": "AI 工作流"
   },
   "pipeline_desc": {
-    "message": "为推文处理阶段分配模型。留空将使用默认路径。"
+    "message": "为各处理阶段选择模型。服务商可使用全局默认，模型必须单独选择。"
   },
   "node_perception": {
     "message": "视觉识别"
@@ -1078,5 +1078,8 @@
   },
   "system_sponsor_title": {
     "message": "支持原作者"
+  },
+  "workflow_model_required": {
+    "message": "尚未选择模型：请点选列表项，或输入模型名后按 Enter 确认。"
   }
 }

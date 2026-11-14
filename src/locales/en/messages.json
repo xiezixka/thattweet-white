@@ -621,7 +621,7 @@
     "message": "Disabled"
   },
   "pipeline_desc": {
-    "message": "Assign a model to each processing stage. Leave empty to use the default."
+    "message": "Assign models to each processing stage. Providers can inherit the global default, but each model must be selected explicitly."
   },
   "pipeline_status_online": {
     "message": "Online"
@@ -682,5 +682,8 @@
   },
   "system_active": {
     "message": "Active"
+  },
+  "workflow_model_required": {
+    "message": "No model selected: choose a list item, or type a model name and press Enter to confirm."
   }
 }

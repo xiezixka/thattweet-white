@@ -1,0 +1,18 @@
+[
+  {
+    "browser": "chrome",
+    "version": "4.5.7",
+    "files": 113,
+    "bytes": 2422207,
+    "sha256": "9ef929ccce861aaa0847d7eccdb95d073770da0afe72fa6e3705f825825a9c5d",
+    "assetAndArchiveCheck": "passed"
+  },
+  {
+    "browser": "firefox",
+    "version": "4.5.7",
+    "files": 112,
+    "bytes": 2420981,
+    "sha256": "4fecefc43166b16a74d3f5346bcf5f0e2440533d113d73ddbf5cb55d7f859c53",
+    "assetAndArchiveCheck": "passed"
+  }
+]
