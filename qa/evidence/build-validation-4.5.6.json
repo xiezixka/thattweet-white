@@ -1,0 +1,16 @@
+[
+  {
+    "browser": "chrome",
+    "version": "4.5.6",
+    "bytes": 2421630,
+    "sha256": "bb8ea26a097392bea6479f0df35c2ea2b5cd0513e263f00b7926445c27fecddb",
+    "manifestAssetsAndArchive": "passed"
+  },
+  {
+    "browser": "firefox",
+    "version": "4.5.6",
+    "bytes": 2420404,
+    "sha256": "6e6ba2846bc5b2f603337bbe5908c2055a322468c1c778b5bd76f48223651a4e",
+    "manifestAssetsAndArchive": "passed"
+  }
+]

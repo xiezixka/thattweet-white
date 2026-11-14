@@ -27,11 +27,11 @@ jobs:
         run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
       - uses: actions/upload-artifact@v7
         with:
-          name: ThatTweet-4.5.5-Chrome
+          name: ThatTweet-4.5.6-Chrome
           path: dist_chrome
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
-          name: ThatTweet-4.5.5-Firefox
+          name: ThatTweet-4.5.6-Firefox
           path: dist_firefox
           if-no-files-found: error

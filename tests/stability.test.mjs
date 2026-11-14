@@ -12,7 +12,8 @@ import rehypeKatex from 'rehype-katex';
 function loadTypeScript(path, globals = {}) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8');
     const { outputText } = ts.transpileModule(source, {
-        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+        fileName: path,
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }
     });
     const exports = {};
     vm.runInNewContext(outputText, { exports, console, ...globals }, { filename: path });
@@ -28,6 +29,39 @@ test('updated Markdown and math dependencies still render formulas', () => {
     assert.match(html, /class="katex"/);
     assert.match(html, /<math/);
     assert.doesNotMatch(html, /<script/);
+});
+
+test('capture starts before body exists and mounts without replacing the original extension', () => {
+    const original = { id: '__root' };
+    const nodes = new Map([['__root', original]]);
+    const events = {};
+    const rendered = [];
+    const document = {
+        body: null,
+        head: { appendChild(node) { nodes.set(node.id, node); } },
+        getElementById: id => nodes.get(id),
+        createElement: () => ({}),
+        addEventListener: (name, callback) => { events[name] = callback; }
+    };
+    const runtime = { id: 'white-copy', getURL: path => `chrome-extension://white-copy/${path}` };
+    const dependencies = {
+        'react-dom/client': { createRoot: node => ({ render: value => rendered.push({ node, value }) }) },
+        'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+        '../../core/extractor/observer': { DomObserver: class {} },
+        './style.css': {}
+    };
+    loadTypeScript('../src/pages/content/index.tsx', {
+        document, chrome: { runtime }, window: { addEventListener() {}, location: { pathname: '/home' } },
+        require: name => { assert.ok(name in dependencies, name); return dependencies[name]; }
+    });
+    assert.equal(rendered.length, 0);
+    document.body = { appendChild(node) { nodes.set(node.id, node); } };
+    events.DOMContentLoaded();
+    assert.equal(rendered.length, 1);
+    assert.equal(rendered[0].node.id, 'thattweet-capture-white-copy');
+    assert.equal(nodes.get('__root'), original);
+    events.DOMContentLoaded();
+    assert.equal(rendered.length, 1);
 });
 
 test('legacy settings receive a white theme and complete workflow defaults', () => {

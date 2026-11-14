@@ -1,8 +1,10 @@
-# ThatTweet 白色优化版 · 4.5.5
+# ThatTweet 白色优化版 · 4.5.6
 
 基于 [mu-zi-lee/thattweet-vite](https://github.com/mu-zi-lee/thattweet-vite) 的 4.5.4 源码（提交 `8b0c37c`）维护，保留原有推文采集、本地管理、图谱、AI 与笔记功能。
 
 本版默认使用白色背景，可在「实验室 → 系统信息 → 颜色主题」切回深色。主题适用于管理页和弹窗；媒体预览保留深色遮罩，图片原始颜色不变。白色主题样式不注入 X 网页。
+
+4.5.6 修复采集提示在页面主体未就绪时启动、以及与原版界面节点冲突的问题。更新后需要重新加载扩展并完整刷新 X 页面；AI 服务商和模型须在新版单独配置。聊天、笔记和旧数据尚未自动迁移，请继续保留原版。
 
 主要修复：后台休眠后的队列唤醒、旧设置合并、预测字段错误、弹窗备份下载、导入后的图谱恢复、清空数据遗漏向量缓存、缺失的中英文翻译。图谱、统计和编辑器改为按需加载，并补充键盘/触控导航入口与列表、设置页的窄屏布局。
 
@@ -31,7 +33,7 @@ npm run preview:ui
 
 打开 `http://127.0.0.1:5187/qa/preview.html` 或 `http://127.0.0.1:5187/qa/popup.html`。这是独立的离线验收入口，使用模拟扩展 API 和示例数据库，不读取已安装扩展的数据，也不进入生产构建。
 
-[验收记录与限制](qa/ACCEPTANCE.md) · [桌面列表](qa/evidence/feed-desktop.png) · [窄屏列表](qa/evidence/feed-mobile.png) · [主题设置](qa/evidence/settings-desktop.png)
+[4.5.6 启动修复验收](qa/STARTUP-4.5.6.md) · [4.5.5 验收记录与限制](qa/ACCEPTANCE.md) · [桌面列表](qa/evidence/feed-desktop.png) · [窄屏列表](qa/evidence/feed-mobile.png) · [主题设置](qa/evidence/settings-desktop.png)
 
 真实 X 采集、用户 API 服务、浏览器长期后台行为仍需安装扩展后在真实账号环境确认；离线检查不代表这些外部链路已经通过。
 

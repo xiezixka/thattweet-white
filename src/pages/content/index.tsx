@@ -82,17 +82,21 @@ window.addEventListener('thattweet-tweet-data', (event: any) => {
 // 初始化注入
 injectInterceptor();
 
-// 简单的 UI 提示
-const div = document.createElement('div');
-div.id = '__root';
-document.body.appendChild(div);
-
-const rootContainer = document.querySelector('#__root');
-if (rootContainer) {
+// Each installed copy owns its own root. The original extension may still be active.
+function mountCaptureIndicator() {
+  if (!document.body) return;
+  const rootId = `thattweet-capture-${chrome.runtime.id}`;
+  if (document.getElementById(rootId)) return;
+  const rootContainer = document.createElement('div');
+  rootContainer.id = rootId;
+  document.body.appendChild(rootContainer);
   const root = createRoot(rootContainer);
   root.render(
-    <div className='fixed bottom-4 right-4 p-2 bg-blue-500/80 backdrop-blur text-white rounded-lg shadow-xl z-[9999] text-xs pointer-events-none'>
-      ThatTweet Capture <span className='font-bold text-green-300'>Hybrid</span>
+    <div title='采集脚本已加载；是否成功保存请在新版管理页核对。' className='fixed bottom-14 right-4 p-2 bg-blue-500/80 backdrop-blur text-white rounded-lg shadow-xl z-[9999] text-xs pointer-events-none'>
+      ThatTweet 白色版 <span className='font-bold text-green-300'>采集脚本已加载</span>
     </div>
   );
 }
+
+if (document.body) mountCaptureIndicator();
+else document.addEventListener('DOMContentLoaded', mountCaptureIndicator, { once: true });
