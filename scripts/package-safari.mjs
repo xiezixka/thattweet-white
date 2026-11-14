@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, copyFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,4 +20,9 @@ mkdirSync(output, { recursive: true });
 const result = spawnSync('xcrun', [tool, resources, '--project-location', output,
     '--app-name', 'ThatTweetSafari', '--bundle-identifier', 'io.github.xiezixka.thattweet.safari',
     '--swift', '--ios-only', '--copy-resources', '--no-open', '--no-prompt'], { stdio: 'inherit' });
+if (result.status === 0) {
+    const host = resolve(output, 'ThatTweetSafari/ThatTweetSafari/Resources');
+    copyFileSync(resolve(root, 'ios/host/Main.html'), resolve(host, 'Base.lproj/Main.html'));
+    copyFileSync(resolve(root, 'ios/host/Style.css'), resolve(host, 'Style.css'));
+}
 process.exit(result.status ?? 1);

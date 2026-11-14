@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { create } from 'zustand';
 
 function load(path, globals) {
     const { outputText } = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
@@ -109,4 +110,31 @@ test('Safari asks for only the chosen HTTPS API origin and reports permission re
     assert.equal(requests.length, 0);
     await assert.rejects(api.requestAIHostPermission('https://custom.invalid/v1'), /允许/);
     assert.equal(requests[0].origins[0], 'https://custom.invalid/*');
+});
+
+test('new chats preserve an independent note and switching restores each session note', async () => {
+    let noteContent = '原来的独立笔记';
+    const local = new Map();
+    const modules = {
+        zustand: { create }, '../services/ragService': {}, '../services/llmService': {},
+        './useIntelligenceStore': { useIntelligenceStore: { getState: () => ({ noteContent, setNoteContent: value => { noteContent = value; } }) } },
+    };
+    const { useChatStore } = load('../src/features/intelligence/store/useChatStore.ts', {
+        require: name => { assert.ok(name in modules, name); return modules[name]; },
+        localStorage: { getItem: key => local.get(key) || null, setItem: (key, value) => local.set(key, value) },
+    });
+    await useChatStore.getState().loadSessions();
+    const first = useChatStore.getState().createSession();
+    assert.equal(useChatStore.getState().currentSession.noteContent, '原来的独立笔记');
+    useChatStore.getState().updateSessionNote(first, '第一个会话笔记');
+    const second = useChatStore.getState().createSession();
+    assert.equal(noteContent, '');
+    useChatStore.getState().updateSessionNote(second, '第二个会话笔记');
+    useChatStore.getState().switchSession(first);
+    assert.equal(noteContent, '第一个会话笔记');
+    useChatStore.getState().switchSession(second);
+    assert.equal(noteContent, '第二个会话笔记');
+    const stored = JSON.parse(local.get('chat_sessions'));
+    assert.equal(stored.find(s => s.id === first).noteContent, '第一个会话笔记');
+    assert.equal(stored.find(s => s.id === second).noteContent, '第二个会话笔记');
 });
