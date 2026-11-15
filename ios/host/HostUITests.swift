@@ -11,7 +11,7 @@ final class ThatTweetSafariUITests: XCTestCase {
         let heading = web.staticTexts["在 Safari 中使用 ThatTweet"]
         XCTAssertTrue(heading.waitForExistence(timeout: 20), app.debugDescription)
 
-        let start = XCTAttachment(screenshot: app.screenshot())
+        let start = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         start.name = "中文启用说明"
         start.lifetime = .keepAlways
         add(start)
@@ -29,7 +29,14 @@ final class ThatTweetSafariUITests: XCTestCase {
             web.swipeUp()
         }
         XCTAssertTrue(notice.exists && notice.isHittable, "The last setup paragraph must be reachable by scrolling")
-        let bottom = XCTAttachment(screenshot: app.screenshot())
+        // Application-element screenshots can retain portrait bounds after rotation.
+        // Capture the physical screen and reject clipped portrait-shaped evidence.
+        let screenRotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let size = XCUIScreen.main.screenshot().image.size
+            return size.width > size.height
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [screenRotated], timeout: 10), .completed)
+        let bottom = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         bottom.name = "滚动到最后说明"
         bottom.lifetime = .keepAlways
         add(bottom)
