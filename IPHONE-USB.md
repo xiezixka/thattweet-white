@@ -10,6 +10,14 @@ Safari 扩展资源、原生启用说明、构建和验收资料已经准备。�
 
 Apple 的兼容表列出 Xcode 27.2 包含 iOS 27.2 SDK，支持 macOS 26.6 及以上。优先使用匹配手机系统的稳定版；本地尚未安装完整 Xcode，官方开发者下载入口需要 Apple 账号登录。下载、许可确认及首次启动步骤留到你方便时处理；没有自动接受协议或购买开发者计划。
 
+也可以从 Mac App Store 免费获取 Xcode，无需购买开发者会员。内置盘空间不足时，可用 App Store 的「下载并安装大型 App 到独立存储盘」选择 APFS 外接盘；该方式的实际应用路径以安装结果为准，不一定是上述建议目录。获取过程可能要求普通 Apple 账号登录验证，由本人完成。
+
+## 免费个人签名
+
+本人设备测试可以先使用普通 Apple 账号在 Xcode 中建立 Personal Team；无需先付费。Apple 为免费个人团队签发的描述文件有效期为 7 天，到期后需要重新构建、签名和安装。免费团队还有设备数、应用数及能力限制；本扩展的实际签名结果仍需在 Xcode 中核实，不把普通应用可安装视为扩展已签名成功。
+
+续签时保留同一 Team、应用及扩展 Bundle ID，更新已有应用；不要先卸载或清除 Safari 数据。续签前仍应把聊天、笔记等完整备份保存到「文件」。免费签名用于本人测试，TestFlight 或 App Store 分发属于其他流程。
+
 ## Xcode 准备好后
 
 只读检查，不修改系统 Xcode 选择、不读取 Apple 账号或私钥：
@@ -63,3 +71,6 @@ npm run iphone:install -- --device YOUR-DEVICE-ID --xcode "/Volumes/存储盘/�
 - [设备开发者模式](https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device)
 - [设备命令行工具](https://developer.apple.com/documentation/xcode/interacting-with-devices-using-the-command-line)
 - [Xcode 组件下载与安装](https://developer.apple.com/documentation/xcode/downloading-and-installing-additional-xcode-components)
+- [Xcode 免费下载入口](https://developer.apple.com/xcode/resources/)
+- [免费个人团队及 7 天签名限制](https://developer.apple.com/help/account/basics/about-your-developer-account)
+- [App Store 安装大型应用到外接盘](https://support.apple.com/guide/app-store/fir06754f864/mac)
