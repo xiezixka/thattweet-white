@@ -24,12 +24,20 @@ const Options: React.FC = () => {
   React.useEffect(() => {
     if (!isSafariIOS) return;
     document.documentElement.dataset.platform = 'safari-ios';
+    const fitViewport = () => document.documentElement.style.setProperty('--safari-viewport-height', `${window.visualViewport?.height || window.innerHeight}px`);
+    fitViewport();
+    window.visualViewport?.addEventListener('resize', fitViewport);
+    window.addEventListener('resize', fitViewport);
     const resume = () => {
       if (!document.hidden) chrome.runtime.sendMessage({ type: 'RESUME_QUEUES' }).catch(console.error);
     };
     resume();
     document.addEventListener('visibilitychange', resume);
-    return () => document.removeEventListener('visibilitychange', resume);
+    return () => {
+      document.removeEventListener('visibilitychange', resume);
+      window.visualViewport?.removeEventListener('resize', fitViewport);
+      window.removeEventListener('resize', fitViewport);
+    };
   }, []);
 
   React.useEffect(() => {

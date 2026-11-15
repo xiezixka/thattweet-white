@@ -8,3 +8,11 @@ body {
 #__root {
   height: 100%;
 }
+
+html[data-platform="safari-ios"] body {
+  min-height: 0;
+}
+
+html[data-platform="safari-ios"] #__root {
+  height: auto;
+}

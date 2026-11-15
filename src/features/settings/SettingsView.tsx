@@ -359,7 +359,7 @@ export const SettingsView: React.FC = () => {
     ];
 
     return (
-        <div className="flex flex-col md:flex-row h-full min-w-0 bg-black font-sans selection:bg-white selection:text-black">
+        <div className="settings-workspace flex flex-col md:flex-row h-full min-w-0 bg-black font-sans selection:bg-white selection:text-black">
             {/* --- SIDEBAR --- */}
             <aside className="w-full md:w-[260px] border-b md:border-b-0 md:border-r border-white/10 flex flex-col bg-black shrink-0 relative z-20">
                 <div className="hidden md:block p-8 pb-10">
@@ -432,10 +432,10 @@ export const SettingsView: React.FC = () => {
 
                     {/* === TAB: NEURAL FORGE === */}
                     {activeGroup === 'neural' && (
-                        <div className="flex gap-8 h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div className="settings-ai-columns flex gap-8 h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
 
                             {/* Left: Engine Inventory (Sticky Sidebar) */}
-                            <div className="w-[320px] shrink-0 sticky top-0 h-fit space-y-6">
+                            <div className="settings-ai-controls w-[320px] shrink-0 sticky top-0 h-fit space-y-6">
                                 <Card className="border-white/10 bg-black shadow-2xl">
                                     <AIEngineManager settings={settings} onUpdate={handleSettingsUpdate} />
                                 </Card>

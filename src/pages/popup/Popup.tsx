@@ -70,7 +70,7 @@ export default function Popup() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-5 font-sans flex flex-col">
+    <div className={`${isSafariIOS ? 'min-h-0' : 'min-h-screen'} bg-zinc-950 text-zinc-100 p-5 font-sans flex flex-col`}>
       {/* Brand */}
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg">
@@ -81,6 +81,14 @@ export default function Popup() {
           <p className="text-[10px] text-zinc-500">{t('popup_tagline')}</p>
         </div>
       </div>
+
+      {/* Safari's sheet viewport can clip a footer positioned with 100vh. */}
+      <button
+        onClick={openOptions}
+        className={`w-full h-12 shrink-0 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-all active:scale-95 shadow-xl shadow-white/5 ${isSafariIOS ? 'mb-6' : 'order-last mt-auto'}`}
+      >
+        {t('popup_open_dashboard')} <ArrowRight size={18} />
+      </button>
 
       {/* Stats Card */}
       <div className="bg-zinc-900 border border-white/5 rounded-2xl p-5 mb-6 relative overflow-hidden group">
@@ -122,13 +130,6 @@ export default function Popup() {
         </div>
       </div>
 
-      {/* Action Button */}
-      <button
-        onClick={openOptions}
-        className="w-full h-12 bg-white text-black font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-all active:scale-95 shadow-xl shadow-white/5 mt-auto"
-      >
-        {t('popup_open_dashboard')} <ArrowRight size={18} />
-      </button>
     </div>
   );
 }

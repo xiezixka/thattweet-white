@@ -10,6 +10,7 @@ import { TweetCard } from '../../../../shared/components/TweetCard';
 import { AISettings, DEFAULT_AI_SETTINGS } from '../../../../shared/types/settings';
 import { Tweet } from '../../../../shared/types/tweet';
 import { useTranslation } from '../../../../shared/hooks/useTranslation';
+import { isSafariIOS } from '../../../../shared/utils/platform';
 
 export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAttached?: () => void; onOpenLibrary?: () => void }> = ({ citationToAttach, onCitationAttached, onOpenLibrary }) => {
     const { currentSession, sendMessage, isGenerating, statusMessage, createSession, searchMode, setSearchMode, loadSessions } = useChatStore();
@@ -212,7 +213,7 @@ export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAtt
                             onClick={() => setShowModelDropdown(!showModelDropdown)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors text-sm font-semibold text-zinc-400 group max-w-[200px]"
                         >
-                            <span className="truncate">{aiSettings.workflowNodes?.chat?.model || "Select Model"}</span>
+                            <span className="truncate">{aiSettings.workflowNodes?.chat?.model || "选择模型"}</span>
                             <ChevronDown size={14} className={cn("transition-transform shrink-0", showModelDropdown && "rotate-180")} />
                         </button>
 
@@ -343,7 +344,7 @@ export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAtt
             </div >
 
             {/* Input Area - ChatGPT Premium Style */}
-            < div className="w-full max-w-5xl mx-auto px-6 pb-8 pt-2" >
+            < div className="chat-composer w-full max-w-5xl mx-auto px-6 pb-8 pt-2" >
                 <div
                     onDrop={handleDrop}
                     onDragOver={(e) => e.preventDefault()}
@@ -382,7 +383,7 @@ export const ChatArea: React.FC<{ citationToAttach?: Tweet | null; onCitationAtt
                         <textarea
                             ref={inputRef}
                             className="flex-1 bg-transparent border-none focus:ring-0 outline-none text-[15px] leading-relaxed text-zinc-100 py-2.5 px-1 max-h-60 resize-none no-scrollbar placeholder:text-zinc-600 font-medium"
-                            placeholder={attachments.length > 0 ? t('int_ask_with_attachments') : t('int_chat_placeholder')}
+                            placeholder={attachments.length > 0 ? t('int_ask_with_attachments') : isSafariIOS ? '输入问题…' : t('int_chat_placeholder')}
                             rows={1}
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}

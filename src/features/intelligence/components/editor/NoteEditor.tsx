@@ -245,6 +245,8 @@ export const NoteEditor: React.FC = () => {
     const [currentTime, setCurrentTime] = useState("");
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [showHistory, setShowHistory] = useState(false);
+    const [mobileView, setMobileView] = useState<'edit' | 'preview'>('edit');
+    const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
     const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
     const [isResizingSplit, setIsResizingSplit] = useState(false);
 
@@ -537,7 +539,24 @@ export const NoteEditor: React.FC = () => {
             <style>{MARVEL_DEVICES_CSS}</style>
             <style>{customCss}</style>
 
-            <header className="h-14 flex items-center justify-between px-6 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 z-20 shrink-0">
+            <div className="note-mobile-toolbar">
+                <div className="note-mode-switch" aria-label="笔记显示方式">
+                    <button type="button" aria-pressed={mobileView === 'edit'} onClick={() => setMobileView('edit')}>编辑</button>
+                    <button type="button" aria-pressed={mobileView === 'preview'} onClick={() => setMobileView('preview')}>预览</button>
+                </div>
+                <button type="button" className="note-tools-toggle" aria-expanded={mobileToolsOpen} onClick={() => setMobileToolsOpen(!mobileToolsOpen)}><MoreHorizontal size={18} />更多</button>
+                {mobileToolsOpen && <div className="note-mobile-tools">
+                    <button onClick={() => { setMobileToolsOpen(false); setShowHistory(true); }}><History size={18} />笔记历史</button>
+                    <button onClick={() => { setMobileToolsOpen(false); handleOpenFile(); }}><Plus size={18} />导入文件</button>
+                    <button onClick={() => { setMobileToolsOpen(false); handleSaveFile(true); }}><Save size={18} />导出 Markdown</button>
+                    <button onClick={() => { setMobileToolsOpen(false); navigator.clipboard.writeText(content).then(() => setFileError('已复制笔记内容。')).catch(() => setFileError('复制未成功，请在编辑区选择文本后复制。')); }}><Copy size={18} />复制内容</button>
+                    <button onClick={() => { setMobileToolsOpen(false); setIsEditingStyle(true); }}><Settings size={18} />预览样式</button>
+                    {fileHandle && <button onClick={() => { setMobileToolsOpen(false); handleDisconnect(); }}><X size={18} />断开文件</button>}
+                    <button className="note-tools-close" onClick={() => setMobileToolsOpen(false)}>收起工具</button>
+                </div>}
+            </div>
+
+            <header className="note-desktop-toolbar h-14 flex items-center justify-between px-6 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5 z-20 shrink-0">
                 <div className="flex flex-col">
                     <div className="text-[11px] font-black text-white/90 uppercase tracking-[0.2em] flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-brand shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
@@ -574,7 +593,7 @@ export const NoteEditor: React.FC = () => {
                 </div>
             </header>
 
-            <div ref={containerRef} className="flex-1 flex overflow-hidden relative">
+            <div ref={containerRef} data-mobile-mode={mobileView} className="note-surface flex-1 flex overflow-hidden relative">
                 {showHistory && (
                     <div className="absolute inset-x-0 top-0 h-[80%] bg-[#0f0f0f]/95 backdrop-blur-3xl border-b border-white/10 z-30 flex flex-col animate-in slide-in-from-top overflow-hidden shadow-2xl">
                         <div className="flex items-center justify-between px-6 py-3 bg-white/[0.02] border-b border-white/5">
@@ -710,8 +729,8 @@ export const NoteEditor: React.FC = () => {
                     </div>
                 )}
 
-                <div className={cn("flex flex-col relative bg-[#0f0f0f]", !dualPane ? "flex-1 max-w-4xl mx-auto min-w-[500px]" : "shrink-0 min-w-[500px]")} style={dualPane ? { width: `${splitRatio * 100}%` } : {}}>
-                    <div className="absolute top-4 right-6 flex items-center gap-3 z-10">
+                <div className={cn("note-edit-pane flex flex-col relative bg-[#0f0f0f]", !dualPane ? "flex-1 max-w-4xl mx-auto min-w-[500px]" : "shrink-0 min-w-[500px]")} style={dualPane ? { width: `${splitRatio * 100}%` } : {}}>
+                    <div className="note-editor-status absolute top-4 right-6 flex items-center gap-3 z-10">
                         <div className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors", saveStatus === 'saved' ? "text-brand border-brand/20 bg-brand/5" : "text-amber-500 border-amber-500/20 bg-amber-500/5")}>{saveStatus}</div>
                         <div className="text-[9px] text-zinc-700 font-bold uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-full">{content.length} chars</div>
                     </div>
@@ -731,13 +750,13 @@ export const NoteEditor: React.FC = () => {
                             </button>
                         ))}
                     </div>
-                    <textarea ref={editorRef} value={content} onChange={(e) => onChange(e.target.value)} onScroll={() => handleSyncScroll('editor')} className="flex-1 w-full bg-transparent text-zinc-300 p-12 pl-16 resize-none outline-none font-sans text-[17px] leading-[1.8] no-scrollbar placeholder:text-zinc-900 focus:ring-0" placeholder="# Start writing..." spellCheck={false} />
+                    <textarea aria-label="笔记正文" ref={editorRef} value={content} onChange={(e) => onChange(e.target.value)} onScroll={() => handleSyncScroll('editor')} className="flex-1 w-full bg-transparent text-zinc-300 p-12 pl-16 resize-none outline-none font-sans text-[17px] leading-[1.8] no-scrollbar placeholder:text-zinc-900 focus:ring-0" placeholder="写下笔记…" spellCheck={false} />
                 </div>
 
                 {dualPane && <div onMouseDown={onMouseDownResizer} className={cn("w-[2px] shrink-0 z-40 cursor-col-resize relative", isResizingSplit ? "bg-brand" : "bg-white/5 hover:bg-brand/30")} />}
 
-                {dualPane && (
-                    <div className="flex-1 bg-[#0c0c0c] overflow-hidden flex justify-center p-0 border-l border-white/5 min-w-[500px]">
+                {(dualPane || mobileView === 'preview') && (
+                    <div className="note-preview-pane flex-1 bg-[#0c0c0c] overflow-hidden flex justify-center p-0 border-l border-white/5 min-w-[500px]">
                         <div ref={previewContainerRef} onScroll={() => handleSyncScroll('preview')} className={cn("w-full h-full flex justify-center transition-all", previewMode === 'mobile' ? "items-center bg-[#080808]" : "items-stretch overflow-y-auto no-scrollbar")}>
                             {previewMode === 'mobile' ? (
                                 <div className="scale-[0.85] origin-center flex justify-center">
