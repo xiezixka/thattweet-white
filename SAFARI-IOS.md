@@ -1,4 +1,4 @@
-# ThatTweet Safari iPhone 版 4.6.1
+# ThatTweet Safari iPhone 版 4.6.2
 
 基于白色版 4.5.7 的独立 iOS 分支。目标为 iOS 17 及以上的 Safari；保留原有采集、收藏、AI 工作流、OCR/图片分析、统计、作者分析、检索、图谱、模拟、画廊、聊天和笔记入口。**编译通过不等于这些功能已在 iPhone 真机全部验收。**
 
@@ -10,6 +10,9 @@
 - Safari 扩展仅采集 Safari 中获准访问的 X 网页，不能读取 X 原生 App。
 
 ## 构建与安装
+
+准备数据线安装时请先看 [IPHONE-USB.md](IPHONE-USB.md)。本机检测和构建命令使用独立手机工程，构建缓存放在项目外接盘目录。
+
 
 ```sh
 npm ci --ignore-scripts

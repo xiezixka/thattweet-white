@@ -20,4 +20,4 @@ const tested = spawnSync('xcodebuild', ['-project', project, '-scheme', scheme,
 mkdirSync(resolve(root, 'artifacts/ios-ui-evidence'), { recursive: true });
 const exported = spawnSync('xcrun', ['xcresulttool', 'export', 'attachments', '--path', resultPath,
     '--output-path', resolve(root, 'artifacts/ios-ui-evidence')], { stdio: 'inherit' });
-process.exit(tested.status || exported.status || 0);
+process.exit(tested.status === 0 && exported.status === 0 ? 0 : 1);
