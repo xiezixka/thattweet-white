@@ -4,6 +4,14 @@ import WebKit
 final class ViewController: UIViewController {
     @IBOutlet private var webView: WKWebView!
 
+    override func loadView() {
+        let configuration = WKWebViewConfiguration()
+        // The setup page is instructions, not an X browser without the extension.
+        configuration.dataDetectorTypes = []
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        view = webView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // The generated template disables scrolling, clipping setup steps on iPhone.
