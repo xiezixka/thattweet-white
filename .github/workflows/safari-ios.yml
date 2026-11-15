@@ -12,7 +12,7 @@ permissions:
 jobs:
   ios:
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -25,6 +25,16 @@ jobs:
       - run: npm run package:safari
       - name: Compile iPhone simulator app without signing
         run: node scripts/build-safari-simulator.mjs
+      - name: Launch iPhone simulator and verify Chinese setup screen
+        run: node scripts/test-safari-simulator.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ThatTweet-Safari-iOS-UI-Acceptance
+          path: |
+            artifacts/ios-ui-evidence
+            artifacts/ios-host-tests.xcresult
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v7
         with:
           name: ThatTweet-Safari-iOS-Xcode

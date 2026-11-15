@@ -24,5 +24,7 @@ if (result.status === 0) {
     const host = resolve(output, 'ThatTweetSafari/ThatTweetSafari/Resources');
     copyFileSync(resolve(root, 'ios/host/Main.html'), resolve(host, 'Base.lproj/Main.html'));
     copyFileSync(resolve(root, 'ios/host/Style.css'), resolve(host, 'Style.css'));
+    copyFileSync(resolve(root, 'ios/host/ViewController.swift'), resolve(output, 'ThatTweetSafari/ThatTweetSafari/ViewController.swift'));
+    copyFileSync(resolve(root, 'ios/host/HostUITests.swift'), resolve(output, 'ThatTweetSafari/ThatTweetSafariUITests/ThatTweetSafariUITests.swift'));
 }
 process.exit(result.status ?? 1);
