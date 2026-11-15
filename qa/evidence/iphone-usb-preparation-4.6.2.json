@@ -1,0 +1,43 @@
+{
+  "version": "4.6.2",
+  "date": "2026-11-15",
+  "code_commit": "0890109c70a45f630b558515af51114bad18a57b",
+  "acceptance": {
+    "typecheck": "passed",
+    "node_tests": {
+      "passed": 24
+    },
+    "chrome_firefox_safari_builds": "passed",
+    "native_simulator_build": "passed",
+    "native_chinese_title_and_landscape_scroll": "passed in run 43666099406",
+    "full_screen_screenshot_retest": {
+      "status": "passed",
+      "ci_run": 43667074035,
+      "test_count": 1,
+      "failures": 0,
+      "seconds": 41.466,
+      "device": "iPhone 16 Pro simulator",
+      "system": "iOS 18.5",
+      "manual_image_review": "Chinese setup instructions and landscape bottom paragraph visible; no clipped landscape capture"
+    },
+    "prepared_resources_matched": 116,
+    "native_source_files_matched": 4,
+    "xcode_project_plist": "passed",
+    "device_command_dry_runs": "passed",
+    "installed_desktop_program_files_unchanged": 113,
+    "cloud_project_resources_matched": 116
+  },
+  "pending": [
+    "Full Xcode SDK setup on this Mac",
+    "Personal Apple signing configuration",
+    "iOS 27.2 physical device install",
+    "Real Safari capture and AI",
+    "Original desktop chats and notes migration"
+  ],
+  "desktop_plugins_disabled": false,
+  "desktop_data_accessed": false,
+  "ci": {
+    "native": "https://github.com/xiezixka/thattweet-white/actions/runs/43667074035",
+    "extension": "https://github.com/xiezixka/thattweet-white/actions/runs/43667073980"
+  }
+}
