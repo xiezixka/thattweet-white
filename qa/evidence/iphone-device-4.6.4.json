@@ -1,0 +1,39 @@
+{
+  "version": "4.6.4",
+  "date": "2026-11-15",
+  "code_commit": "07129bf608544fbd618514c8744400c88aaa3d76",
+  "device": "iPhone 16 Pro Max / iOS 27.2",
+  "build": "Xcode 27.2, iphoneos27.2, arm64",
+  "passed": [
+    "signed device build and install",
+    "same app and extension identities retained",
+    "Safari content script and captured-record count",
+    "dashboard open and records after refresh",
+    "popup dashboard action visible and clicked",
+    "single-pane note edit and preview",
+    "mobile tools menu",
+    "chat composer layout",
+    "session A AB -> session B empty -> session A AB",
+    "page reload -> session A AB retained",
+    "24 unit tests",
+    "Chrome/Firefox/Safari CI builds"
+  ],
+  "capture_count_observations": [
+    51,
+    51,
+    89
+  ],
+  "pending": [
+    "AI provider and real request",
+    "streaming chat and citations",
+    "Files export/import and complete dataset comparison",
+    "settings full-page physical-device visual review",
+    "landscape and physical soft keyboard",
+    "original desktop chats and notes migration"
+  ],
+  "computer_control": "disconnected; memory/disk pressure observed, final disk check 29 GiB free and swap zero",
+  "desktop_plugins_disabled": false,
+  "desktop_data_modified": false,
+  "ci_native": "https://github.com/xiezixka/thattweet-white/actions/runs/43672688413",
+  "ci_extension": "https://github.com/xiezixka/thattweet-white/actions/runs/43672688470"
+}
