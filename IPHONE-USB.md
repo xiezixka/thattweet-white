@@ -6,9 +6,9 @@
 
 Safari 扩展资源、原生启用说明、构建和验收资料已经准备。手机签名工程保存在项目的 `artifacts/device-project/ThatTweetSafari/ThatTweetSafari.xcodeproj`；它是独立副本，后续的 Team、签名和本地配置只在这个工程里修改，不影响电脑 Chrome。
 
-这台 Mac 是 Apple silicon、macOS 27.0，内置盘剩余约 18 GiB；外接「存储盘」是 APFS，剩余约 1.3 TiB。建议将完整 Xcode 放在 `/Volumes/存储盘/开发工具/Xcode.app`，本项目的 DerivedData 已放在外接盘。Xcode 仍可能在系统盘创建组件和设备支持缓存，不能承诺完全不占内置盘空间。
+这台 Mac 是 Apple silicon、macOS 27.0，已通过 App Store 安装 Xcode 27.2，实际位置为 `/Applications/Xcode.app`。本项目的 DerivedData 和新生成的 iPhone 系统调试缓存已放在外接「存储盘」。设备缓存原路径保留了链接，进行本机开发时请保持外接盘连接。Xcode 仍可能在系统盘创建其他缓存。
 
-Apple 的兼容表列出 Xcode 27.2 包含 iOS 27.2 SDK，支持 macOS 26.6 及以上。优先使用匹配手机系统的稳定版；本地尚未安装完整 Xcode，官方开发者下载入口需要 Apple 账号登录。下载、许可确认及首次启动步骤留到你方便时处理；没有自动接受协议或购买开发者计划。
+Apple 的兼容表列出 Xcode 27.2 包含 iOS 27.2 SDK，支持 macOS 26.6 及以上。当前本机已完成首次启动及 iOS 27.2 SDK 配置，许可协议、账号验证和开发者信任均由本人确认；没有购买开发者计划。
 
 也可以从 Mac App Store 免费获取 Xcode，无需购买开发者会员。内置盘空间不足时，可用 App Store 的「下载并安装大型 App 到独立存储盘」选择 APFS 外接盘；该方式的实际应用路径以安装结果为准，不一定是上述建议目录。获取过程可能要求普通 Apple 账号登录验证，由本人完成。
 
@@ -23,7 +23,7 @@ Apple 的兼容表列出 Xcode 27.2 包含 iOS 27.2 SDK，支持 macOS 26.6 及�
 只读检查，不修改系统 Xcode 选择、不读取 Apple 账号或私钥：
 
 ```sh
-npm run iphone:check -- --xcode "/Volumes/存储盘/开发工具/Xcode.app"
+npm run iphone:check -- --xcode "/Applications/Xcode.app"
 ```
 
 在 Xcode 中打开上述手机工程。用你自己的 Apple 账号配置应用和扩展两个 Target 的 Signing & Capabilities，保持两者 Team 一致。后续升级保留这个工程及应用身份，避免重新生成工程后误换 Bundle ID。
@@ -51,13 +51,13 @@ npm run iphone:install -- --device 00008110-EXAMPLE1234 --plan
 准备完成后使用实际值，去掉 `--plan` 执行：
 
 ```sh
-npm run iphone:build -- --team YOURTEAMID --xcode "/Volumes/存储盘/开发工具/Xcode.app"
-npm run iphone:install -- --device YOUR-DEVICE-ID --xcode "/Volumes/存储盘/开发工具/Xcode.app"
+npm run iphone:build -- --team YOURTEAMID --xcode "/Applications/Xcode.app"
+npm run iphone:install -- --device YOUR-DEVICE-ID --xcode "/Applications/Xcode.app"
 ```
 
 构建不会自动创建 Apple 证书或申请描述文件；缺少签名配置时会停止，需要在 Xcode 中完成配置。安装命令会核对应用及扩展身份、真机平台、描述文件和代码签名，拒绝模拟器包；必须明确指定设备，不自动挑选手机，不包含卸载或清空数据操作。
 
-已验证部分是参数校验、计划演练和包身份规则；**真实签名、设备安装与启动要等完整 Xcode、账号和手机准备好后验收**。
+已通过参数校验、计划演练、包身份检查，以及当前 iPhone 16 Pro Max / iOS 27.2 的真实签名、安装和启动。Safari 功能的验收状态见 [真机验收记录](qa/SAFARI-IOS-ACCEPTANCE.md)，不能把安装成功视为全部功能通过。
 
 ## 接线后的验收顺序
 

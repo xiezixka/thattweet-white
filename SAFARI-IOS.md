@@ -1,6 +1,8 @@
-# ThatTweet Safari iPhone 版 4.6.2
+# ThatTweet Safari iPhone 版 4.6.4
 
 基于白色版 4.5.7 的独立 iOS 分支。目标为 iOS 17 及以上的 Safari；保留原有采集、收藏、AI 工作流、OCR/图片分析、统计、作者分析、检索、图谱、模拟、画廊、聊天和笔记入口。**编译通过不等于这些功能已在 iPhone 真机全部验收。**
+
+当前版本已在 iPhone 16 Pro Max / iOS 27.2 原位安装。已通过与待验收项目见 [真机验收记录](qa/SAFARI-IOS-ACCEPTANCE.md)。
 
 ## 独立与数据边界
 
