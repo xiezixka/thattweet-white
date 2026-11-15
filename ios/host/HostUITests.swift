@@ -16,7 +16,14 @@ final class ThatTweetSafariUITests: XCTestCase {
         start.lifetime = .keepAlways
         add(start)
 
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            web.frame.width > web.frame.height
+        }, object: web)
+        XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 10), .completed)
         let notice = web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "iOS 可能暂停后台处理")).firstMatch
+        XCTAssertFalse(notice.isHittable, "Landscape must exercise the scroll boundary rather than only a fully visible portrait page")
         for _ in 0..<5 {
             if notice.exists && notice.isHittable { break }
             web.swipeUp()
